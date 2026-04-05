@@ -1,240 +1,171 @@
-# WingetAppDeployer - Volgende Stappen
+# WingetAppDeployer - Development Roadmap
 
-Het project is volledig opgezet! Hier is wat je nu moet doen:
+## ✅ Voltooid (v0.5.0 - Alpha)
 
-## 1. GitHub Repository Setup
+- [x] GitHub repository opgezet op `MisterDuckles/WinGetAppDeployer`
+- [x] Project gebouwd en getest
+- [x] GitHub releases aangemaakt
+- [x] Installatie getest en geverifieerd
+- [x] Project hernoemd van WinAppInstaller naar WingetAppDeployer
+- [x] Alle namespaces en referenties bijgewerkt
 
-### A. Update GitHub gebruikersnaam
+---
 
-✅ **Voltooid!** GitHub username is al ingesteld op `MisterDuckles` in:
-- ✅ `src/WingetAppDeployer/Services/GitHubService.cs`
-- ✅ `src/Launcher/Program.cs`
-- ✅ `README.md`
-- ✅ `INTEGRATIE.md`
+## ✅ Voltooid (v1.0.0)
 
-### B. Maak GitHub Repository
+- [x] Fix scrolling in MainWindow
+- [x] Klik op gehele card om app te selecteren (niet alleen checkbox)
+- [x] Redesign Minimal theme (animatie, hover-effecten, shadows)
+- [x] Fix theme switching functionaliteit
+- [x] Fluent (Windows 11) en Material Design themes toegevoegd
+- [x] Settings icoon cutting off gefixed
+- [x] App installed status indicator (groen vinkje)
+- [x] Betere error messages bij gefaalde installaties
+- [x] Loading indicator tijdens app database fetch
+- [x] Search functionaliteit in app lijst
+
+---
+
+## 🐛 Bekende Issues (Te Fixen)
+
+### Medium Priority
+- [ ] Add icons for apps
+
+### Low Priority
+- [ ]
+
+---
+
+## 🚀 Geplande Features
+
+### v1.1.0 - Enhanced UX
+- [ ] Dark mode implementatie
+- [ ] App icons tonen (fetch van GitHub/Winget)
+- [ ] Installation profiles (Gaming, Developer, Office, etc.)
+- [ ] Parallel installaties (meerdere apps tegelijk)
+- [ ] Progress bar per app tijdens installatie
+- [ ] Export/Import selectie naar JSON
+
+### v1.2.0 - Advanced Features
+- [ ] Multi-language support (NL/EN toggle)
+- [ ] Fuzzy search in app lijst
+- [ ] Filter opties (alleen popular, al geïnstalleerd, etc.)
+- [ ] Update checker voor geïnstalleerde apps
+- [ ] Installatie geschiedenis/logs
+- [ ] Notifications bij voltooide installaties
+
+### v2.0.0 - Major Update
+- [ ] Plugin systeem voor custom app sources
+- [ ] Cloud sync voor settings en app selecties
+- [ ] Custom app repositories toevoegen
+- [ ] Portable mode (geen installatie nodig)
+- [ ] CLI interface (`winget-deployer install --profile gaming`)
+- [ ] Backup/restore functionaliteit
+
+---
+
+## 💡 Feature Ideas (Nog te beoordelen)
+
+Voeg hier nieuwe ideeën toe:
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
+## 📝 Development Notes
+
+### Quick Commands
 
 ```bash
-cd d:\WingetAppDeployer
-git add .
-git commit -m "Initial commit - WingetAppDeployer v1.0.0"
-git remote add origin https://github.com/MisterDuckles/WinGetAppDeployer.git
-git push -u origin master
+# Build solution
+dotnet build WingetAppDeployer.sln -c Release
+
+# Publish executables
+dotnet publish src/Launcher -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish src/WingetAppDeployer -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+
+# Run tests (wanneer toegevoegd)
+dotnet test
+
+# Clean build
+dotnet clean && dotnet build
 ```
 
-## 2. Build het Project
+### Project Structure
 
-### Optie A: Visual Studio / Rider
-
-1. Open `WingetAppDeployer.sln`
-2. Build > Build Solution (Ctrl+Shift+B)
-3. Output files:
-   - `src/WingetAppDeployer/bin/Release/net8.0-windows/WingetAppDeployer.exe`
-   - `src/Launcher/bin/Release/net8.0-windows/Launcher.exe`
-
-### Optie B: Command Line
-
-```bash
-cd d:\WingetAppDeployer
-
-# Build main app
-dotnet build src/WingetAppDeployer/WingetAppDeployer.csproj -c Release
-
-# Build launcher
-dotnet build src/Launcher/Launcher.csproj -c Release
+```
+src/
+├── WingetAppDeployer/           # Main WPF application
+│   ├── Models/                  # Data models (App, Category, Settings)
+│   ├── Services/                # Business logic
+│   │   ├── WingetService.cs    # Winget CLI wrapper
+│   │   ├── GitHubService.cs    # GitHub API for updates & apps.json
+│   │   ├── SettingsService.cs  # Settings persistence
+│   │   └── TaskSchedulerService.cs # Scheduled auto-updates
+│   ├── Views/                   # XAML windows (Install, Settings, Schedule)
+│   ├── Themes/                  # UI themes (Minimal, Fluent, Material)
+│   └── MainWindow.xaml          # Main UI with app list
+└── Launcher/                    # Bootstrap launcher (~5KB)
+    └── Program.cs               # Downloads & launches main app
 ```
 
-## 3. Create GitHub Release
+### Testing Checklist
 
-1. Ga naar GitHub → Repositories → WingetAppDeployer
-2. Klik "Releases" → "Create a new release"
-3. Tag version: `v1.0.0`
-4. Release title: `WinApp Installer v1.0.0`
-5. Description:
-   ```
-   First release of WingetAppDeployer!
+Voor elke release:
+- [ ] Build succesvol (geen errors)
+- [ ] Launcher werkt (download + launch)
+- [ ] App database laadt correct
+- [ ] Minimaal 3 apps succesvol geïnstalleerd
+- [ ] Settings opslaan/laden werkt
+- [ ] Auto-update functionaliteit werkt
+- [ ] Theme switching werkt correct (alle 3 themes)
 
-   Features:
-   - 200+ apps across 8 categories
-   - Modern UI with theme support
-   - Auto-update functionality
-   - Scheduled task integration
-   - Bootstrap launcher
+---
 
-   Download Launcher.exe to get started!
-   ```
-6. Upload files:
-   - `Launcher.exe` (from `src/Launcher/bin/Release/...`)
-   - `WingetAppDeployer.exe` (from `src/WingetAppDeployer/bin/Release/...`)
-7. Click "Publish release"
+## 🔧 Troubleshooting
 
-## 4. Test de Installatie
+### Build Issues
 
-### Test Launcher
-
-```powershell
-# Download launcher
-Invoke-WebRequest -Uri "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/Launcher.exe" -OutFile "C:\Temp\Launcher.exe"
-
-# Run it
-Start-Process "C:\Temp\Launcher.exe"
-```
-
-De launcher zou moeten:
-1. De main app downloaden van GitHub
-2. De main app opstarten
-3. Apps.json laden en tonen
-
-### Test App Installatie
-
-1. Zoek een app (bijv. "7-Zip")
-2. Selecteer checkbox
-3. Klik "Install Selected Apps"
-4. Controleer of installatie werkt
-
-## 5. Integreer met Windows11-Unattended-Debloat
-
-### Methode 1: Direct in debloat.ps1
-
-Voeg toe aan je bestaande `debloat.ps1`:
-
-```powershell
-# Install WingetAppDeployer
-Write-Host "Installing WingetAppDeployer..." -ForegroundColor Cyan
-$installDir = "$env:ProgramFiles\WingetAppDeployer"
-$launcherUrl = "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/Launcher.exe"
-New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-Invoke-WebRequest -Uri $launcherUrl -OutFile "$installDir\Launcher.exe" -UseBasicParsing
-
-# Create desktop shortcut
-$desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
-$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut("$desktop\WinApp Installer.lnk")
-$shortcut.TargetPath = "$installDir\Launcher.exe"
-$shortcut.Save()
-```
-
-### Methode 2: Gebruik deploy.ps1
-
-```powershell
-# Download and run deploy script
-$deployScript = Invoke-WebRequest "https://raw.githubusercontent.com/MisterDuckles/WingetAppDeployer/main/scripts/deploy.ps1" -UseBasicParsing
-Invoke-Expression $deployScript.Content
-```
-
-## 6. Test Volledige Flow
-
-In een VM of test machine:
-
-1. Run je Windows 11 unattended installatie
-2. Debloat script zou moeten runnen
-3. WingetAppDeployer launcher wordt geïnstalleerd
-4. Desktop shortcut wordt aangemaakt
-5. Open WingetAppDeployer
-6. Test app installatie
-
-## 7. Optioneel: Extra Features Toevoegen
-
-Zie `CONTRIBUTING.md` voor features om toe te voegen:
-
-- [ ] Dark mode
-- [ ] App status indicator (check if already installed)
-- [ ] Parallel installations
-- [ ] App icons
-- [ ] Installation profiles
-- [ ] Multi-language support
-
-## Troubleshooting
-
-### Build Errors
-
-**Error: MaterialDesignThemes not found**
+**MaterialDesignThemes niet gevonden:**
 ```bash
 dotnet restore src/WingetAppDeployer/WingetAppDeployer.csproj
 ```
 
-**Error: .NET 8 not found**
-- Download: https://dotnet.microsoft.com/download/dotnet/8.0
+**Verkeerde .NET versie:**
+- Project gebruikt .NET 10.0
+- Download: https://dotnet.microsoft.com/download/dotnet/10.0
 
-### Runtime Errors
+### Runtime Issues
 
-**"Winget not found"**
+**"Winget not found":**
 - Installeer App Installer via Microsoft Store
-- Of: https://github.com/microsoft/winget-cli/releases
+- Of download: https://github.com/microsoft/winget-cli/releases
 
-**"Failed to download app database"**
-- Check of GitHub repository public is
-- Check of `apps.json` in `main` branch zit
-- Check internet connectie
+**"Failed to download app database":**
+- Check GitHub repository is public
+- Verifieer `apps.json` in `main` branch staat
+- Test internet connectie
 
-### GitHub Release Issues
+**Scrolling werkt niet:**
+- Gefixed in v1.0.0
 
-**"Asset not found"**
-- Zorg dat je `Launcher.exe` en `WingetAppDeployer.exe` upload
-- Exact die namen gebruiken (case-sensitive on Linux)
+---
 
-## Project Structure Overview
+## 📊 Project Stats
 
-```
-d:\WingetAppDeployer\
-├── src/
-│   ├── WingetAppDeployer/          # Main WPF app
-│   │   ├── Models/               # App, Category, Settings models
-│   │   ├── Services/             # Winget, GitHub, TaskScheduler services
-│   │   ├── Views/                # Install, Settings, Schedule windows
-│   │   ├── Themes/               # UI themes
-│   │   ├── App.xaml              # Application entry
-│   │   └── MainWindow.xaml       # Main UI
-│   └── Launcher/                 # Bootstrap launcher (5KB)
-│       └── Program.cs            # Downloads & runs main app
-├── data/
-│   └── apps.json                 # 200+ apps database
-├── scripts/
-│   └── deploy.ps1                # Deployment script
-├── README.md                     # Main documentation
-├── INTEGRATIE.md                 # Integration guide
-├── CONTRIBUTING.md               # Contribution guide
-└── WingetAppDeployer.sln           # Visual Studio solution
-
-Total: ~25 files | ~3000 lines of code
-```
-
-## Apps in Database
-
-De `apps.json` bevat nu:
-
-- **8 hoofdcategorieën**
+- **8 categorieën** met apps
 - **15 subcategorieën**
-- **200+ apps**
+- **200+ apps** in database
+- **~3000 regels code**
+- **~25 bestanden**
 
-Categorieën:
-1. 🌐 Browsers (9 apps)
-2. 💼 Development (6 subcategorieën, 40+ apps)
-3. 🔐 Security & Privacy (6 apps)
-4. 📝 Productivity (3 subcategorieën, 15+ apps)
-5. 💬 Communication (7 apps)
-6. 🎵 Media & Entertainment (3 subcategorieën, 15+ apps)
-7. 🛠️ Utilities (4 subcategorieën, 20+ apps)
-8. 🎨 Creative & Design (3 subcategorieën, 10+ apps)
+---
 
-## Volgende Releases
+## 📞 Contact & Support
 
-### v1.1.0 (Next)
-- [ ] Dark mode
-- [ ] App installed status check
-- [ ] Better error messages
+- GitHub Issues: https://github.com/MisterDuckles/WinGetAppDeployer/issues
+- Discussions: https://github.com/MisterDuckles/WinGetAppDeployer/discussions
 
-### v1.2.0
-- [ ] Installation profiles
-- [ ] Parallel installations
-- [ ] App icons
-
-### v2.0.0
-- [ ] Plugin system
-- [ ] Custom app sources
-- [ ] Cloud sync settings
-
-## Support
-
-Vragen? Open een issue op GitHub of stuur me een bericht!
-
-**Succes met je project! 🚀**
+**Happy coding! 🚀**

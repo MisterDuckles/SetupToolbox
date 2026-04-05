@@ -29,13 +29,12 @@ public partial class InstallWindow : Window
         {
             var appPanel = new Border
             {
-                Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(224, 224, 224)),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(15),
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            appPanel.SetResourceReference(Border.BackgroundProperty, "SurfaceColor");
 
             var stackPanel = new StackPanel();
 
@@ -45,14 +44,15 @@ public partial class InstallWindow : Window
                 FontSize = 14,
                 FontWeight = FontWeights.Medium
             };
+            nameText.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryColor");
 
             var statusText = new TextBlock
             {
                 Text = "⏳ Waiting...",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(117, 117, 117)),
                 Margin = new Thickness(0, 5, 0, 0)
             };
+            statusText.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryColor");
 
             _appStatusTexts[app.WingetId] = statusText;
 
@@ -84,11 +84,11 @@ public partial class InstallWindow : Window
 
                     if (update.message.Contains("✓"))
                     {
-                        statusText.Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80));
+                        statusText.SetResourceReference(TextBlock.ForegroundProperty, "AccentColor");
                     }
                     else if (update.message.Contains("✗"))
                     {
-                        statusText.Foreground = new SolidColorBrush(Color.FromRgb(244, 67, 54));
+                        statusText.SetResourceReference(TextBlock.ForegroundProperty, "ErrorColor");
                     }
                 }
             });

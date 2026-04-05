@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using WingetAppDeployer.Models;
@@ -46,6 +47,36 @@ public class WingetService
     }
 
     /// <summary>
+    /// Gets all installed app IDs in a single batch call
+    /// </summary>
+    public async Task<HashSet<string>> GetInstalledAppIdsAsync()
+    {
+        var installedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var result = await RunWingetCommandAsync("list --accept-source-agreements");
+            if (result.exitCode == 0)
+            {
+                var lines = result.output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                // Skip header lines (first 2 lines are header + separator)
+                foreach (var line in lines.Skip(2))
+                {
+                    var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
+                    {
+                        installedIds.Add(parts[1]); // Second column is the ID
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Return empty set on failure
+        }
+        return installedIds;
+    }
+
+    /// <summary>
     /// Installs an app using winget
     /// </summary>
     public async Task<(bool success, string output)> InstallAppAsync(string wingetId, IProgress<string>? progress = null)
@@ -66,7 +97,8 @@ public class WingetService
             }
             else
             {
-                progress?.Report($"✗ Failed to install {wingetId}");
+                var friendlyError = GetFriendlyErrorMessage(result.error, result.output, wingetId);
+                progress?.Report($"✗ {friendlyError}");
                 return (false, result.error);
             }
         }
@@ -75,6 +107,24 @@ public class WingetService
             progress?.Report($"✗ Error installing {wingetId}: {ex.Message}");
             return (false, ex.Message);
         }
+    }
+
+    private static string GetFriendlyErrorMessage(string error, string output, string wingetId)
+    {
+        var combined = error + output;
+        if (combined.Contains("No applicable installer", StringComparison.OrdinalIgnoreCase))
+            return $"{wingetId}: No compatible installer found for this system.";
+        if (combined.Contains("already installed", StringComparison.OrdinalIgnoreCase))
+            return $"{wingetId}: This app is already installed.";
+        if (combined.Contains("No package found", StringComparison.OrdinalIgnoreCase))
+            return $"{wingetId}: Package not found in winget repository.";
+        if (combined.Contains("installer hash does not match", StringComparison.OrdinalIgnoreCase))
+            return $"{wingetId}: Download verification failed. Try again later.";
+        if (combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
+            return $"{wingetId}: Access denied. Try running as administrator.";
+        if (combined.Contains("0x80070005", StringComparison.OrdinalIgnoreCase))
+            return $"{wingetId}: Permission error. Try running as administrator.";
+        return $"Failed to install {wingetId}. Check your internet connection and try again.";
     }
 
     /// <summary>

@@ -5,7 +5,7 @@
         Height="500"
         Width="600"
         WindowStartupLocation="CenterOwner"
-        Background="#F5F5F5">
+        Background="{DynamicResource BackgroundColor}">
 
     <Grid Margin="30">
         <Grid.RowDefinitions>
@@ -18,13 +18,14 @@
                    Text="⚙️ Settings"
                    FontSize="24"
                    FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryColor}"
                    Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- Appearance -->
-                <Border Background="White"
-                        BorderBrush="#E0E0E0"
+                <Border Background="{DynamicResource SurfaceColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="20"
@@ -33,27 +34,33 @@
                         <TextBlock Text="🎨 Appearance"
                                    FontSize="18"
                                    FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,0,0,15"/>
 
-                        <TextBlock Text="Theme:" Margin="0,0,0,5"/>
+                        <TextBlock Text="Theme:" Margin="0,0,0,5"
+                                   Foreground="{DynamicResource TextPrimaryColor}"/>
                         <ComboBox x:Name="ThemeComboBox"
                                   Margin="0,0,0,15"
                                   SelectionChanged="ThemeComboBox_SelectionChanged">
-                            <ComboBoxItem Content="Minimal (Default)" Tag="Minimal"/>
-                            <ComboBoxItem Content="Fluent (Windows 11)" Tag="Fluent"/>
-                            <ComboBoxItem Content="Material Design" Tag="Material"/>
+                            <ComboBoxItem Content="Google" Tag="Google"/>
+                            <ComboBoxItem Content="Windows 11" Tag="Windows"/>
+                            <ComboBoxItem Content="Sunset" Tag="Sunset"/>
+                            <ComboBoxItem Content="Ocean Breeze" Tag="OceanBreeze"/>
+                            <ComboBoxItem Content="Aurora" Tag="Aurora"/>
                         </ComboBox>
 
                         <CheckBox x:Name="DarkModeCheckBox"
-                                  Content="Dark Mode (Coming Soon)"
-                                  IsEnabled="False"
-                                  Margin="0,5,0,0"/>
+                                  Content="Dark Mode"
+                                  Foreground="{DynamicResource TextPrimaryColor}"
+                                  Margin="0,5,0,0"
+                                  Checked="DarkModeCheckBox_Changed"
+                                  Unchecked="DarkModeCheckBox_Changed"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Updates -->
-                <Border Background="White"
-                        BorderBrush="#E0E0E0"
+                <Border Background="{DynamicResource SurfaceColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="20"
@@ -62,10 +69,12 @@
                         <TextBlock Text="🔄 Updates"
                                    FontSize="18"
                                    FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,0,0,15"/>
 
                         <CheckBox x:Name="CheckUpdatesOnStartupCheckBox"
                                   Content="Check for app updates on startup"
+                                  Foreground="{DynamicResource TextPrimaryColor}"
                                   Margin="0,0,0,10"/>
 
                         <Button Content="Manage Auto-Update Schedule"
@@ -76,8 +85,8 @@
                 </Border>
 
                 <!-- General -->
-                <Border Background="White"
-                        BorderBrush="#E0E0E0"
+                <Border Background="{DynamicResource SurfaceColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="20">
@@ -85,21 +94,24 @@
                         <TextBlock Text="📋 General"
                                    FontSize="18"
                                    FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,0,0,15"/>
 
                         <CheckBox x:Name="ShowWelcomeCheckBox"
                                   Content="Show welcome message on startup"
+                                  Foreground="{DynamicResource TextPrimaryColor}"
                                   Margin="0,0,0,10"/>
 
-<TextBlock Text="About"
+                        <TextBlock Text="About"
                                    FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,15,0,5"/>
-                        <TextBlock Text="WinApp Installer v1.0.0"
+                        <TextBlock Text="WingetAppDeployer v1.0.0"
                                    FontSize="12"
-                                   Foreground="#757575"/>
+                                   Foreground="{DynamicResource TextSecondaryColor}"/>
                         <TextBlock Text="A modern app installer for Windows using Winget"
                                    FontSize="12"
-                                   Foreground="#757575"
+                                   Foreground="{DynamicResource TextSecondaryColor}"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>

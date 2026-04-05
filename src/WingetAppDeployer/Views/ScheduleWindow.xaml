@@ -6,7 +6,7 @@
         Width="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#F5F5F5">
+        Background="{DynamicResource BackgroundColor}">
 
     <Grid Margin="30">
         <Grid.RowDefinitions>
@@ -19,11 +19,12 @@
                    Text="⏰ Setup Automatic Updates"
                    FontSize="24"
                    FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryColor}"
                    Margin="0,0,0,20"/>
 
         <Border Grid.Row="1"
-                Background="White"
-                BorderBrush="#E0E0E0"
+                Background="{DynamicResource SurfaceColor}"
+                BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="20">
@@ -31,17 +32,19 @@
                 <TextBlock Text="Keep your apps up to date automatically"
                            FontSize="14"
                            TextWrapping="Wrap"
-                           Foreground="#757575"
+                           Foreground="{DynamicResource TextSecondaryColor}"
                            Margin="0,0,0,20"/>
 
                 <RadioButton x:Name="DailyRadio"
                              Content="Check daily"
+                             Foreground="{DynamicResource TextPrimaryColor}"
                              GroupName="Schedule"
                              IsChecked="True"
                              Margin="0,0,0,15"/>
 
                 <StackPanel Orientation="Horizontal" Margin="25,0,0,15">
-                    <TextBlock Text="Time:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="Time:" VerticalAlignment="Center" Margin="0,0,10,0"
+                               Foreground="{DynamicResource TextPrimaryColor}"/>
                     <TextBox x:Name="TimeTextBox"
                              Text="09:00"
                              Width="80"/>
@@ -49,17 +52,19 @@
 
                 <RadioButton x:Name="WeeklyRadio"
                              Content="Check weekly (Monday)"
+                             Foreground="{DynamicResource TextPrimaryColor}"
                              GroupName="Schedule"
                              Margin="0,0,0,15"/>
 
                 <RadioButton x:Name="OnStartupRadio"
                              Content="Check on startup/login"
+                             Foreground="{DynamicResource TextPrimaryColor}"
                              GroupName="Schedule"
                              Margin="0,0,0,15"/>
 
                 <TextBlock Text="Note: This will create a scheduled task in Windows Task Scheduler."
                            FontSize="11"
-                           Foreground="#999"
+                           Foreground="{DynamicResource TextSecondaryColor}"
                            TextWrapping="Wrap"
                            Margin="0,20,0,0"/>
             </StackPanel>

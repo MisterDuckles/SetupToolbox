@@ -6,7 +6,8 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <!-- <ApplicationIcon>Resources\app.ico</ApplicationIcon> -->
-    <Version>0.5.0</Version>
+    <AssemblyName>WingetAppDeployer-v1.0.0</AssemblyName>
+    <Version>1.0.0</Version>
     <Authors>Daan</Authors>
     <Product>Winget App Deployer</Product>
     <Description>Modern Windows application installer using Winget</Description>

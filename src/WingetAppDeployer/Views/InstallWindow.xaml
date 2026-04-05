@@ -7,7 +7,7 @@
         Width="700"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#F5F5F5">
+        Background="{DynamicResource BackgroundColor}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -21,17 +21,16 @@
                    Text="Installing Applications"
                    FontSize="24"
                    FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryColor}"
                    Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="InstallLogPanel">
-                <!-- Install progress for each app will be added here -->
-            </StackPanel>
+            <StackPanel x:Name="InstallLogPanel"/>
         </ScrollViewer>
 
         <Border Grid.Row="2"
-                Background="White"
-                BorderBrush="#E0E0E0"
+                Background="{DynamicResource SurfaceColor}"
+                BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="15"
@@ -41,7 +40,8 @@
                     <TextBlock x:Name="CurrentAppText"
                                Text="Installing app 0 of 0..."
                                FontSize="14"
-                               FontWeight="Medium"/>
+                               FontWeight="Medium"
+                               Foreground="{DynamicResource TextPrimaryColor}"/>
                     <ProgressBar x:Name="OverallProgressBar"
                                  Height="8"
                                  Minimum="0"

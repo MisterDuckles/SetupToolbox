@@ -17,25 +17,43 @@ public partial class SettingsWindow : Window
 
     private void LoadSettings()
     {
-        // Theme
         ThemeComboBox.SelectedIndex = _settings.Theme switch
         {
-            AppTheme.Minimal => 0,
-            AppTheme.Fluent => 1,
-            AppTheme.Material => 2,
+            AppTheme.Google => 0,
+            AppTheme.Windows => 1,
+            AppTheme.Sunset => 2,
+            AppTheme.OceanBreeze => 3,
+            AppTheme.Aurora => 4,
             _ => 0
         };
 
-        // Other settings
         DarkModeCheckBox.IsChecked = _settings.DarkMode;
         CheckUpdatesOnStartupCheckBox.IsChecked = _settings.CheckForUpdatesOnStartup;
         ShowWelcomeCheckBox.IsChecked = _settings.ShowWelcomeScreen;
     }
 
+    private AppTheme GetSelectedTheme()
+    {
+        return ThemeComboBox.SelectedIndex switch
+        {
+            1 => AppTheme.Windows,
+            2 => AppTheme.Sunset,
+            3 => AppTheme.OceanBreeze,
+            4 => AppTheme.Aurora,
+            _ => AppTheme.Google
+        };
+    }
+
     private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Theme switching logic would go here
-        // This would require reloading the UI or restarting the app
+        if (!IsLoaded) return;
+        App.ApplyTheme(GetSelectedTheme(), DarkModeCheckBox.IsChecked ?? false);
+    }
+
+    private void DarkModeCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        App.ApplyTheme(GetSelectedTheme(), DarkModeCheckBox.IsChecked ?? false);
     }
 
     private void ManageScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -47,14 +65,7 @@ public partial class SettingsWindow : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        // Save theme
-        _settings.Theme = ThemeComboBox.SelectedIndex switch
-        {
-            0 => AppTheme.Minimal,
-            1 => AppTheme.Fluent,
-            2 => AppTheme.Material,
-            _ => AppTheme.Minimal
-        };
+        _settings.Theme = GetSelectedTheme();
 
         // Save other settings
         _settings.DarkMode = DarkModeCheckBox.IsChecked ?? false;
