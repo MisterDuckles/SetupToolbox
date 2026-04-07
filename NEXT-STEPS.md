@@ -49,7 +49,7 @@
 ### Medium Priority
 - [ ] Echte app icons — plan uitdenken zodat elke app een eigen icon krijgt. Mogelijkheden: icons hosten op git repo, URL per app in apps.json, of icon pack downloaden. Nu emoji placeholder per category
 - [ ] Settings window styling kan nog mooier (buttons, combobox, checkbox niet theme-aware)
-- [ ] WPF default ComboBox/CheckBox/RadioButton styling lekt door in dark mode
+- [x] WPF default ComboBox/CheckBox/RadioButton styling lekt door in dark mode
 - [x] Searchbox placeholder tekst ("Search apps...")
 
 ### Low Priority
@@ -70,7 +70,7 @@
 - [ ] Smooth scroll 165Hz verbeteren (onderzoeken of WPF dit beter kan)
 - [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
 - [x] Placeholder tekst in searchbox ("Search apps...")
-- [ ] Custom WPF styles voor ComboBox, CheckBox, RadioButton (theme-aware in dark mode)
+- [x] Custom WPF styles voor ComboBox, CheckBox, RadioButton (theme-aware in dark mode)
 - [ ] Windows theme meer laten lijken op Windows 11 Settings (referentie: Win11Debloat)
 
 ### v1.2.0 - Enhanced UX
