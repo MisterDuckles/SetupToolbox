@@ -50,7 +50,7 @@
 - [ ] Echte app icons — plan uitdenken zodat elke app een eigen icon krijgt. Mogelijkheden: icons hosten op git repo, URL per app in apps.json, of icon pack downloaden. Nu emoji placeholder per category
 - [ ] Settings window styling kan nog mooier (buttons, combobox, checkbox niet theme-aware)
 - [ ] WPF default ComboBox/CheckBox/RadioButton styling lekt door in dark mode
-- [ ] Searchbox placeholder tekst ("Search apps...")
+- [x] Searchbox placeholder tekst ("Search apps...")
 
 ### Low Priority
 - [ ] Welcome banner gradient zou theme-kleuren moeten volgen (niet altijd blauw)
@@ -69,7 +69,7 @@
 - [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
 - [ ] Smooth scroll 165Hz verbeteren (onderzoeken of WPF dit beter kan)
 - [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
-- [ ] Placeholder tekst in searchbox ("Search apps...")
+- [x] Placeholder tekst in searchbox ("Search apps...")
 - [ ] Custom WPF styles voor ComboBox, CheckBox, RadioButton (theme-aware in dark mode)
 - [ ] Windows theme meer laten lijken op Windows 11 Settings (referentie: Win11Debloat)
 
