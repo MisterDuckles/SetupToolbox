@@ -180,8 +180,9 @@
                                 BorderBrush="{StaticResource TextSecondaryColor}"
                                 BorderThickness="1" CornerRadius="3"
                                 VerticalAlignment="Center" SnapsToDevicePixels="True">
-                            <Path x:Name="check" Data="M3,7 L6,10 L11,4"
+                            <Path x:Name="check" Data="M3,9 L7,13 L15,4"
                                   Stroke="White" StrokeThickness="2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                   VerticalAlignment="Center" HorizontalAlignment="Center"
                                   Visibility="Collapsed"/>
                         </Border>
@@ -191,7 +192,8 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="box" Property="Background" Value="{StaticResource PrimaryColor}"/>
-                            <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="Transparent"/>
+                            <Setter TargetName="box" Property="BorderThickness" Value="0"/>
                             <Setter TargetName="check" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">

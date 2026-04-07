@@ -78,8 +78,9 @@
                                   Margin="0,0,0,10"/>
 
                         <Button Content="Manage Auto-Update Schedule"
-                                Width="200"
+                                Width="220"
                                 HorizontalAlignment="Left"
+                                Style="{DynamicResource SelectAllButtonStyle}"
                                 Click="ManageScheduleButton_Click"/>
                     </StackPanel>
                 </Border>
@@ -106,7 +107,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,15,0,5"/>
-                        <TextBlock Text="WingetAppDeployer v1.0.5"
+                        <TextBlock Text="WingetAppDeployer v1.0.6"
                                    FontSize="12"
                                    Foreground="{DynamicResource TextSecondaryColor}"/>
                         <TextBlock Text="A modern app installer for Windows using Winget"
@@ -126,10 +127,12 @@
                     Width="100"
                     Height="40"
                     Margin="0,0,10,0"
+                    Style="{DynamicResource MaterialDesignFlatButton}"
                     Click="CancelButton_Click"/>
             <Button Content="Save"
                     Width="100"
                     Height="40"
+                    Style="{DynamicResource MaterialDesignRaisedButton}"
                     Click="SaveButton_Click"/>
         </StackPanel>
     </Grid>

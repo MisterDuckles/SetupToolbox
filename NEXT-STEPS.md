@@ -48,7 +48,7 @@
 
 ### Medium Priority
 - [ ] Echte app icons — plan uitdenken zodat elke app een eigen icon krijgt. Mogelijkheden: icons hosten op git repo, URL per app in apps.json, of icon pack downloaden. Nu emoji placeholder per category
-- [ ] Settings window styling kan nog mooier (buttons, combobox, checkbox niet theme-aware)
+- [x] Settings window styling kan nog mooier (buttons, combobox, checkbox niet theme-aware)
 - [x] WPF default ComboBox/CheckBox/RadioButton styling lekt door in dark mode
 - [x] Searchbox placeholder tekst ("Search apps...")
 
