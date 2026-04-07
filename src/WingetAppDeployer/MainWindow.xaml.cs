@@ -241,9 +241,11 @@ public partial class MainWindow : Window
         Grid.SetColumn(catTitle, 0);
         headerGrid.Children.Add(catTitle);
 
+        var allApps = GetAllAppsInCategory(category);
+        var allSelected = allApps.All(app => _selectedApps.GetValueOrDefault(app, false));
         var selectAllBtn = new Button
         {
-            Content = "Select All", Tag = category, VerticalAlignment = VerticalAlignment.Center
+            Content = allSelected ? "Deselect All" : "Select All", Tag = category, VerticalAlignment = VerticalAlignment.Center
         };
         selectAllBtn.SetResourceReference(StyleProperty, "SelectAllButtonStyle");
         selectAllBtn.Click += SelectAllCategory_Click;
@@ -495,13 +497,16 @@ public partial class MainWindow : Window
         var category = button?.Tag as Category;
         if (category == null) return;
 
-        var appsToSelect = GetAllAppsInCategory(category);
+        var apps = GetAllAppsInCategory(category);
+        var allSelected = apps.All(app => _selectedApps.GetValueOrDefault(app, false));
 
-        foreach (var app in appsToSelect)
+        foreach (var app in apps)
         {
-            _selectedApps[app] = true;
+            _selectedApps[app] = !allSelected;
             UpdateCardVisual(app);
         }
+
+        button.Content = allSelected ? "Select All" : "Deselect All";
         UpdateSelectionCount();
     }
 

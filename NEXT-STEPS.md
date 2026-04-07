@@ -43,7 +43,7 @@
 ### High Priority
 - [x] Auto-update loop: app detecteert steeds "nieuwe versie" en download zichzelf opnieuw (gefixed: versie komt nu dynamisch uit assembly i.p.v. hardcoded)
 - [ ] Subcategorie layout onoverzichtelijk — subcats (IDE & Editors, Version Control, etc.) lopen in elkaar over, moet overzichtelijker. Hier moeten we nog over nadenken hoe dit beter kan
-- [ ] Select All moet ook Deselect All zijn (toggle)
+- [x] Select All moet ook Deselect All zijn (toggle)
 - [ ] Smooth scroll verbeteren — werkt maar voelt nog niet 100% vloeiend (165Hz monitor). Uitzoeken of WPF dit beter kan
 
 ### Medium Priority
@@ -65,7 +65,7 @@
 - [x] App cards redesign: Apple-stijl iconen (afgerond vierkant), card highlight selectie, geen checkbox
 - [x] Smooth scroll (basis)
 - [x] Fix auto-update versie-check loop
-- [ ] Select All / Deselect All toggle
+- [x] Select All / Deselect All toggle
 - [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
 - [ ] Smooth scroll 165Hz verbeteren (onderzoeken of WPF dit beter kan)
 - [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
