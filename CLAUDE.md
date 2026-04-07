@@ -23,9 +23,10 @@
 - Alleen committen als een issue/feature ECHT af is, niet halverwege (tenzij de gebruiker dit expliciet vraagt)
 - GEEN "Co-Authored-By" of andere AI-attributie in commit messages
 - Commit messages bevatten alleen relevante info over wat er is gewijzigd
-- Na commit: update versienummer in `WingetAppDeployer.csproj` en `SettingsWindow.xaml`
+- Versienummer in code (csproj, AssemblyName, SettingsWindow) updaten als ONDERDEEL van dezelfde commit — NIET als aparte commit
+- Alles in 1 commit: code wijziging + versienummer update + NEXT-STEPS.md update
+- 1 build check is voldoende — bouw pas NADAT alle wijzigingen (inclusief versienummer) zijn gedaan
 - GitHub Releases (met exe's) ALLEEN bij milestone versies (1.1.0, 1.2.0, 2.0.0 etc.), NIET bij patches (1.0.1, 1.0.2 etc.)
-- Versienummer in code (csproj, AssemblyName, SettingsWindow) WEL updaten bij elke patch
 
 ## Context window bewaking
 
