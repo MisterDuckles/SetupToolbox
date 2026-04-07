@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using WingetAppDeployer.Models;
 using WingetAppDeployer.Services;
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, TextBlock> _installedLabels = new();
     private Category? _currentCategory;
     private string _currentCategoryColor = "#607D8B";
+    private double _scrollTarget;
 
     public MainWindow()
     {
@@ -52,10 +54,19 @@ public partial class MainWindow : Window
 
         await LoadAppDatabaseAsync();
 
-        // Smooth scroll
+        // Smooth scroll — uses CompositionTarget.Rendering to sync with monitor refresh rate
+        _scrollTarget = MainScrollViewer.VerticalOffset;
+        CompositionTarget.Rendering += (s, ev) =>
+        {
+            var current = MainScrollViewer.VerticalOffset;
+            var diff = _scrollTarget - current;
+            if (Math.Abs(diff) > 0.5)
+                MainScrollViewer.ScrollToVerticalOffset(current + diff * 0.15);
+        };
         MainScrollViewer.PreviewMouseWheel += (s, ev) =>
         {
-            MainScrollViewer.ScrollToVerticalOffset(MainScrollViewer.VerticalOffset - (ev.Delta * 0.6));
+            _scrollTarget -= ev.Delta * 0.8;
+            _scrollTarget = Math.Max(0, Math.Min(_scrollTarget, MainScrollViewer.ScrollableHeight));
             ev.Handled = true;
         };
     }

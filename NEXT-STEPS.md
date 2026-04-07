@@ -44,7 +44,8 @@
 - [x] Auto-update loop: app detecteert steeds "nieuwe versie" en download zichzelf opnieuw (gefixed: versie komt nu dynamisch uit assembly i.p.v. hardcoded)
 - [ ] Subcategorie layout onoverzichtelijk — subcats (IDE & Editors, Version Control, etc.) lopen in elkaar over, moet overzichtelijker. Hier moeten we nog over nadenken hoe dit beter kan
 - [x] Select All moet ook Deselect All zijn (toggle)
-- [ ] Smooth scroll verbeteren — werkt maar voelt nog niet 100% vloeiend (165Hz monitor). Uitzoeken of WPF dit beter kan
+- [ ] Auto-update schedule werkt niet — bij aanmaken task admin elevation nodig (UAC prompt)
+- [x] Smooth scroll verbeteren — werkt maar voelt nog niet 100% vloeiend (165Hz monitor). Uitzoeken of WPF dit beter kan
 
 ### Medium Priority
 - [ ] Echte app icons — plan uitdenken zodat elke app een eigen icon krijgt. Mogelijkheden: icons hosten op git repo, URL per app in apps.json, of icon pack downloaden. Nu emoji placeholder per category
@@ -67,13 +68,14 @@
 - [x] Fix auto-update versie-check loop
 - [x] Select All / Deselect All toggle
 - [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
-- [ ] Smooth scroll 165Hz verbeteren (onderzoeken of WPF dit beter kan)
+- [x] Smooth scroll 165Hz verbeteren (CompositionTarget.Rendering + lerp)
 - [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
 - [x] Placeholder tekst in searchbox ("Search apps...")
 - [x] Custom WPF styles voor ComboBox, CheckBox, RadioButton (theme-aware in dark mode)
 - [ ] Windows theme meer laten lijken op Windows 11 Settings (referentie: Win11Debloat)
 
 ### v1.2.0 - Enhanced UX
+- [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden
 - [ ] Installation profiles (Gaming, Developer, Office, etc.)
 - [ ] Parallel installaties (meerdere apps tegelijk)
 - [ ] Progress bar per app tijdens installatie
