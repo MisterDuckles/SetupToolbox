@@ -62,19 +62,21 @@
 
 ## Geplande Features
 
-### v1.1.0 - Polish & Subcategorie Redesign
+### v1.1.0 - Polish & UI Styling
 - [x] App cards redesign: Apple-stijl iconen (afgerond vierkant), card highlight selectie, geen checkbox
 - [x] Smooth scroll (basis)
 - [x] Fix auto-update versie-check loop
 - [x] Select All / Deselect All toggle
-- [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
 - [x] Smooth scroll 165Hz verbeteren (CompositionTarget.Rendering + lerp)
-- [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
 - [x] Placeholder tekst in searchbox ("Search apps...")
 - [x] Custom WPF styles voor ComboBox, CheckBox, RadioButton (theme-aware in dark mode)
+
+### v1.2.0 - Subcategorie Redesign & Icons
+- [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
+- [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
 - [ ] Windows theme meer laten lijken op Windows 11 Settings (referentie: Win11Debloat)
 
-### v1.2.0 - Enhanced UX
+### v1.3.0 - Enhanced UX
 - [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden
 - [ ] Installation profiles (Gaming, Developer, Office, etc.)
 - [ ] Parallel installaties (meerdere apps tegelijk)
@@ -84,14 +86,14 @@
 - [ ] Installatie geschiedenis/logs
 - [ ] Category card search: ook filteren op app-naam binnen categories
 
-### v1.3.0 - Advanced Features
+### v1.4.0 - Advanced Features
 - [ ] Multi-language support (NL/EN toggle)
 - [ ] Fuzzy search in app lijst
 - [ ] Update checker voor geinstalleerde apps
 - [ ] Notifications bij voltooide installaties
 - [ ] Welcome banner styling volgt theme kleuren
 
-### v1.4.0 - Integratie & Deployment
+### v1.5.0 - Integratie & Deployment
 - [ ] Integratie met Windows11-Unattended-Debloat updaten en testen
 - [ ] deploy.ps1 script updaten voor nieuwe exe naam
 - [ ] INTEGRATIE.md bijwerken met nieuwe instructies

@@ -107,7 +107,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,15,0,5"/>
-                        <TextBlock Text="WingetAppDeployer v1.0.7"
+                        <TextBlock Text="WingetAppDeployer v1.1.0"
                                    FontSize="12"
                                    Foreground="{DynamicResource TextSecondaryColor}"/>
                         <TextBlock Text="A modern app installer for Windows using Winget"
