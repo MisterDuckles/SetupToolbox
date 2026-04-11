@@ -41,6 +41,7 @@
 ## Bekende Issues (Te Fixen)
 
 ### High Priority
+- [x] Exe direct downloaden van GitHub opent niet — gefixed: self-contained exe (bevat .NET runtime)
 - [x] Auto-update loop: app detecteert steeds "nieuwe versie" en download zichzelf opnieuw (gefixed: versie komt nu dynamisch uit assembly i.p.v. hardcoded)
 - [ ] Subcategorie layout onoverzichtelijk — subcats (IDE & Editors, Version Control, etc.) lopen in elkaar over, moet overzichtelijker. Hier moeten we nog over nadenken hoe dit beter kan
 - [x] Select All moet ook Deselect All zijn (toggle)
@@ -72,6 +73,7 @@
 - [x] Custom WPF styles voor ComboBox, CheckBox, RadioButton (theme-aware in dark mode)
 
 ### v1.2.0 - Subcategorie Redesign & Icons
+- [x] Exe direct downloaden van GitHub opent niet — self-contained exe
 - [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
 - [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
 - [ ] Windows theme meer laten lijken op Windows 11 Settings (referentie: Win11Debloat)
@@ -117,8 +119,8 @@
 dotnet build WingetAppDeployer.sln -c Debug
 
 # Publish executables
-dotnet publish src/WingetAppDeployer -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./release
-dotnet publish src/Launcher -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./release
+dotnet publish src/WingetAppDeployer -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./release
+dotnet publish src/Launcher -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./release
 
 # Create GitHub release
 gh release create v1.x.x ./release/WingetAppDeployer-v1.x.x.exe ./release/Launcher.exe --title "WingetAppDeployer v1.x.x"
