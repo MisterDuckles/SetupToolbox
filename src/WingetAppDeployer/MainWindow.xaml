@@ -16,17 +16,17 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="64"/>
+            <RowDefinition x:Name="HeaderRow" Height="64"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="70"/>
         </Grid.RowDefinitions>
 
         <!-- Header with gradient -->
-        <Border Grid.Row="0" Background="{DynamicResource HeaderBackground}">
+        <Border x:Name="HeaderBorder" Grid.Row="0" Background="{DynamicResource HeaderBackground}">
             <Border.Effect>
                 <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.15" Color="#000000" Direction="270"/>
             </Border.Effect>
-            <Grid Margin="24,0">
+            <Grid x:Name="HeaderContentGrid" Margin="24,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="🪟" FontSize="26" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock Text="WingetAppDeployer" FontSize="22" FontWeight="SemiBold"
@@ -34,7 +34,8 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Border Background="{DynamicResource SearchBoxBackgroundColor}"
+                    <Border x:Name="SearchBoxBorder"
+                            Background="{DynamicResource SearchBoxBackgroundColor}"
                             BorderBrush="{DynamicResource SearchBoxBorderColor}"
                             CornerRadius="6" Margin="0,0,12,0" BorderThickness="1">
                         <TextBox Width="220"
@@ -78,7 +79,7 @@
                             </TextBox.CaretBrush>
                         </TextBox>
                     </Border>
-                    <Button Content="⚙️" FontSize="18" Width="44" Height="44"
+                    <Button x:Name="SettingsButton" Content="⚙️" FontSize="18" Width="44" Height="44"
                             Padding="0"
                             Style="{DynamicResource MaterialDesignFlatButton}"
                             Click="SettingsButton_Click"/>

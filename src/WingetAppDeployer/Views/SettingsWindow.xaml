@@ -42,7 +42,6 @@
                         <ComboBox x:Name="ThemeComboBox"
                                   Margin="0,0,0,15"
                                   SelectionChanged="ThemeComboBox_SelectionChanged">
-                            <ComboBoxItem Content="Google" Tag="Google"/>
                             <ComboBoxItem Content="Windows 11" Tag="Windows"/>
                             <ComboBoxItem Content="Sunset" Tag="Sunset"/>
                             <ComboBoxItem Content="Ocean Breeze" Tag="OceanBreeze"/>
@@ -107,7 +106,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryColor}"
                                    Margin="0,15,0,5"/>
-                        <TextBlock Text="WingetAppDeployer v1.1.0"
+                        <TextBlock Text="WingetAppDeployer v1.1.1"
                                    FontSize="12"
                                    Foreground="{DynamicResource TextSecondaryColor}"/>
                         <TextBlock Text="A modern app installer for Windows using Winget"

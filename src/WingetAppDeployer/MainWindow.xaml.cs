@@ -8,6 +8,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Shell;
+using WingetAppDeployer.Helpers;
 using WingetAppDeployer.Models;
 using WingetAppDeployer.Services;
 using WingetAppDeployer.Views;
@@ -27,10 +29,71 @@ public partial class MainWindow : Window
     private string _currentCategoryColor = "#607D8B";
     private double _scrollTarget;
 
+    private bool _micaActive;
+    private DropShadowEffect? _headerShadow;
+
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += MainWindow_SourceInitialized;
         Loaded += MainWindow_Loaded;
+    }
+
+    private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        var settings = App.SettingsService?.LoadSettings();
+        if (settings?.Theme == AppTheme.Windows)
+            ApplyMica(settings.DarkMode);
+    }
+
+    /// <summary>
+    /// Enables Mica backdrop + WindowChrome for Windows 11 native look.
+    /// </summary>
+    public void ApplyMica(bool darkMode)
+    {
+        if (!MicaHelper.EnableMica(this, darkMode))
+            return;
+
+        _micaActive = true;
+
+        // Apply WindowChrome so content extends into title bar
+        MicaHelper.ApplyWindowChrome(this, 80);
+
+        // Make header controls clickable in caption area
+        WindowChrome.SetIsHitTestVisibleInChrome(SearchBoxBorder, true);
+        WindowChrome.SetIsHitTestVisibleInChrome(SearchBox, true);
+        WindowChrome.SetIsHitTestVisibleInChrome(SettingsButton, true);
+
+        // Remove header shadow (Mica uses flat layering)
+        _headerShadow ??= HeaderBorder.Effect as DropShadowEffect;
+        HeaderBorder.Effect = null;
+
+        // Increase header row height so content has breathing room below the OS title bar area
+        HeaderRow.Height = new GridLength(80);
+
+        // Push header content down + leave space for the Win11 min/max/close buttons on the right
+        HeaderContentGrid.Margin = new Thickness(24, 16, 140, 0);
+    }
+
+    /// <summary>
+    /// Removes Mica backdrop and restores standard window decorations.
+    /// </summary>
+    public void RemoveMica()
+    {
+        if (!_micaActive) return;
+
+        MicaHelper.DisableMica(this);
+        MicaHelper.RemoveWindowChrome(this);
+
+        // Restore header shadow
+        if (_headerShadow != null)
+            HeaderBorder.Effect = _headerShadow;
+
+        // Restore original header dimensions
+        HeaderRow.Height = new GridLength(64);
+        HeaderContentGrid.Margin = new Thickness(24, 0, 0, 0);
+
+        _micaActive = false;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)

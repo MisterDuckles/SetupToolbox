@@ -27,15 +27,23 @@ public partial class App : Application
         var mode = darkMode ? "Dark" : "Light";
         var themeName = theme switch
         {
-            AppTheme.Windows => "Windows",
             AppTheme.Sunset => "Sunset",
             AppTheme.OceanBreeze => "OceanBreeze",
             AppTheme.Aurora => "Aurora",
-            _ => "Google"
+            _ => "Windows"
         };
 
         var uri = new Uri($"Themes/{themeName}{mode}.xaml", UriKind.Relative);
         mergedDicts.Add(new ResourceDictionary { Source = uri });
+
+        // Toggle Mica backdrop for Windows theme
+        if (Current.MainWindow is MainWindow mainWindow)
+        {
+            if (theme == AppTheme.Windows)
+                mainWindow.ApplyMica(darkMode);
+            else
+                mainWindow.RemoveMica();
+        }
     }
 
     protected override void OnStartup(StartupEventArgs e)

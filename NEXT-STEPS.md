@@ -76,7 +76,8 @@
 - [x] Exe direct downloaden van GitHub opent niet — self-contained exe
 - [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
 - [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
-- [ ] Windows theme meer laten lijken op Windows 11 Settings (referentie: Win11Debloat)
+- [x] Windows theme met echte Mica backdrop, WinUI 3 color tokens, WindowChrome (native Win11 look)
+- [x] Google theme verwijderd (Windows theme is nu de default)
 
 ### v1.3.0 - Enhanced UX
 - [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden

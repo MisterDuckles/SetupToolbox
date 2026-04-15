@@ -10,7 +10,7 @@
                 <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="Blue" SecondaryColor="Teal" />
 
                 <!-- App Themes -->
-                <ResourceDictionary Source="Themes/GoogleLight.xaml" />
+                <ResourceDictionary Source="Themes/WindowsLight.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

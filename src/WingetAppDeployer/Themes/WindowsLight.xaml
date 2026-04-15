@@ -2,42 +2,58 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
+    <!-- ===== Windows 11 Light - WinUI 3 Fluent Design Tokens ===== -->
+
     <!-- ===== SolidColorBrush Resources ===== -->
     <SolidColorBrush x:Key="PrimaryColor" Color="#005FB8"/>
     <SolidColorBrush x:Key="PrimaryDarkColor" Color="#003D75"/>
     <SolidColorBrush x:Key="PrimaryLightColor" Color="#CCE4F7"/>
-    <SolidColorBrush x:Key="AccentColor" Color="#60CDFF"/>
+    <SolidColorBrush x:Key="AccentColor" Color="#0078D4"/>
+
+    <!-- Mica fallback (code sets Transparent when Mica is active) -->
     <SolidColorBrush x:Key="BackgroundColor" Color="#F3F3F3"/>
-    <SolidColorBrush x:Key="SurfaceColor" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="CardHoverColor" Color="#EBEBEB"/>
-    <SolidColorBrush x:Key="FooterBackgroundColor" Color="#F9F9F9"/>
-    <SolidColorBrush x:Key="TextPrimaryColor" Color="#1A1A1A"/>
-    <SolidColorBrush x:Key="TextSecondaryColor" Color="#616161"/>
-    <SolidColorBrush x:Key="BorderColor" Color="#D1D1D1"/>
-    <SolidColorBrush x:Key="CategoryCardBg" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="CategoryCardBorder" Color="#CCE0F0"/>
-    <SolidColorBrush x:Key="SearchBoxBackgroundColor" Color="#30FFFFFF"/>
-    <SolidColorBrush x:Key="SearchBoxBorderColor" Color="#20FFFFFF"/>
-    <SolidColorBrush x:Key="HeaderTextColor" Color="White"/>
-    <SolidColorBrush x:Key="ErrorColor" Color="#D32F2F"/>
+
+    <!-- Semi-transparent layers: Mica shows through with enough contrast -->
+    <SolidColorBrush x:Key="SurfaceColor" Color="#CCFFFFFF"/>           <!-- CardBackgroundFillColorDefault -->
+    <SolidColorBrush x:Key="CardHoverColor" Color="#99F9F9F9"/>         <!-- ControlFillColorSecondary -->
+    <SolidColorBrush x:Key="FooterBackgroundColor" Color="#24000000"/>  <!-- Darkened footer panel -->
+    <SolidColorBrush x:Key="CategoryCardBg" Color="#B3FFFFFF"/>         <!-- LayerFillColorDefault -->
+
+    <!-- Text: semi-transparent black (WinUI TextFillColor) -->
+    <SolidColorBrush x:Key="TextPrimaryColor" Color="#E4000000"/>       <!-- TextFillColorPrimary -->
+    <SolidColorBrush x:Key="TextSecondaryColor" Color="#9E000000"/>     <!-- TextFillColorSecondary -->
+
+    <!-- Strokes: semi-transparent (WinUI ControlStrokeColor) -->
+    <SolidColorBrush x:Key="BorderColor" Color="#0F000000"/>            <!-- ControlStrokeColorDefault -->
+    <SolidColorBrush x:Key="CategoryCardBorder" Color="#0F000000"/>     <!-- CardStrokeColorDefault -->
+
+    <!-- Search box in transparent header needs visible background -->
+    <SolidColorBrush x:Key="SearchBoxBackgroundColor" Color="#80FFFFFF"/>
+    <SolidColorBrush x:Key="SearchBoxBorderColor" Color="#0F000000"/>
+
+    <!-- Header text dark on light Mica backdrop -->
+    <SolidColorBrush x:Key="HeaderTextColor" Color="#E4000000"/>
+
+    <SolidColorBrush x:Key="ErrorColor" Color="#C42B1C"/>
 
     <!-- ===== LinearGradientBrush Resources ===== -->
-    <LinearGradientBrush x:Key="HeaderBackground" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#005FB8" Offset="0"/>
-        <GradientStop Color="#003D75" Offset="1"/>
+    <!-- Darker tint so header stands out from content area -->
+    <LinearGradientBrush x:Key="HeaderBackground" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#30000000" Offset="0"/>
+        <GradientStop Color="#20000000" Offset="1"/>
     </LinearGradientBrush>
 
     <!-- ===== sys:Double Resources ===== -->
-    <sys:Double x:Key="CardCornerRadius">8</sys:Double>
-    <sys:Double x:Key="CardShadowDepth">2</sys:Double>
-    <sys:Double x:Key="CardShadowBlur">14</sys:Double>
-    <sys:Double x:Key="CardShadowOpacity">0.12</sys:Double>
-    <sys:Double x:Key="CategoryCornerRadius">8</sys:Double>
+    <sys:Double x:Key="CardCornerRadius">7</sys:Double>
+    <sys:Double x:Key="CardShadowDepth">1</sys:Double>
+    <sys:Double x:Key="CardShadowBlur">6</sys:Double>
+    <sys:Double x:Key="CardShadowOpacity">0.04</sys:Double>
+    <sys:Double x:Key="CategoryCornerRadius">7</sys:Double>
 
-    <!-- ===== MaterialDesignFlatButton Style ===== -->
+    <!-- ===== MaterialDesignFlatButton Style (WinUI Subtle Button) ===== -->
     <Style x:Key="MaterialDesignFlatButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{StaticResource PrimaryColor}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="16,8"/>
         <Setter Property="FontSize" Value="14"/>
@@ -50,7 +66,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4"
+                            CornerRadius="5"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -58,14 +74,15 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#1A005FB8"/>
+                            <Setter TargetName="border" Property="Background" Value="#09000000"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#33005FB8"/>
+                            <Setter TargetName="border" Property="Background" Value="#06000000"/>
+                            <Setter Property="Opacity" Value="0.7"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryColor}"/>
-                            <Setter Property="Opacity" Value="0.6"/>
+                            <Setter Property="Opacity" Value="0.5"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -73,11 +90,12 @@
         </Setter>
     </Style>
 
-    <!-- ===== MaterialDesignRaisedButton Style ===== -->
+    <!-- ===== MaterialDesignRaisedButton Style (WinUI Accent Button) ===== -->
     <Style x:Key="MaterialDesignRaisedButton" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
         <Setter Property="Foreground" Value="#FFFFFF"/>
-        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="BorderBrush" Value="#004C95"/>
         <Setter Property="Padding" Value="24,10"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
@@ -89,7 +107,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4"
+                            CornerRadius="5"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -97,14 +115,16 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryDarkColor}"/>
+                            <Setter TargetName="border" Property="Background" Value="#1A6DC1"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#002D59"/>
+                            <Setter TargetName="border" Property="Background" Value="#2D7FD3"/>
+                            <Setter Property="Opacity" Value="0.9"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Background" Value="#D1D1D1"/>
-                            <Setter Property="Foreground" Value="#A0A0A0"/>
+                            <Setter TargetName="border" Property="Background" Value="#37000000"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="Transparent"/>
+                            <Setter Property="Foreground" Value="#9E000000"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -112,15 +132,15 @@
         </Setter>
     </Style>
 
-    <!-- ===== SelectAllButtonStyle ===== -->
+    <!-- ===== SelectAllButtonStyle (WinUI Standard Button) ===== -->
     <Style x:Key="SelectAllButtonStyle" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{StaticResource PrimaryColor}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Background" Value="#B3FFFFFF"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="BorderBrush" Value="#0F000000"/>
+        <Setter Property="BorderThickness" Value="1,1,1,1"/>
         <Setter Property="Padding" Value="16,8"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -129,7 +149,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4"
+                            CornerRadius="5"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -137,15 +157,16 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#1A005FB8"/>
+                            <Setter TargetName="border" Property="Background" Value="#80F9F9F9"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#33005FB8"/>
+                            <Setter TargetName="border" Property="Background" Value="#4DF2F2F2"/>
+                            <Setter Property="Opacity" Value="0.9"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryColor}"/>
-                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderColor}"/>
-                            <Setter Property="Opacity" Value="0.6"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="#0F000000"/>
+                            <Setter Property="Opacity" Value="0.5"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -156,7 +177,7 @@
     <!-- ===== BackButtonStyle ===== -->
     <Style x:Key="BackButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="12,8"/>
         <Setter Property="FontSize" Value="14"/>
@@ -169,7 +190,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4"
+                            CornerRadius="5"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -177,10 +198,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#33FFFFFF"/>
+                            <Setter TargetName="border" Property="Background" Value="#09000000"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#55FFFFFF"/>
+                            <Setter TargetName="border" Property="Background" Value="#06000000"/>
+                            <Setter Property="Opacity" Value="0.85"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.5"/>
@@ -191,19 +213,19 @@
         </Setter>
     </Style>
 
-    <!-- ===== CheckBox Style ===== -->
+    <!-- ===== CheckBox Style (WinUI 3) ===== -->
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontSize" Value="14"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border x:Name="box" Width="18" Height="18"
-                                Background="{StaticResource SurfaceColor}"
-                                BorderBrush="{StaticResource TextSecondaryColor}"
-                                BorderThickness="1" CornerRadius="3"
+                        <Border x:Name="box" Width="20" Height="20"
+                                Background="#B3FFFFFF"
+                                BorderBrush="#72000000"
+                                BorderThickness="1" CornerRadius="4"
                                 VerticalAlignment="Center" SnapsToDevicePixels="True">
                             <Path x:Name="check" Data="M3,9 L7,13 L15,4"
                                   Stroke="White" StrokeThickness="2"
@@ -217,12 +239,11 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="box" Property="Background" Value="{StaticResource PrimaryColor}"/>
-                            <Setter TargetName="box" Property="BorderBrush" Value="Transparent"/>
-                            <Setter TargetName="box" Property="BorderThickness" Value="0"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
                             <Setter TargetName="check" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource TextPrimaryColor}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -230,22 +251,22 @@
         </Setter>
     </Style>
 
-    <!-- ===== RadioButton Style ===== -->
+    <!-- ===== RadioButton Style (WinUI 3) ===== -->
     <Style TargetType="RadioButton">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontSize" Value="14"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border x:Name="circle" Width="18" Height="18"
-                                Background="{StaticResource SurfaceColor}"
-                                BorderBrush="{StaticResource TextSecondaryColor}"
-                                BorderThickness="1" CornerRadius="9"
+                        <Border x:Name="circle" Width="20" Height="20"
+                                Background="#B3FFFFFF"
+                                BorderBrush="#72000000"
+                                BorderThickness="1" CornerRadius="10"
                                 VerticalAlignment="Center" SnapsToDevicePixels="True">
                             <Ellipse x:Name="dot" Width="8" Height="8"
-                                     Fill="White" Visibility="Collapsed"
+                                     Fill="{StaticResource PrimaryColor}" Visibility="Collapsed"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
@@ -253,12 +274,12 @@
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="circle" Property="Background" Value="{StaticResource PrimaryColor}"/>
                             <Setter TargetName="circle" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                            <Setter TargetName="circle" Property="BorderThickness" Value="2"/>
                             <Setter TargetName="dot" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="circle" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                            <Setter TargetName="circle" Property="BorderBrush" Value="{StaticResource TextPrimaryColor}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -266,14 +287,14 @@
         </Setter>
     </Style>
 
-    <!-- ===== ComboBox Style ===== -->
+    <!-- ===== ComboBox Style (WinUI 3) ===== -->
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
-        <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+        <Setter Property="Background" Value="#B3FFFFFF"/>
+        <Setter Property="BorderBrush" Value="#0F000000"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="10,7"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="FontSize" Value="14"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -283,11 +304,11 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4" SnapsToDevicePixels="True">
+                                CornerRadius="5" SnapsToDevicePixels="True">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="32"/>
                                 </Grid.ColumnDefinitions>
                                 <ContentPresenter Grid.Column="0"
                                                   Content="{TemplateBinding SelectionBoxItem}"
@@ -312,16 +333,25 @@
                                       VerticalAlignment="Center" IsHitTestVisible="False"/>
                             </Grid>
                         </Border>
+                        <!-- WinUI bottom accent border on focus -->
+                        <Border x:Name="accentBorder"
+                                BorderThickness="0,0,0,2"
+                                BorderBrush="{StaticResource PrimaryColor}"
+                                CornerRadius="5"
+                                Visibility="Collapsed"/>
                         <Popup x:Name="PART_Popup"
                                IsOpen="{TemplateBinding IsDropDownOpen}"
                                Placement="Bottom" AllowsTransparency="True"
                                PopupAnimation="Slide" Focusable="False">
-                            <Border Background="{StaticResource SurfaceColor}"
-                                    BorderBrush="{StaticResource BorderColor}"
-                                    BorderThickness="1" CornerRadius="4"
-                                    Margin="0,2,0,0" Padding="0,4"
+                            <Border Background="#F3F3F3"
+                                    BorderBrush="#0F000000"
+                                    BorderThickness="1" CornerRadius="7"
+                                    Margin="0,4,0,0" Padding="4"
                                     MinWidth="{TemplateBinding ActualWidth}"
                                     MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="4" BlurRadius="16" Opacity="0.14" Color="#000000" Direction="270"/>
+                                </Border.Effect>
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <StackPanel IsItemsHost="True"
                                                 KeyboardNavigation.DirectionalNavigation="Contained"/>
@@ -331,10 +361,10 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                            <Setter TargetName="border" Property="Background" Value="#80F9F9F9"/>
                         </Trigger>
                         <Trigger Property="IsDropDownOpen" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                            <Setter TargetName="accentBorder" Property="Visibility" Value="Visible"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -346,18 +376,19 @@
     <Style TargetType="ComboBoxItem">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Padding" Value="10,8"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
                     <Border x:Name="bg" Background="{TemplateBinding Background}"
-                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            Padding="{TemplateBinding Padding}" CornerRadius="4"
+                            Margin="2,1" SnapsToDevicePixels="True">
                         <ContentPresenter VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="bg" Property="Background" Value="{StaticResource CardHoverColor}"/>
+                            <Setter TargetName="bg" Property="Background" Value="#09000000"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="bg" Property="Background" Value="{StaticResource PrimaryLightColor}"/>
@@ -368,7 +399,247 @@
         </Setter>
     </Style>
 
-    <!-- ===== MaterialDesignCircularProgressBar Style ===== -->
+    <!-- ===== TextBox Style (WinUI 3) ===== -->
+    <Style TargetType="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="Background" Value="#B3FFFFFF"/>
+        <Setter Property="BorderBrush" Value="#0F000000"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource PrimaryColor}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Grid>
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Focusable="False"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          Background="Transparent"/>
+                        </Border>
+                        <!-- Bottom accent border (WinUI focus indicator) -->
+                        <Border x:Name="accentBorder"
+                                BorderThickness="0,0,0,2"
+                                BorderBrush="{StaticResource PrimaryColor}"
+                                CornerRadius="5"
+                                Visibility="Collapsed"
+                                IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#80F9F9F9"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#FFFFFF"/>
+                            <Setter TargetName="accentBorder" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryColor}"/>
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== ScrollBar Thumb Style (WinUI 3 thin scrollbar) ===== -->
+    <Style x:Key="WinUIScrollBarThumb" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="thumb"
+                            Background="#72000000"
+                            CornerRadius="3"
+                            Margin="2"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="thumb" Property="Background" Value="#9E000000"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="thumb" Property="Background" Value="#CC000000"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== ScrollBar Style (WinUI 3 thin, no arrows) ===== -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="MinWidth" Value="12"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource WinUIScrollBarThumb}"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+                            </Track.DecreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Orientation" Value="Horizontal">
+                            <Setter Property="Height" Value="12"/>
+                            <Setter Property="MinHeight" Value="12"/>
+                            <Setter Property="Width" Value="Auto"/>
+                            <Setter Property="MinWidth" Value="0"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== ToggleButton Style (WinUI 3 generic) ===== -->
+    <Style TargetType="ToggleButton">
+        <Setter Property="Background" Value="#B3FFFFFF"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="BorderBrush" Value="#0F000000"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="5"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#80F9F9F9"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#4DF2F2F2"/>
+                            <Setter Property="Opacity" Value="0.9"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource PrimaryColor}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="Transparent"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== ContextMenu Style (WinUI 3) ===== -->
+    <Style TargetType="ContextMenu">
+        <Setter Property="Background" Value="#F3F3F3"/>
+        <Setter Property="BorderBrush" Value="#0F000000"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="7"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect ShadowDepth="4" BlurRadius="16" Opacity="0.14" Color="#000000" Direction="270"/>
+                        </Border.Effect>
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== MenuItem Style (WinUI 3) ===== -->
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="bg"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            Margin="2,1"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter ContentSource="Header"
+                                          RecognizesAccessKey="True"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="bg" Property="Background" Value="#09000000"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== ToolTip Style (WinUI 3) ===== -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="#F3F3F3"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+        <Setter Property="BorderBrush" Value="#0F000000"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <Border.Effect>
+                            <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.1" Color="#000000" Direction="270"/>
+                        </Border.Effect>
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== MaterialDesignCircularProgressBar Style (WinUI ProgressRing) ===== -->
     <Style x:Key="MaterialDesignCircularProgressBar" TargetType="ProgressBar">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource PrimaryColor}"/>
@@ -379,9 +650,9 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
                     <Grid>
-                        <Ellipse Stroke="#D1D1D1" StrokeThickness="3" Margin="5"/>
-                        <Ellipse Stroke="{TemplateBinding Foreground}" StrokeThickness="3" Margin="5"
-                                 StrokeDashArray="2 4" RenderTransformOrigin="0.5,0.5">
+                        <Ellipse Stroke="#0F000000" StrokeThickness="2.5" Margin="5"/>
+                        <Ellipse Stroke="{TemplateBinding Foreground}" StrokeThickness="2.5" Margin="5"
+                                 StrokeDashArray="3 6" RenderTransformOrigin="0.5,0.5">
                             <Ellipse.RenderTransform>
                                 <RotateTransform x:Name="SpinTransform" Angle="0"/>
                             </Ellipse.RenderTransform>
@@ -391,7 +662,7 @@
                                         <Storyboard RepeatBehavior="Forever">
                                             <DoubleAnimation Storyboard.TargetName="SpinTransform"
                                                              Storyboard.TargetProperty="Angle"
-                                                             From="0" To="360" Duration="0:0:1.5"/>
+                                                             From="0" To="360" Duration="0:0:1.2"/>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </EventTrigger>

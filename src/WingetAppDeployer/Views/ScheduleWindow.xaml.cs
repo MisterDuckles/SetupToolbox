@@ -1,4 +1,6 @@
 using System.Windows;
+using WingetAppDeployer.Helpers;
+using WingetAppDeployer.Models;
 using WingetAppDeployer.Services;
 
 namespace WingetAppDeployer.Views;
@@ -8,6 +10,13 @@ public partial class ScheduleWindow : Window
     public ScheduleWindow()
     {
         InitializeComponent();
+
+        SourceInitialized += (s, e) =>
+        {
+            var settings = App.SettingsService?.LoadSettings();
+            if (settings?.Theme == AppTheme.Windows)
+                MicaHelper.SetTitleBarTheme(this, settings.DarkMode);
+        };
     }
 
     private async void CreateButton_Click(object sender, RoutedEventArgs e)

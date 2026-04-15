@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using WingetAppDeployer.Helpers;
 using WingetAppDeployer.Models;
 using AppModel = WingetAppDeployer.Models.App;
 
@@ -20,6 +21,13 @@ public partial class InstallWindow : Window
         InitializeComponent();
         _appsToInstall = appsToInstall;
         Loaded += InstallWindow_Loaded;
+
+        SourceInitialized += (s, e) =>
+        {
+            var settings = App.SettingsService?.LoadSettings();
+            if (settings?.Theme == AppTheme.Windows)
+                MicaHelper.SetTitleBarTheme(this, settings.DarkMode);
+        };
     }
 
     private async void InstallWindow_Loaded(object sender, RoutedEventArgs e)

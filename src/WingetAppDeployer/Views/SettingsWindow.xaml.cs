@@ -1,5 +1,7 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
+using WingetAppDeployer.Helpers;
 using WingetAppDeployer.Models;
 
 namespace WingetAppDeployer.Views;
@@ -13,17 +15,22 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _settings = App.SettingsService!.LoadSettings();
         LoadSettings();
+
+        SourceInitialized += (s, e) =>
+        {
+            if (_settings.Theme == AppTheme.Windows)
+                MicaHelper.SetTitleBarTheme(this, _settings.DarkMode);
+        };
     }
 
     private void LoadSettings()
     {
         ThemeComboBox.SelectedIndex = _settings.Theme switch
         {
-            AppTheme.Google => 0,
-            AppTheme.Windows => 1,
-            AppTheme.Sunset => 2,
-            AppTheme.OceanBreeze => 3,
-            AppTheme.Aurora => 4,
+            AppTheme.Windows => 0,
+            AppTheme.Sunset => 1,
+            AppTheme.OceanBreeze => 2,
+            AppTheme.Aurora => 3,
             _ => 0
         };
 
@@ -36,24 +43,35 @@ public partial class SettingsWindow : Window
     {
         return ThemeComboBox.SelectedIndex switch
         {
-            1 => AppTheme.Windows,
-            2 => AppTheme.Sunset,
-            3 => AppTheme.OceanBreeze,
-            4 => AppTheme.Aurora,
-            _ => AppTheme.Google
+            1 => AppTheme.Sunset,
+            2 => AppTheme.OceanBreeze,
+            3 => AppTheme.Aurora,
+            _ => AppTheme.Windows
         };
     }
 
     private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded) return;
-        App.ApplyTheme(GetSelectedTheme(), DarkModeCheckBox.IsChecked ?? false);
+        var theme = GetSelectedTheme();
+        var dark = DarkModeCheckBox.IsChecked ?? false;
+        App.ApplyTheme(theme, dark);
+        ApplyMicaToSelf(theme, dark);
     }
 
     private void DarkModeCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded) return;
-        App.ApplyTheme(GetSelectedTheme(), DarkModeCheckBox.IsChecked ?? false);
+        var theme = GetSelectedTheme();
+        var dark = DarkModeCheckBox.IsChecked ?? false;
+        App.ApplyTheme(theme, dark);
+        ApplyMicaToSelf(theme, dark);
+    }
+
+    private void ApplyMicaToSelf(AppTheme theme, bool dark)
+    {
+        if (theme == AppTheme.Windows)
+            MicaHelper.SetTitleBarTheme(this, dark);
     }
 
     private void ManageScheduleButton_Click(object sender, RoutedEventArgs e)
