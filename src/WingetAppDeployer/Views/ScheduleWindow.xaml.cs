@@ -29,33 +29,44 @@ public partial class ScheduleWindow : Window
 
         var time = TimeTextBox.Text;
 
-        var success = await App.TaskSchedulerService!.CreateUpdateTaskAsync(scheduleType, time);
+        var result = await App.TaskSchedulerService!.CreateUpdateTaskAsync(scheduleType, time);
 
-        if (success)
+        switch (result)
         {
-            // Save setting
-            var settings = App.SettingsService!.CurrentSettings;
-            settings.AutoUpdateEnabled = true;
-            settings.AutoUpdateSchedule = scheduleType.ToString();
-            App.SettingsService.SaveSettings(settings);
+            case CreateTaskResult.Success:
+                var settings = App.SettingsService!.CurrentSettings;
+                settings.AutoUpdateEnabled = true;
+                settings.AutoUpdateSchedule = scheduleType.ToString();
+                App.SettingsService.SaveSettings(settings);
 
-            MessageBox.Show(
-                "Auto-update task created successfully!",
-                "Success",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information
-            );
+                MessageBox.Show(
+                    "Auto-update task created successfully!",
+                    "Success",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
 
-            Close();
-        }
-        else
-        {
-            MessageBox.Show(
-                "Failed to create scheduled task. Make sure you have administrator privileges.",
-                "Error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error
-            );
+                Close();
+                break;
+
+            case CreateTaskResult.UserCancelled:
+                MessageBox.Show(
+                    "Admin-rechten geweigerd. De taak is niet aangemaakt.",
+                    "Geannuleerd",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+                break;
+
+            case CreateTaskResult.Failed:
+            default:
+                MessageBox.Show(
+                    "Kon de scheduled task niet aanmaken. Probeer de app opnieuw te starten.",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+                break;
         }
     }
 

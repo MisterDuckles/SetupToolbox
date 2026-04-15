@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -7,54 +8,52 @@ namespace WingetAppDeployer.Services;
 public class TaskSchedulerService
 {
     private const string TaskName = "WingetAppDeployer_AutoUpdate";
+    private const int ErrorCancelled = 1223;
 
-    /// <summary>
-    /// Creates a scheduled task to check for app updates
-    /// </summary>
-    public async Task<bool> CreateUpdateTaskAsync(UpdateScheduleType scheduleType, string? customTime = null)
+    public async Task<CreateTaskResult> CreateUpdateTaskAsync(UpdateScheduleType scheduleType, string? customTime = null)
     {
+        var exePath = Environment.ProcessPath ?? string.Empty;
+        if (string.IsNullOrEmpty(exePath))
+            return CreateTaskResult.Failed;
+
+        var trigger = scheduleType switch
+        {
+            UpdateScheduleType.Daily => $"/sc daily /st {customTime ?? "09:00"}",
+            UpdateScheduleType.Weekly => $"/sc weekly /d MON /st {customTime ?? "09:00"}",
+            UpdateScheduleType.OnStartup => "/sc onlogon",
+            _ => "/sc daily /st 09:00"
+        };
+
+        var arguments = $"/create /tn \"{TaskName}\" {trigger} /tr \"\\\"{exePath}\\\" /autoupdate\" /f /rl highest";
+
         try
         {
-            var exePath = Environment.ProcessPath ?? string.Empty;
-            if (string.IsNullOrEmpty(exePath))
-                return false;
-
-            // Delete existing task if it exists
-            await DeleteUpdateTaskAsync();
-
-            var trigger = scheduleType switch
-            {
-                UpdateScheduleType.Daily => $"/sc daily /st {customTime ?? "09:00"}",
-                UpdateScheduleType.Weekly => $"/sc weekly /d MON /st {customTime ?? "09:00"}",
-                UpdateScheduleType.OnStartup => "/sc onlogon",
-                _ => "/sc daily /st 09:00"
-            };
-
-            var arguments = $"/create /tn \"{TaskName}\" {trigger} /tr \"\\\"{exePath}\\\" /autoupdate\" /f /rl highest";
-
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "schtasks.exe",
                     Arguments = arguments,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
+                    UseShellExecute = true,
                     CreateNoWindow = true,
-                    Verb = "runas" // Request admin
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    Verb = "runas"
                 }
             };
 
             process.Start();
             await process.WaitForExitAsync();
 
-            return process.ExitCode == 0;
+            return process.ExitCode == 0 ? CreateTaskResult.Success : CreateTaskResult.Failed;
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
+        {
+            return CreateTaskResult.UserCancelled;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to create scheduled task: {ex.Message}");
-            return false;
+            return CreateTaskResult.Failed;
         }
     }
 
@@ -157,4 +156,11 @@ public enum UpdateScheduleType
     Daily,
     Weekly,
     OnStartup
+}
+
+public enum CreateTaskResult
+{
+    Success,
+    UserCancelled,
+    Failed
 }

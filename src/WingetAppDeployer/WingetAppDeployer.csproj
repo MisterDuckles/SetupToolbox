@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <!-- <ApplicationIcon>Resources\app.ico</ApplicationIcon> -->
-    <AssemblyName>WingetAppDeployer-v1.1.1</AssemblyName>
-    <Version>1.1.1</Version>
+    <AssemblyName>WingetAppDeployer-v1.1.2</AssemblyName>
+    <Version>1.1.2</Version>
     <Authors>Daan</Authors>
     <Product>Winget App Deployer</Product>
     <Description>Modern Windows application installer using Winget</Description>

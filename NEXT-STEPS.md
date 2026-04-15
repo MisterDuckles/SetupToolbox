@@ -45,7 +45,7 @@
 - [x] Auto-update loop: app detecteert steeds "nieuwe versie" en download zichzelf opnieuw (gefixed: versie komt nu dynamisch uit assembly i.p.v. hardcoded)
 - [ ] Subcategorie layout onoverzichtelijk — subcats (IDE & Editors, Version Control, etc.) lopen in elkaar over, moet overzichtelijker. Hier moeten we nog over nadenken hoe dit beter kan
 - [x] Select All moet ook Deselect All zijn (toggle)
-- [ ] Auto-update schedule werkt niet — bij aanmaken task admin elevation nodig (UAC prompt)
+- [x] Auto-update schedule werkt niet — gefixed: `UseShellExecute=true` + `Verb="runas"` geeft nu daadwerkelijk UAC-prompt, met onderscheid tussen geannuleerd en mislukt (v1.1.2)
 - [x] Smooth scroll verbeteren — werkt maar voelt nog niet 100% vloeiend (165Hz monitor). Uitzoeken of WPF dit beter kan
 
 ### Medium Priority
@@ -80,6 +80,7 @@
 - [x] Google theme verwijderd (Windows theme is nu de default)
 
 ### v1.3.0 - Enhanced UX
+- [ ] Auto-update toast notificatie — na een `/autoupdate` run een **native Windows toast** in Action Center tonen ("Alle apps succesvol geüpdatet" / "X apps geüpdatet, Y gefaald"). Nu draait de update volledig stil, user krijgt geen feedback dat de scheduled task heeft gelopen. Implementatie: `CommunityToolkit.WinUI.Notifications` NuGet package (opvolger van `Microsoft.Toolkit.Uwp.Notifications`) — werkt vanuit WPF zonder UWP-packaging, landt in Action Center
 - [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden
 - [ ] Installation profiles (Gaming, Developer, Office, etc.)
 - [ ] Parallel installaties (meerdere apps tegelijk)
