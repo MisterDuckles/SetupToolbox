@@ -74,13 +74,29 @@
 
 ### v1.2.0 - Subcategorie Redesign & Icons
 - [x] Exe direct downloaden van GitHub opent niet — self-contained exe
-- [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
-- [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
+- [~] Subcategorie layout redesign — **verplaatst naar v1.5.0** (voor decoratieve themes); voor de Windows-theme opgelost door de v1.3.0 Fluent rewrite (NavigationView + native layout)
+- [~] Echte app icons — **verplaatst naar v1.5.0** (voor decoratieve themes); voor de Windows-theme opgelost door v1.3.0 Fluent SymbolIcons
 - [x] Windows theme met echte Mica backdrop, WinUI 3 color tokens, WindowChrome (native Win11 look)
 - [x] Google theme verwijderd (Windows theme is nu de default)
 
-### v1.3.0 - Enhanced UX
+### v1.3.0 - Windows Native Fluent UI (Major UI rewrite)
+Nieuwe parallelle window-set wanneer het "Windows" theme actief is. Volledig Fluent Design via de WPF-UI library: Mica hoofdwindow, Acrylic dialogs, Segoe Fluent Icons, ToggleSwitches, SettingsCards, AutoSuggestBox, NavigationView sidebar met Apps/Tweaks/Debloat/Settings. **Geen enkel visueel element uit de huidige look blijft zichtbaar** in deze variant — alleen de categorie-indeling en de data-flow blijven gelijk. Decoratieve themes (Sunset/OceanBreeze/Aurora) blijven onaangeroerd in hun eigen window-set.
+
+- [x] v1.2.1: WPF-UI NuGet integratie + proof-of-concept sandbox (`/fluentsandbox`) — Fase 1
+- [ ] v1.3.0: MainWindowFluent met NavigationView sidebar (Apps/Tweaks/Debloat/Settings), Mica backdrop, AutoSuggestBox, Fluent category + app cards — Fase 2
+- [ ] v1.3.1: SettingsWindowFluent met SettingsCards + ToggleSwitches, Acrylic backdrop — Fase 3
+- [ ] v1.3.2: InstallWindowFluent + ScheduleWindowFluent, Acrylic — Fase 4
+- [ ] v1.3.3: Fluent SymbolIcons voor categorieën + polish + GitHub release — Fase 5
+- [ ] Confirm-dialog bij theme swap tussen Windows native en decoratieve themes
+- [ ] Tweaks + Debloat als placeholder sidebar items (InfoBar "Coming soon") — voor toekomstige features
+
+### v1.4.0 - Enhanced UX
 - [ ] Auto-update toast notificatie — na een `/autoupdate` run een **native Windows toast** in Action Center tonen ("Alle apps succesvol geüpdatet" / "X apps geüpdatet, Y gefaald"). Nu draait de update volledig stil, user krijgt geen feedback dat de scheduled task heeft gelopen. Implementatie: `CommunityToolkit.WinUI.Notifications` NuGet package (opvolger van `Microsoft.Toolkit.Uwp.Notifications`) — werkt vanuit WPF zonder UWP-packaging, landt in Action Center
+- [ ] **Global search field in MainWindow** — groot, prominent zoekveld bovenaan de MainWindow (boven de category cards) waarmee je direct op app-naam kan zoeken, ook als je niet weet in welke categorie de app staat. Moet *twee* bronnen doorzoeken:
+  1. **Lokale apps.json** — alle apps uit onze gecureerde categorieen (snel, instant results)
+  2. **Winget repository** — alle beschikbare apps via `winget search <query>` zodat je ook apps kan vinden en installeren die *niet* in onze categorieen staan. Resultaten moeten duidelijk gelabeld worden (bijv. "In je lijst" vs "Via winget") en via dezelfde install-flow kunnen worden geïnstalleerd.
+
+  Styling: moderne "gave" search box met glassmorphism/frosted glass effect, gradient glow erachter (zie reference image), search icon links, clear icon rechts. Moet theme-aware zijn (werkt met alle 4 themes in light + dark mode). Debounced input (300ms) zodat we niet bij elke toetsaanslag `winget search` aanroepen.
 - [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden
 - [ ] Installation profiles (Gaming, Developer, Office, etc.)
 - [ ] Parallel installaties (meerdere apps tegelijk)
@@ -90,14 +106,16 @@
 - [ ] Installatie geschiedenis/logs
 - [ ] Category card search: ook filteren op app-naam binnen categories
 
-### v1.4.0 - Advanced Features
+### v1.5.0 - Advanced Features & Decorative Themes Polish
 - [ ] Multi-language support (NL/EN toggle)
 - [ ] Fuzzy search in app lijst
 - [ ] Update checker voor geinstalleerde apps
 - [ ] Notifications bij voltooide installaties
 - [ ] Welcome banner styling volgt theme kleuren
+- [ ] Subcategorie layout redesign (alleen voor decoratieve themes — verplaatst uit v1.2.0)
+- [ ] Echte app icons (alleen voor decoratieve themes — verplaatst uit v1.2.0)
 
-### v1.5.0 - Integratie & Deployment
+### v1.6.0 - Integratie & Deployment
 - [ ] Integratie met Windows11-Unattended-Debloat updaten en testen
 - [ ] deploy.ps1 script updaten voor nieuwe exe naam
 - [ ] INTEGRATIE.md bijwerken met nieuwe instructies

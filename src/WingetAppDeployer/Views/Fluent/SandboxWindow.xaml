@@ -1,0 +1,58 @@
+<ui:FluentWindow x:Class="WingetAppDeployer.Views.Fluent.SandboxWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="WPF-UI Sandbox"
+                 Width="520"
+                 Height="400"
+                 WindowBackdropType="Acrylic"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowStartupLocation="CenterScreen">
+
+    <ui:FluentWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Light" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="WPF-UI Sandbox" />
+
+        <StackPanel Grid.Row="1" Margin="24" VerticalAlignment="Center">
+            <TextBlock Text="Fluent sandbox"
+                       FontSize="22"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,16" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <ui:SymbolIcon Symbol="Apps24" FontSize="22" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock Text="SymbolIcon rendering" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <ui:ToggleSwitch Content="Native toggle switch" IsChecked="True" Margin="0,0,0,12" />
+
+            <ui:Button Content="Primary Fluent button"
+                       Appearance="Primary"
+                       Icon="{ui:SymbolIcon Symbol=Checkmark24}"
+                       Margin="0,0,0,8" />
+
+            <ui:Button Content="Transparent button"
+                       Appearance="Transparent" />
+
+            <ui:InfoBar Title="Acrylic backdrop"
+                        Message="Frosted glass see-through effect. Mica is more subtle; Acrylic is more translucent."
+                        Severity="Informational"
+                        IsOpen="True"
+                        IsClosable="False"
+                        Margin="0,16,0,0" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>
