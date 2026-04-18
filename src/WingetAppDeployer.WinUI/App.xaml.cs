@@ -27,7 +27,9 @@ namespace WingetAppDeployer_WinUI;
 /// </summary>
 public partial class App : Application
 {
-    private Window? _window;
+    // Exposed so Pages can tweak window-level things (e.g. SystemBackdrop swap
+    // from a sub-view). Set during OnLaunched.
+    public static MainWindow? Window { get; private set; }
 
     // App-wide singleton services. Pages reach them via App.Database.
     public static AppDatabaseService Database { get; } = new();
@@ -47,7 +49,7 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
+        Window = new MainWindow();
+        Window.Activate();
     }
 }

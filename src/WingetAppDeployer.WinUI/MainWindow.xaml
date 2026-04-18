@@ -8,8 +8,12 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="WingetAppDeployer.WinUI Sandbox"
     mc:Ignorable="d">
-    <!-- SystemBackdrop wordt in code-behind geconfigureerd via DesktopAcrylicController
-         met DesktopAcrylicKind.Thin (meer see-through dan Default). -->
+    <Window.SystemBackdrop>
+        <!-- Mica Alt (BaseAlt): sterker wallpaper-doorschijn dan gewone Mica,
+             maar zonder de live-blur van DesktopAcrylic. Hetzelfde effect dat
+             Windows 11 Notepad en Terminal gebruiken. -->
+        <MicaBackdrop Kind="BaseAlt" />
+    </Window.SystemBackdrop>
 
     <Grid>
         <Grid.RowDefinitions>
