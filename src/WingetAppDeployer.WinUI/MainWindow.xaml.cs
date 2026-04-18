@@ -1,6 +1,10 @@
+using System;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Animation;
+using WingetAppDeployer_WinUI.Pages;
 using WinRT;
 
 namespace WingetAppDeployer_WinUI;
@@ -19,9 +23,40 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
-        // Enable Desktop Acrylic backdrop (Thin variant = stronger see-through)
+        // Desktop Acrylic (Thin) backdrop via official controller snippet
         TrySetAcrylicBackdrop(useAcrylicThin: true);
+
+        // Select the first menu item on startup — fires SelectionChanged which
+        // handles the Frame navigation.
+        NavView.SelectedItem = NavView.MenuItems[0];
     }
+
+    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        Type? pageType = null;
+
+        if (args.IsSettingsSelected)
+        {
+            pageType = typeof(SettingsPage);
+        }
+        else if (args.SelectedItem is NavigationViewItem item && item.Tag is string tag)
+        {
+            pageType = tag switch
+            {
+                "Apps" => typeof(AppsPage),
+                "Tweaks" => typeof(TweaksPage),
+                "Debloat" => typeof(DebloatPage),
+                _ => null
+            };
+        }
+
+        if (pageType == null) return;
+        if (ContentFrame.CurrentSourcePageType == pageType) return;
+
+        ContentFrame.Navigate(pageType, null, new EntranceNavigationTransitionInfo());
+    }
+
+    // ============== Desktop Acrylic backdrop ==============
 
     private bool TrySetAcrylicBackdrop(bool useAcrylicThin)
     {
@@ -31,8 +66,6 @@ public sealed partial class MainWindow : Window
         _wsdqHelper = new WindowsSystemDispatcherQueueHelper();
         _wsdqHelper.EnsureWindowsSystemDispatcherQueueController();
 
-        // Hook up the policy object so the backdrop reacts to window activation
-        // and theme changes correctly.
         _configurationSource = new SystemBackdropConfiguration();
         Activated += Window_Activated;
         Closed += Window_Closed;
