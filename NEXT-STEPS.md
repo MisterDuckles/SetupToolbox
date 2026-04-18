@@ -74,23 +74,13 @@
 
 ### v1.2.0 - Subcategorie Redesign & Icons
 - [x] Exe direct downloaden van GitHub opent niet — self-contained exe
-- [~] Subcategorie layout redesign — **verplaatst naar v1.5.0** (voor decoratieve themes); voor de Windows-theme opgelost door de v1.3.0 Fluent rewrite (NavigationView + native layout)
-- [~] Echte app icons — **verplaatst naar v1.5.0** (voor decoratieve themes); voor de Windows-theme opgelost door v1.3.0 Fluent SymbolIcons
+- [ ] Subcategorie layout redesign — overzichtelijker maken (cards? tabs? accordion?)
+- [ ] Echte app icons: plan uitdenken + implementeren (icons op git repo, URL in apps.json)
 - [x] Windows theme met echte Mica backdrop, WinUI 3 color tokens, WindowChrome (native Win11 look)
 - [x] Google theme verwijderd (Windows theme is nu de default)
+- [x] v1.2.1: WPF-UI NuGet integratie + Fluent sandbox PoC (verworpen als UI-pad — zie losse WinUI 3 track hieronder). Sandbox-files staan nog in `Views/Fluent/` voor referentie; WPF-UI package blijft in csproj.
 
-### v1.3.0 - Windows Native Fluent UI (Major UI rewrite)
-Nieuwe parallelle window-set wanneer het "Windows" theme actief is. Volledig Fluent Design via de WPF-UI library: Mica hoofdwindow, Acrylic dialogs, Segoe Fluent Icons, ToggleSwitches, SettingsCards, AutoSuggestBox, NavigationView sidebar met Apps/Tweaks/Debloat/Settings. **Geen enkel visueel element uit de huidige look blijft zichtbaar** in deze variant — alleen de categorie-indeling en de data-flow blijven gelijk. Decoratieve themes (Sunset/OceanBreeze/Aurora) blijven onaangeroerd in hun eigen window-set.
-
-- [x] v1.2.1: WPF-UI NuGet integratie + proof-of-concept sandbox (`/fluentsandbox`) — Fase 1
-- [ ] v1.3.0: MainWindowFluent met NavigationView sidebar (Apps/Tweaks/Debloat/Settings), Mica backdrop, AutoSuggestBox, Fluent category + app cards — Fase 2
-- [ ] v1.3.1: SettingsWindowFluent met SettingsCards + ToggleSwitches, Acrylic backdrop — Fase 3
-- [ ] v1.3.2: InstallWindowFluent + ScheduleWindowFluent, Acrylic — Fase 4
-- [ ] v1.3.3: Fluent SymbolIcons voor categorieën + polish + GitHub release — Fase 5
-- [ ] Confirm-dialog bij theme swap tussen Windows native en decoratieve themes
-- [ ] Tweaks + Debloat als placeholder sidebar items (InfoBar "Coming soon") — voor toekomstige features
-
-### v1.4.0 - Enhanced UX
+### v1.3.0 - Enhanced UX
 - [ ] Auto-update toast notificatie — na een `/autoupdate` run een **native Windows toast** in Action Center tonen ("Alle apps succesvol geüpdatet" / "X apps geüpdatet, Y gefaald"). Nu draait de update volledig stil, user krijgt geen feedback dat de scheduled task heeft gelopen. Implementatie: `CommunityToolkit.WinUI.Notifications` NuGet package (opvolger van `Microsoft.Toolkit.Uwp.Notifications`) — werkt vanuit WPF zonder UWP-packaging, landt in Action Center
 - [ ] **Global search field in MainWindow** — groot, prominent zoekveld bovenaan de MainWindow (boven de category cards) waarmee je direct op app-naam kan zoeken, ook als je niet weet in welke categorie de app staat. Moet *twee* bronnen doorzoeken:
   1. **Lokale apps.json** — alle apps uit onze gecureerde categorieen (snel, instant results)
@@ -106,16 +96,14 @@ Nieuwe parallelle window-set wanneer het "Windows" theme actief is. Volledig Flu
 - [ ] Installatie geschiedenis/logs
 - [ ] Category card search: ook filteren op app-naam binnen categories
 
-### v1.5.0 - Advanced Features & Decorative Themes Polish
+### v1.4.0 - Advanced Features
 - [ ] Multi-language support (NL/EN toggle)
 - [ ] Fuzzy search in app lijst
 - [ ] Update checker voor geinstalleerde apps
 - [ ] Notifications bij voltooide installaties
 - [ ] Welcome banner styling volgt theme kleuren
-- [ ] Subcategorie layout redesign (alleen voor decoratieve themes — verplaatst uit v1.2.0)
-- [ ] Echte app icons (alleen voor decoratieve themes — verplaatst uit v1.2.0)
 
-### v1.6.0 - Integratie & Deployment
+### v1.5.0 - Integratie & Deployment
 - [ ] Integratie met Windows11-Unattended-Debloat updaten en testen
 - [ ] deploy.ps1 script updaten voor nieuwe exe naam
 - [ ] INTEGRATIE.md bijwerken met nieuwe instructies
@@ -127,6 +115,48 @@ Nieuwe parallelle window-set wanneer het "Windows" theme actief is. Volledig Flu
 - [ ] Portable mode (geen installatie nodig)
 - [ ] CLI interface (`winget-deployer install --profile gaming`)
 - [ ] Backup/restore functionaliteit
+
+---
+
+## WingetAppDeployer.WinUI — Native Windows 11 App (Parallelle Track)
+
+Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen versie-lijn. Echte **WinUI 3 / Windows App SDK** stack — geen WPF, geen lepoco workarounds. Dit wordt de "Windows native" versie van de app. De bestaande WPF app blijft parallel bestaan voor de decoratieve themes (Sunset/OceanBreeze/Aurora) en voor gebruikers die die stijl willen.
+
+**Stack:** .NET 10 + Windows App SDK 1.8 + WinUI 3 + unpackaged exe. DesktopAcrylicController voor backdrop, echte `Microsoft.UI.Xaml` controls (TitleBar, ToggleSwitch, InfoBar, SymbolIcon, NavigationView etc.).
+
+### v0.1.0 - Sandbox foundation (huidig)
+- [x] Nieuw WinUI 3 project aangemaakt + toegevoegd aan solution
+- [x] Unpackaged exe config (`WindowsPackageType=None`)
+- [x] MainWindow met native Fluent TitleBar, content stack, ToggleSwitch, Accent button, Default button, SymbolIcon, InfoBar
+- [x] DesktopAcrylicController met `DesktopAcrylicKind.Thin` (via officiële Microsoft snippet + WindowsSystemDispatcherQueueHelper)
+- [x] Build + run verified op .NET 10
+
+### v0.2.0 - NavigationView shell
+- [ ] NavigationView sidebar: Apps / Tweaks / Debloat / Settings (identiek aan WinUI 3 Gallery patroon)
+- [ ] Drie lege Pages als routing targets
+- [ ] Settings item via `FooterMenuItems` + custom Settings page
+- [ ] AppTitleBar drag regions goed afgestemd
+
+### v0.3.0 - Apps pagina met categorieën
+- [ ] Port van de categorie-data uit `apps.json` (via gedeelde Models — eventueel via nieuw `WingetAppDeployer.Core` class library of initieel duplicate)
+- [ ] Settings-style category rows (`SettingsCard` / CardExpander) ipv kleurige tile grid
+- [ ] Click → detail page met app list + selectie
+
+### v0.4.0 - Install flow + winget integratie
+- [ ] WingetService porten / hergebruiken
+- [ ] Install dialog met echte Fluent `ProgressBar` + log
+- [ ] Schedule dialog voor auto-update
+
+### v0.5.0 - Polish + release
+- [ ] Segoe Fluent Icons per categorie
+- [ ] Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)
+- [ ] Eigen GitHub release artifact
+- [ ] Eventueel `WingetAppDeployer.Core/` extractie van Models+Services
+
+### Out of scope voor dit track
+- Decoratieve themes (Sunset/Aurora/OceanBreeze) — exclusief in de WPF app, nooit in WinUI 3
+- MSIX packaging — mogelijk later, voor nu unpackaged
+- Integratie in de bestaande `Launcher/` — voor nu los te downloaden
 
 ---
 
@@ -150,23 +180,25 @@ gh release create v1.x.x ./release/WingetAppDeployer-v1.x.x.exe ./release/Launch
 
 ```
 src/
-├── WingetAppDeployer/           # Main WPF application
+├── WingetAppDeployer/           # Main WPF application (decorative themes)
 │   ├── Models/                  # Data models (App, Category, Settings)
 │   ├── Services/                # Business logic (Winget, GitHub, Settings, TaskScheduler)
 │   ├── Views/                   # XAML windows (Install, Settings, Schedule)
-│   ├── Themes/                  # 10 theme files (5 themes x light/dark)
-│   │   ├── GoogleLight.xaml
-│   │   ├── GoogleDark.xaml
-│   │   ├── WindowsLight.xaml
-│   │   ├── WindowsDark.xaml
-│   │   ├── SunsetLight.xaml
-│   │   ├── SunsetDark.xaml
-│   │   ├── OceanBreezeLight.xaml
-│   │   ├── OceanBreezeDark.xaml
-│   │   ├── AuroraLight.xaml
-│   │   └── AuroraDark.xaml
+│   │   └── Fluent/              # Legacy WPF-UI sandbox (reference only, approach dropped)
+│   ├── Themes/                  # Theme files (light/dark for each)
+│   │   ├── WindowsLight.xaml / WindowsDark.xaml
+│   │   ├── SunsetLight.xaml / SunsetDark.xaml
+│   │   ├── OceanBreezeLight.xaml / OceanBreezeDark.xaml
+│   │   └── AuroraLight.xaml / AuroraDark.xaml
+│   ├── Helpers/MicaHelper.cs    # P/Invoke Mica backdrop for Windows theme
 │   └── MainWindow.xaml          # Main UI (category grid + app list)
-└── Launcher/                    # Bootstrap launcher
+├── WingetAppDeployer.WinUI/     # NEW: native Windows 11 app (WinUI 3 + WinAppSDK 1.8)
+│   ├── App.xaml / App.xaml.cs
+│   ├── MainWindow.xaml / .xaml.cs         # DesktopAcrylicController (Thin)
+│   ├── WindowsSystemDispatcherQueueHelper.cs
+│   ├── app.manifest + Package.appxmanifest
+│   └── Assets/                  # Store icons + AppIcon.ico
+└── Launcher/                    # Bootstrap launcher (WPF app only)
     └── Program.cs               # Downloads & launches main app
 ```
 

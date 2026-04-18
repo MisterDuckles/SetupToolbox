@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="WingetAppDeployer_WinUI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:WingetAppDeployer_WinUI"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="WingetAppDeployer.WinUI Sandbox"
+    mc:Ignorable="d">
+    <!-- SystemBackdrop wordt in code-behind geconfigureerd via DesktopAcrylicController
+         met DesktopAcrylicKind.Thin (meer see-through dan Default). Zie MainWindow.xaml.cs. -->
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar x:Name="AppTitleBar" Title="WingetAppDeployer.WinUI Sandbox">
+            <TitleBar.IconSource>
+                <ImageIconSource ImageSource="Assets/AppIcon.ico" />
+            </TitleBar.IconSource>
+        </TitleBar>
+
+        <ScrollViewer Grid.Row="1" Padding="32,24,32,24">
+            <StackPanel Spacing="16" MaxWidth="520" HorizontalAlignment="Left">
+                <TextBlock Text="Fluent sandbox"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <SymbolIcon Symbol="AllApps" />
+                    <TextBlock Text="SymbolIcon rendering"
+                               Style="{StaticResource BodyTextBlockStyle}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <ToggleSwitch Header="Native toggle switch" IsOn="True" />
+
+                <Button Style="{StaticResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="Accept" />
+                        <TextBlock Text="Primary Fluent button" />
+                    </StackPanel>
+                </Button>
+
+                <Button>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="Globe" />
+                        <TextBlock Text="Default button" />
+                    </StackPanel>
+                </Button>
+
+                <InfoBar Severity="Informational"
+                         Title="Desktop Acrylic backdrop"
+                         Message="If this window shows the desktop and other windows softly blurred through it, the system acrylic backdrop from the Windows App SDK is active."
+                         IsOpen="True"
+                         IsClosable="False" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
