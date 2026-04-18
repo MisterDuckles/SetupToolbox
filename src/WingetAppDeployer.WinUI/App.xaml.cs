@@ -31,8 +31,9 @@ public partial class App : Application
     // from a sub-view). Set during OnLaunched.
     public static MainWindow? Window { get; private set; }
 
-    // App-wide singleton services. Pages reach them via App.Database.
+    // App-wide singleton services. Pages reach them via App.Database / App.Winget.
     public static AppDatabaseService Database { get; } = new();
+    public static WingetService Winget { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
