@@ -5,48 +5,105 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:WingetAppDeployer_WinUI.Models"
     mc:Ignorable="d"
     Background="Transparent">
 
-    <ScrollViewer Padding="36,24,36,24">
-        <StackPanel Spacing="16" MaxWidth="720" HorizontalAlignment="Left">
-            <TextBlock Text="Apps"
-                       Style="{StaticResource TitleTextBlockStyle}" />
+    <Grid Padding="36,24,36,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <TextBlock Text="Sandbox demo — this is where the category grid and app list will live. For now it shows the Fluent control demo from v0.1.0."
-                       Style="{StaticResource BodyTextBlockStyle}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       TextWrapping="Wrap" />
+        <TextBlock Grid.Row="0"
+                   Text="Apps"
+                   Style="{StaticResource TitleTextBlockStyle}"
+                   Margin="0,0,0,16" />
 
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,8,0,0">
-                <SymbolIcon Symbol="AllApps" />
-                <TextBlock Text="SymbolIcon rendering"
+        <Grid Grid.Row="1">
+            <!-- Loading state -->
+            <StackPanel x:Name="LoadingPanel"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <ProgressRing IsIndeterminate="True" Width="48" Height="48" />
+                <TextBlock Text="Loading categories..."
                            Style="{StaticResource BodyTextBlockStyle}"
-                           VerticalAlignment="Center" />
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
 
-            <ToggleSwitch Header="Native toggle switch" IsOn="True" />
+            <!-- Error state -->
+            <InfoBar x:Name="ErrorBar"
+                     Severity="Error"
+                     Title="Could not load categories"
+                     Message="Check your internet connection and try again."
+                     IsOpen="False"
+                     IsClosable="False"
+                     VerticalAlignment="Top"
+                     MaxWidth="720"
+                     HorizontalAlignment="Left" />
 
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Style="{StaticResource AccentButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Accept" />
-                        <TextBlock Text="Primary Fluent button" />
-                    </StackPanel>
-                </Button>
-                <Button>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <SymbolIcon Symbol="Globe" />
-                        <TextBlock Text="Default button" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
+            <!-- Category grid (WinUI 3 Gallery style boxes) -->
+            <ScrollViewer x:Name="CategoryScroller"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsRepeater x:Name="CategoryList">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout MinItemWidth="260"
+                                           MinItemHeight="150"
+                                           MinRowSpacing="12"
+                                           MinColumnSpacing="12"
+                                           ItemsStretch="Fill" />
+                    </ItemsRepeater.Layout>
 
-            <InfoBar Severity="Informational"
-                     Title="Category grid coming in v0.3.0"
-                     Message="Next step is porting the category list + app list + install flow from the WPF app into this native WinUI 3 shell."
-                     IsOpen="True"
-                     IsClosable="False" />
-        </StackPanel>
-    </ScrollViewer>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="models:Category">
+                            <Button Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="16"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch"
+                                    Click="CategoryCard_Click"
+                                    Tag="{x:Bind Id}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0"
+                                               Text="{x:Bind Icon}"
+                                               FontSize="32"
+                                               Margin="0,0,0,8"
+                                               HorizontalAlignment="Left" />
+
+                                    <StackPanel Grid.Row="1" VerticalAlignment="Top">
+                                        <TextBlock Text="{x:Bind Name}"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="{x:Bind Description}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0" />
+                                    </StackPanel>
+
+                                    <FontIcon Grid.Row="2"
+                                              Glyph="&#xE76C;"
+                                              FontSize="12"
+                                              HorizontalAlignment="Right"
+                                              VerticalAlignment="Bottom"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
 </Page>

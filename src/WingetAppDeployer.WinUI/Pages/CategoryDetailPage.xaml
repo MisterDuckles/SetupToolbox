@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="WingetAppDeployer_WinUI.Pages.CategoryDetailPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:WingetAppDeployer_WinUI.Models"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <Grid Padding="36,24,36,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Back button -->
+        <Button Grid.Row="0"
+                x:Name="BackButton"
+                Click="BackButton_Click"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="8,6"
+                Margin="0,0,0,4"
+                HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon Glyph="&#xE72B;" FontSize="12" />
+                <TextBlock Text="Back to categories"
+                           Style="{StaticResource BodyTextBlockStyle}" />
+            </StackPanel>
+        </Button>
+
+        <!-- Title + select all -->
+        <Grid Grid.Row="1" Margin="0,4,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       x:Name="CategoryTitle"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    x:Name="SelectAllButton"
+                    Content="Select all"
+                    Click="SelectAllButton_Click"
+                    VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- App list -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsRepeater x:Name="AppList">
+                <ItemsRepeater.Layout>
+                    <StackLayout Spacing="4" />
+                </ItemsRepeater.Layout>
+
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="models:App">
+                        <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                              BorderThickness="1"
+                              CornerRadius="4"
+                              Padding="16,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{x:Bind Name}"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               VerticalAlignment="Center" />
+                                    <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
+                                            CornerRadius="4"
+                                            Padding="6,2"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind Popular}">
+                                        <TextBlock Text="Popular"
+                                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind Description}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,0,0" />
+                            </StackPanel>
+
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                      VerticalAlignment="Center"
+                                      MinWidth="0"
+                                      Checked="AppCheckBox_Changed"
+                                      Unchecked="AppCheckBox_Changed" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </ScrollViewer>
+
+        <!-- Footer with selection count -->
+        <Grid Grid.Row="3"
+              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="0,12,0,0"
+              Margin="0,16,0,0">
+            <TextBlock x:Name="SelectionCountText"
+                       Text="0 apps selected"
+                       Style="{StaticResource BodyTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       VerticalAlignment="Center" />
+            <Button x:Name="InstallButton"
+                    Content="Install selected apps"
+                    Style="{StaticResource AccentButtonStyle}"
+                    IsEnabled="False"
+                    HorizontalAlignment="Right"
+                    Click="InstallButton_Click" />
+        </Grid>
+    </Grid>
+</Page>
