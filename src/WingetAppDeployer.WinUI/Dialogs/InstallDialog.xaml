@@ -12,62 +12,65 @@
     IsPrimaryButtonEnabled="False"
     DefaultButton="Primary">
 
-    <Grid Width="520" MinHeight="300">
+    <Grid Width="560" MinHeight="260">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,12">
-            <TextBlock x:Name="ProgressHeader"
-                       Text="Preparing..."
-                       Style="{StaticResource BodyStrongTextBlockStyle}" />
-            <TextBlock x:Name="ProgressDetail"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       TextWrapping="Wrap"
-                       TextTrimming="CharacterEllipsis" />
-        </StackPanel>
+        <TextBlock Grid.Row="0"
+                   x:Name="ProgressHeader"
+                   Text="Preparing..."
+                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                   Margin="0,0,0,16" />
 
-        <ProgressBar Grid.Row="1"
-                     x:Name="OverallProgress"
-                     Value="0"
-                     Maximum="1"
-                     Margin="0,0,0,12" />
-
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MaxHeight="320">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="380">
             <ItemsControl x:Name="AppItemList">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="dialogs:InstallItem">
-                        <Grid Padding="0,6" ColumnSpacing="12">
+                        <Grid Padding="0,10" ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="24" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" MinWidth="90" />
                             </Grid.ColumnDefinitions>
 
                             <FontIcon Grid.Column="0"
                                       Glyph="{x:Bind Glyph, Mode=OneWay}"
+                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                       FontSize="16"
                                       Foreground="{x:Bind IconBrush, Mode=OneWay}"
-                                      VerticalAlignment="Center" />
+                                      Visibility="{x:Bind GlyphVisibility, Mode=OneWay}"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0" />
 
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
                                 <TextBlock Text="{x:Bind Name}"
                                            Style="{StaticResource BodyTextBlockStyle}" />
+
+                                <!-- Indeterminate bar during install -->
+                                <ProgressBar Width="150"
+                                             HorizontalAlignment="Left"
+                                             IsIndeterminate="True"
+                                             ShowPaused="False"
+                                             ShowError="False"
+                                             Visibility="{x:Bind ProgressVisibility, Mode=OneWay}" />
+
+                                <!-- Live winget stdout line (e.g. "97.3 MB / 154 MB") -->
                                 <TextBlock Text="{x:Bind Message, Mode=OneWay}"
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextTrimming="CharacterEllipsis"
-                                           Visibility="{x:Bind HasMessage, Mode=OneWay}" />
+                                           Visibility="{x:Bind MessageVisibility, Mode=OneWay}" />
                             </StackPanel>
 
                             <TextBlock Grid.Column="2"
                                        Text="{x:Bind StateLabel, Mode=OneWay}"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{x:Bind IconBrush, Mode=OneWay}"
-                                       VerticalAlignment="Center" />
+                                       TextAlignment="Right"
+                                       VerticalAlignment="Top"
+                                       Margin="0,4,0,0" />
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

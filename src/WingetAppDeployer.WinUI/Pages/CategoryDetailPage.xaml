@@ -82,6 +82,20 @@
                                         <TextBlock Text="Popular"
                                                    Style="{StaticResource CaptionTextBlockStyle}" />
                                     </Border>
+                                    <Border Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                            CornerRadius="4"
+                                            Padding="6,2"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind IsInstalled}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon Glyph="&#xE73E;"
+                                                      FontSize="10"
+                                                      VerticalAlignment="Center" />
+                                            <TextBlock Text="Installed"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                                 <TextBlock Text="{x:Bind Description}"
                                            Style="{StaticResource CaptionTextBlockStyle}"

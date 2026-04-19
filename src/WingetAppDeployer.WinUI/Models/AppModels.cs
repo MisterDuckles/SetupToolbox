@@ -67,4 +67,7 @@ public class App
 
     [JsonIgnore]
     public bool IsSelected { get; set; }
+
+    [JsonIgnore]
+    public bool IsInstalled { get; set; }
 }

@@ -21,7 +21,7 @@ public sealed partial class CategoryDetailPage : Page
         InitializeComponent();
     }
 
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         if (e.Parameter is not Category category) return;
@@ -42,6 +42,32 @@ public sealed partial class CategoryDetailPage : Page
         AppList.ItemsSource = _allApps;
         UpdateSelectionCount();
         UpdateSelectAllButton();
+
+        // Kick off installed-state detection in the background so the page
+        // renders immediately; badges pop in once winget list returns.
+        await RefreshInstalledStateAsync();
+    }
+
+    private async Task RefreshInstalledStateAsync(bool forceRefresh = false)
+    {
+        var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh);
+        var changed = false;
+        foreach (var app in _allApps)
+        {
+            var nowInstalled = installedIds.Contains(app.WingetId);
+            if (app.IsInstalled != nowInstalled)
+            {
+                app.IsInstalled = nowInstalled;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            // Re-trigger x:Bind evaluation for the list by reassigning.
+            AppList.ItemsSource = null;
+            AppList.ItemsSource = _allApps;
+        }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
@@ -92,10 +118,10 @@ public sealed partial class CategoryDetailPage : Page
         await dialog.ShowAsync();
 
         // After install finishes, de-select everything so the user can start a
-        // fresh batch.
+        // fresh batch, then re-query winget list so just-installed apps show the
+        // Installed badge.
         foreach (var app in selected) app.IsSelected = false;
-        AppList.ItemsSource = null;
-        AppList.ItemsSource = _allApps;
+        await RefreshInstalledStateAsync(forceRefresh: true);
         UpdateSelectionCount();
         UpdateSelectAllButton();
     }

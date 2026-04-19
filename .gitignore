@@ -85,3 +85,6 @@ $RECYCLE.BIN/
 # Application settings (don't commit user settings)
 appsettings.Development.json
 appsettings.local.json
+
+# Claude Code personal settings
+.claude/settings.local.json

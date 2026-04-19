@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using AppModel = WingetAppDeployer_WinUI.Models.App;
 
@@ -11,6 +13,9 @@ namespace WingetAppDeployer_WinUI.Services;
 // winget.exe CLI, streams stdout as progress, no shared code with the WPF app.
 public sealed class WingetService
 {
+    private HashSet<string>? _installedIdsCache;
+    private readonly SemaphoreSlim _installedLock = new(1, 1);
+
     public async Task<bool> IsWingetAvailableAsync()
     {
         try
@@ -21,6 +26,58 @@ public sealed class WingetService
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses `winget list` output and returns the set of installed winget IDs.
+    /// Cached — pass forceRefresh=true after an install batch to re-detect.
+    /// </summary>
+    public async Task<HashSet<string>> GetInstalledAppIdsAsync(bool forceRefresh = false)
+    {
+        await _installedLock.WaitAsync();
+        try
+        {
+            if (_installedIdsCache != null && !forceRefresh)
+                return _installedIdsCache;
+
+            var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var (exitCode, output, _) = await RunWingetCommandAsync(
+                    "list --accept-source-agreements");
+                if (exitCode == 0)
+                {
+                    // winget list output: header line + separator + rows. The ID is the
+                    // second column. We split on whitespace; some rows have names with
+                    // spaces so we can't rely on position — instead match any token that
+                    // looks like a dotted winget ID (Publisher.AppName) per row.
+                    var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var line in lines.Skip(2))
+                    {
+                        var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var part in parts)
+                        {
+                            if (part.Contains('.') && !part.Contains('/') && part.Length > 3)
+                            {
+                                installed.Add(part);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // swallow — return empty set
+            }
+
+            _installedIdsCache = installed;
+            return installed;
+        }
+        finally
+        {
+            _installedLock.Release();
         }
     }
 

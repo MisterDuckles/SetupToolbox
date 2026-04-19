@@ -132,20 +132,31 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 - [x] Build + run verified op .NET 10
 
 ### v0.2.0 - NavigationView shell
-- [ ] NavigationView sidebar: Apps / Tweaks / Debloat / Settings (identiek aan WinUI 3 Gallery patroon)
-- [ ] Drie lege Pages als routing targets
-- [ ] Settings item via `FooterMenuItems` + custom Settings page
-- [ ] AppTitleBar drag regions goed afgestemd
+- [x] NavigationView sidebar: Apps / Tweaks / Debloat / Settings (identiek aan WinUI 3 Gallery patroon)
+- [x] Drie lege Pages als routing targets
+- [x] Settings item via `FooterMenuItems` + custom Settings page
+- [x] AppTitleBar drag regions goed afgestemd
 
 ### v0.3.0 - Apps pagina met categorieën
-- [ ] Port van de categorie-data uit `apps.json` (via gedeelde Models — eventueel via nieuw `WingetAppDeployer.Core` class library of initieel duplicate)
-- [ ] Settings-style category rows (`SettingsCard` / CardExpander) ipv kleurige tile grid
-- [ ] Click → detail page met app list + selectie
+- [x] Port van de categorie-data uit `apps.json` (via gedeelde Models — eventueel via nieuw `WingetAppDeployer.Core` class library of initieel duplicate)
+- [x] Settings-style category rows (`SettingsCard` / CardExpander) ipv kleurige tile grid
+- [x] Click → detail page met app list + selectie
+
+### v0.3.1 - MicaBackdrop polish
+- [x] MicaBackdrop BaseAlt + simplified backdrop code
 
 ### v0.4.0 - Install flow + winget integratie
-- [ ] WingetService porten / hergebruiken
-- [ ] Install dialog met echte Fluent `ProgressBar` + log
+- [x] WingetService porten / hergebruiken
+- [x] Install dialog met echte Fluent `ProgressBar` + log
 - [ ] Schedule dialog voor auto-update
+
+### v0.4.1 - Install UX polish + installed-state detectie
+- [x] InstallDialog redesign — overall progress bar weg, per-app indeterminate bar, live winget stdout line ("97.3 MB / 154 MB")
+- [x] DispatcherQueue-marshalling voor `Progress<T>` callbacks (WinUI 3 Desktop heeft niet altijd een SyncContext op de UI-thread)
+- [x] Expliciete `Visibility`-typed binding properties (bool->Visibility implicit via x:Bind kan flaky zijn)
+- [x] `WingetService.GetInstalledAppIdsAsync()` — parseert `winget list`, gecachet, `forceRefresh` na install batch
+- [x] "Installed" badge in CategoryDetailPage met groene achtergrond + checkmark glyph
+- [x] Auto-refresh installed state na install-batch
 
 ### v0.5.0 - Polish + release
 - [ ] Segoe Fluent Icons per categorie

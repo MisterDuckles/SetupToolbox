@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -30,7 +29,6 @@ public sealed partial class InstallDialog : ContentDialog
             _items.Add(new InstallItem(app.Name, app.WingetId));
 
         AppItemList.ItemsSource = _items;
-        OverallProgress.Maximum = apps.Count;
 
         Opened += InstallDialog_Opened;
         Closing += InstallDialog_Closing;
@@ -39,7 +37,6 @@ public sealed partial class InstallDialog : ContentDialog
     private async void InstallDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
         ProgressHeader.Text = $"Installing {_apps.Count} app{(_apps.Count == 1 ? "" : "s")}";
-        ProgressDetail.Text = "Starting...";
 
         var progress = new Progress<InstallProgress>(OnProgress);
         var results = await App.Winget.InstallAppsAsync(_apps, progress);
@@ -50,14 +47,23 @@ public sealed partial class InstallDialog : ContentDialog
         ProgressHeader.Text = failCount == 0
             ? $"Installed {successCount} app{(successCount == 1 ? "" : "s")} successfully"
             : $"{successCount} succeeded, {failCount} failed";
-        ProgressDetail.Text = string.Empty;
-        OverallProgress.Value = _apps.Count;
 
         _installFinished = true;
         IsPrimaryButtonEnabled = true;
     }
 
     private void OnProgress(InstallProgress p)
+    {
+        // Progress<T> captures SyncContext at construction, but WinUI 3 Desktop
+        // doesn't always have a SyncContext on the UI thread. Marshal explicitly
+        // via DispatcherQueue to be safe — INPC must fire on the UI thread.
+        if (DispatcherQueue.HasThreadAccess)
+            ApplyProgress(p);
+        else
+            DispatcherQueue.TryEnqueue(() => ApplyProgress(p));
+    }
+
+    private void ApplyProgress(InstallProgress p)
     {
         var item = _items.FirstOrDefault(i => i.WingetId == p.App.WingetId);
         if (item == null) return;
@@ -71,24 +77,16 @@ public sealed partial class InstallDialog : ContentDialog
             _ => item.State
         };
 
-        // Keep running log messages out of the ticker — only show terminal state
-        // messages (success/fail) under the name. Preparing messages are noisy.
-        item.Message = p.Phase is InstallPhase.Success or InstallPhase.Failed
-            ? p.Message
-            : string.Empty;
+        // Show winget's live output during install so the user sees progress
+        // (e.g. "97.3 MB / 154 MB"). On Success/Failed show the terminal message.
+        item.Message = string.IsNullOrWhiteSpace(p.Message) ? string.Empty : p.Message.Trim();
 
         ProgressHeader.Text = $"Installing {p.CurrentIndex} of {p.Total}: {p.App.Name}";
-        ProgressDetail.Text = p.Message;
-
-        // Count completed items for the bar
-        var completed = _items.Count(i => i.State is InstallItemState.Success or InstallItemState.Failed);
-        OverallProgress.Value = completed;
     }
 
     private void InstallDialog_Closing(ContentDialog sender, ContentDialogClosingEventArgs args)
     {
-        // Prevent closing while the install is still running. Primary button
-        // is disabled during install so the only way in is Esc.
+        // Prevent closing while the install is still running.
         if (!_installFinished) args.Cancel = true;
     }
 }
@@ -120,6 +118,8 @@ public sealed class InstallItem : INotifyPropertyChanged
             OnChanged(nameof(Glyph));
             OnChanged(nameof(IconBrush));
             OnChanged(nameof(StateLabel));
+            OnChanged(nameof(ProgressVisibility));
+            OnChanged(nameof(GlyphVisibility));
         }
     }
 
@@ -128,23 +128,33 @@ public sealed class InstallItem : INotifyPropertyChanged
         get => _message;
         set
         {
-            if (_message == value) return;
-            _message = value ?? string.Empty;
+            var v = value ?? string.Empty;
+            if (_message == v) return;
+            _message = v;
             OnChanged();
-            OnChanged(nameof(HasMessage));
+            OnChanged(nameof(MessageVisibility));
         }
     }
 
-    public Visibility HasMessage => string.IsNullOrEmpty(_message) ? Visibility.Collapsed : Visibility.Visible;
+    // Explicit Visibility-typed properties — bool->Visibility implicit conversion
+    // via x:Bind can be flaky on re-eval; returning Visibility directly is reliable.
+    public Visibility ProgressVisibility =>
+        _state == InstallItemState.Installing ? Visibility.Visible : Visibility.Collapsed;
 
-    // E10D = CircleRing (pending), E768 = ProgressRingDots/Play, E73E = Checkmark, EA39 = ErrorBadge
+    public Visibility GlyphVisibility =>
+        _state == InstallItemState.Installing ? Visibility.Collapsed : Visibility.Visible;
+
+    public Visibility MessageVisibility =>
+        string.IsNullOrEmpty(_message) ? Visibility.Collapsed : Visibility.Visible;
+
+    // Segoe Fluent Icons glyphs — reliable code points that render on Win11.
     public string Glyph => _state switch
     {
-        InstallItemState.Pending => "\uE10D",
-        InstallItemState.Installing => "\uEC4A",
-        InstallItemState.Success => "\uE73E",
-        InstallItemState.Failed => "\uEA39",
-        _ => "\uE10D"
+        InstallItemState.Pending => "\uEA3A",   // CircleRing (outline circle)
+        InstallItemState.Installing => string.Empty,
+        InstallItemState.Success => "\uE73E",   // CheckMark
+        InstallItemState.Failed => "\uEA39",    // ErrorBadge
+        _ => "\uEA3A"
     };
 
     public Brush IconBrush => _state switch
