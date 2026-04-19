@@ -158,6 +158,13 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 - [x] "Installed" badge in CategoryDetailPage met groene achtergrond + checkmark glyph
 - [x] Auto-refresh installed state na install-batch
 
+### v0.4.2 - Install dialog 3-state progress per app
+- [x] Pending apps tonen kleine `ProgressRing` (20px, spinning) — visuele "wachten in queue" indicator
+- [x] Installing zonder percentage: indeterminate `ProgressBar`
+- [x] Installing met percentage: determinate `ProgressBar` met `Value` uit geparste "X MB / Y MB" winget output
+- [x] Percentage parser: regex met unit normalization (B/KB/MB/GB), clamp op [0,1]
+- [x] `HasProgress` flag — zodra eerste percentage binnenkomt flipt de bar van indeterminate naar determinate, blijft daarna determinate (install phase na download emit geen percentages)
+
 ### v0.5.0 - Polish + release
 - [ ] Segoe Fluent Icons per categorie
 - [ ] Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)

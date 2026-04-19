@@ -30,31 +30,48 @@
                     <DataTemplate x:DataType="dialogs:InstallItem">
                         <Grid Padding="0,10" ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="24" />
+                                <ColumnDefinition Width="28" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" MinWidth="90" />
                             </Grid.ColumnDefinitions>
 
-                            <FontIcon Grid.Column="0"
-                                      Glyph="{x:Bind Glyph, Mode=OneWay}"
-                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                      FontSize="16"
-                                      Foreground="{x:Bind IconBrush, Mode=OneWay}"
-                                      Visibility="{x:Bind GlyphVisibility, Mode=OneWay}"
-                                      VerticalAlignment="Top"
-                                      Margin="0,2,0,0" />
+                            <!-- Status indicator column: ring while pending, glyph on terminal state.
+                                 Both are mutually exclusive via Visibility. -->
+                            <Grid Grid.Column="0"
+                                  Width="20" Height="20"
+                                  VerticalAlignment="Top"
+                                  Margin="0,2,0,0">
+                                <ProgressRing Width="20" Height="20"
+                                              IsActive="True"
+                                              Visibility="{x:Bind RingVisibility, Mode=OneWay}" />
+                                <FontIcon Glyph="{x:Bind Glyph, Mode=OneWay}"
+                                          FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                          FontSize="16"
+                                          Foreground="{x:Bind IconBrush, Mode=OneWay}"
+                                          Visibility="{x:Bind GlyphVisibility, Mode=OneWay}" />
+                            </Grid>
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
                                 <TextBlock Text="{x:Bind Name}"
                                            Style="{StaticResource BodyTextBlockStyle}" />
 
-                                <!-- Indeterminate bar during install -->
+                                <!-- Indeterminate bar while winget is starting / no percent seen yet -->
                                 <ProgressBar Width="150"
                                              HorizontalAlignment="Left"
                                              IsIndeterminate="True"
                                              ShowPaused="False"
                                              ShowError="False"
-                                             Visibility="{x:Bind ProgressVisibility, Mode=OneWay}" />
+                                             Visibility="{x:Bind IndeterminateVisibility, Mode=OneWay}" />
+
+                                <!-- Determinate bar once we've parsed an "X MB / Y MB" line -->
+                                <ProgressBar Width="150"
+                                             HorizontalAlignment="Left"
+                                             Minimum="0"
+                                             Maximum="1"
+                                             Value="{x:Bind Progress, Mode=OneWay}"
+                                             ShowPaused="False"
+                                             ShowError="False"
+                                             Visibility="{x:Bind DeterminateVisibility, Mode=OneWay}" />
 
                                 <!-- Live winget stdout line (e.g. "97.3 MB / 154 MB") -->
                                 <TextBlock Text="{x:Bind Message, Mode=OneWay}"

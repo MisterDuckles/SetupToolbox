@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -77,12 +79,49 @@ public sealed partial class InstallDialog : ContentDialog
             _ => item.State
         };
 
-        // Show winget's live output during install so the user sees progress
-        // (e.g. "97.3 MB / 154 MB"). On Success/Failed show the terminal message.
-        item.Message = string.IsNullOrWhiteSpace(p.Message) ? string.Empty : p.Message.Trim();
+        var msg = string.IsNullOrWhiteSpace(p.Message) ? string.Empty : p.Message.Trim();
+        item.Message = msg;
+
+        // Parse "X MB / Y MB" from winget's live output. Once we see a ratio we
+        // flip the item's bar from indeterminate to determinate; subsequent lines
+        // update the value. Install phase after download doesn't emit percentages,
+        // so the last value stays on screen until Success/Failed.
+        var ratio = TryParseProgressRatio(msg);
+        if (ratio.HasValue) item.Progress = ratio.Value;
 
         ProgressHeader.Text = $"Installing {p.CurrentIndex} of {p.Total}: {p.App.Name}";
     }
+
+    private static readonly Regex _progressRegex = new(
+        @"([\d.,]+)\s*(B|KB|MB|GB)\s*/\s*([\d.,]+)\s*(B|KB|MB|GB)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static double? TryParseProgressRatio(string line)
+    {
+        if (string.IsNullOrEmpty(line)) return null;
+        var m = _progressRegex.Match(line);
+        if (!m.Success) return null;
+
+        if (!double.TryParse(m.Groups[1].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var cur))
+            return null;
+        if (!double.TryParse(m.Groups[3].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var tot))
+            return null;
+
+        var curBytes = cur * UnitMultiplier(m.Groups[2].Value);
+        var totBytes = tot * UnitMultiplier(m.Groups[4].Value);
+        if (totBytes <= 0) return null;
+
+        return Math.Clamp(curBytes / totBytes, 0.0, 1.0);
+    }
+
+    private static double UnitMultiplier(string unit) => unit.ToUpperInvariant() switch
+    {
+        "B" => 1,
+        "KB" => 1024,
+        "MB" => 1024d * 1024,
+        "GB" => 1024d * 1024 * 1024,
+        _ => 1
+    };
 
     private void InstallDialog_Closing(ContentDialog sender, ContentDialogClosingEventArgs args)
     {
@@ -97,6 +136,8 @@ public sealed class InstallItem : INotifyPropertyChanged
 {
     private InstallItemState _state = InstallItemState.Pending;
     private string _message = string.Empty;
+    private double _progress;
+    private bool _hasProgress;
 
     public InstallItem(string name, string wingetId)
     {
@@ -118,7 +159,9 @@ public sealed class InstallItem : INotifyPropertyChanged
             OnChanged(nameof(Glyph));
             OnChanged(nameof(IconBrush));
             OnChanged(nameof(StateLabel));
-            OnChanged(nameof(ProgressVisibility));
+            OnChanged(nameof(RingVisibility));
+            OnChanged(nameof(IndeterminateVisibility));
+            OnChanged(nameof(DeterminateVisibility));
             OnChanged(nameof(GlyphVisibility));
         }
     }
@@ -136,25 +179,50 @@ public sealed class InstallItem : INotifyPropertyChanged
         }
     }
 
+    public double Progress
+    {
+        get => _progress;
+        set
+        {
+            var v = Math.Clamp(value, 0.0, 1.0);
+            if (Math.Abs(_progress - v) < 0.0001) return;
+            _progress = v;
+            OnChanged();
+
+            if (!_hasProgress)
+            {
+                _hasProgress = true;
+                // Once we have a real percentage, swap indeterminate → determinate.
+                OnChanged(nameof(IndeterminateVisibility));
+                OnChanged(nameof(DeterminateVisibility));
+            }
+        }
+    }
+
     // Explicit Visibility-typed properties — bool->Visibility implicit conversion
     // via x:Bind can be flaky on re-eval; returning Visibility directly is reliable.
-    public Visibility ProgressVisibility =>
-        _state == InstallItemState.Installing ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility RingVisibility =>
+        _state == InstallItemState.Pending ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility IndeterminateVisibility =>
+        _state == InstallItemState.Installing && !_hasProgress ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility DeterminateVisibility =>
+        _state == InstallItemState.Installing && _hasProgress ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility GlyphVisibility =>
-        _state == InstallItemState.Installing ? Visibility.Collapsed : Visibility.Visible;
+        _state is InstallItemState.Success or InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility MessageVisibility =>
         string.IsNullOrEmpty(_message) ? Visibility.Collapsed : Visibility.Visible;
 
-    // Segoe Fluent Icons glyphs — reliable code points that render on Win11.
+    // Glyph is only rendered in terminal states — Pending uses ProgressRing,
+    // Installing uses ProgressBar, so no glyph needed there.
     public string Glyph => _state switch
     {
-        InstallItemState.Pending => "\uEA3A",   // CircleRing (outline circle)
-        InstallItemState.Installing => string.Empty,
         InstallItemState.Success => "\uE73E",   // CheckMark
         InstallItemState.Failed => "\uEA39",    // ErrorBadge
-        _ => "\uEA3A"
+        _ => string.Empty
     };
 
     public Brush IconBrush => _state switch
