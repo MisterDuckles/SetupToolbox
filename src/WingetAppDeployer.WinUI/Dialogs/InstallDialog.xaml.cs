@@ -2,15 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
-using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Windows.UI;
 using WingetAppDeployer_WinUI.Services;
 using AppModel = WingetAppDeployer_WinUI.Models.App;
 
@@ -70,58 +66,41 @@ public sealed partial class InstallDialog : ContentDialog
         var item = _items.FirstOrDefault(i => i.WingetId == p.App.WingetId);
         if (item == null) return;
 
-        item.State = p.Phase switch
-        {
-            InstallPhase.Starting => InstallItemState.Installing,
-            InstallPhase.Running => InstallItemState.Installing,
-            InstallPhase.Success => InstallItemState.Success,
-            InstallPhase.Failed => InstallItemState.Failed,
-            _ => item.State
-        };
-
         var msg = string.IsNullOrWhiteSpace(p.Message) ? string.Empty : p.Message.Trim();
         item.Message = msg;
 
-        // Parse "X MB / Y MB" from winget's live output. Once we see a ratio we
-        // flip the item's bar from indeterminate to determinate; subsequent lines
-        // update the value. Install phase after download doesn't emit percentages,
-        // so the last value stays on screen until Success/Failed.
-        var ratio = TryParseProgressRatio(msg);
-        if (ratio.HasValue) item.Progress = ratio.Value;
+        switch (p.Phase)
+        {
+            case InstallPhase.Starting:
+                // Preparing is too fast to visualize — start the ring straight at
+                // Downloading (1/4). If winget's "Found / license headers" flash
+                // by quickly the user still sees a consistent stage-1 marker.
+                item.State = InstallItemState.Installing;
+                item.AdvanceStage(1); // Downloading
+                break;
+            case InstallPhase.Running:
+                // Stages: 1 Downloading → 2 Verifying → 3 Installing → 4 Done.
+                // AdvanceStage never moves the stage backwards.
+                if (msg.Contains("Starting package install", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("Installing package", StringComparison.OrdinalIgnoreCase))
+                    item.AdvanceStage(3);
+                else if (msg.Contains("installer hash", StringComparison.OrdinalIgnoreCase))
+                    item.AdvanceStage(2);
+                // else: stay at current stage (1 = Downloading) — the "X MB / Y MB"
+                // lines flow by here and don't advance, they just confirm we're
+                // still downloading.
+                break;
+            case InstallPhase.Success:
+                item.State = InstallItemState.Success;
+                item.AdvanceStage(4); // Done — ring is hidden anyway, checkmark takes over
+                break;
+            case InstallPhase.Failed:
+                item.State = InstallItemState.Failed;
+                break;
+        }
 
         ProgressHeader.Text = $"Installing {p.CurrentIndex} of {p.Total}: {p.App.Name}";
     }
-
-    private static readonly Regex _progressRegex = new(
-        @"([\d.,]+)\s*(B|KB|MB|GB)\s*/\s*([\d.,]+)\s*(B|KB|MB|GB)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    private static double? TryParseProgressRatio(string line)
-    {
-        if (string.IsNullOrEmpty(line)) return null;
-        var m = _progressRegex.Match(line);
-        if (!m.Success) return null;
-
-        if (!double.TryParse(m.Groups[1].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var cur))
-            return null;
-        if (!double.TryParse(m.Groups[3].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var tot))
-            return null;
-
-        var curBytes = cur * UnitMultiplier(m.Groups[2].Value);
-        var totBytes = tot * UnitMultiplier(m.Groups[4].Value);
-        if (totBytes <= 0) return null;
-
-        return Math.Clamp(curBytes / totBytes, 0.0, 1.0);
-    }
-
-    private static double UnitMultiplier(string unit) => unit.ToUpperInvariant() switch
-    {
-        "B" => 1,
-        "KB" => 1024,
-        "MB" => 1024d * 1024,
-        "GB" => 1024d * 1024 * 1024,
-        _ => 1
-    };
 
     private void InstallDialog_Closing(ContentDialog sender, ContentDialogClosingEventArgs args)
     {
@@ -134,10 +113,11 @@ public enum InstallItemState { Pending, Installing, Success, Failed }
 
 public sealed class InstallItem : INotifyPropertyChanged
 {
+    public const int TotalStages = 4;
+
     private InstallItemState _state = InstallItemState.Pending;
     private string _message = string.Empty;
-    private double _progress;
-    private bool _hasProgress;
+    private int _stage;
 
     public InstallItem(string name, string wingetId)
     {
@@ -156,13 +136,15 @@ public sealed class InstallItem : INotifyPropertyChanged
             if (_state == value) return;
             _state = value;
             OnChanged();
-            OnChanged(nameof(Glyph));
-            OnChanged(nameof(IconBrush));
             OnChanged(nameof(StateLabel));
-            OnChanged(nameof(RingVisibility));
-            OnChanged(nameof(IndeterminateVisibility));
-            OnChanged(nameof(DeterminateVisibility));
-            OnChanged(nameof(GlyphVisibility));
+            OnChanged(nameof(StateLabelBrush));
+            OnChanged(nameof(PendingRingVisibility));
+            OnChanged(nameof(BarVisibility));
+            OnChanged(nameof(StageRingVisibility));
+            OnChanged(nameof(CheckVisibility));
+            OnChanged(nameof(ErrorVisibility));
+            OnChanged(nameof(MessageVisibility));
+            OnChanged(nameof(StateLabelVisibility));
         }
     }
 
@@ -179,65 +161,77 @@ public sealed class InstallItem : INotifyPropertyChanged
         }
     }
 
-    public double Progress
+    public int Stage
     {
-        get => _progress;
-        set
+        get => _stage;
+        private set
         {
-            var v = Math.Clamp(value, 0.0, 1.0);
-            if (Math.Abs(_progress - v) < 0.0001) return;
-            _progress = v;
+            var v = Math.Clamp(value, 0, TotalStages);
+            if (_stage == v) return;
+            _stage = v;
             OnChanged();
-
-            if (!_hasProgress)
-            {
-                _hasProgress = true;
-                // Once we have a real percentage, swap indeterminate → determinate.
-                OnChanged(nameof(IndeterminateVisibility));
-                OnChanged(nameof(DeterminateVisibility));
-            }
+            OnChanged(nameof(StageValue));
+            OnChanged(nameof(StageLabel));
+            OnChanged(nameof(StageText));
         }
     }
 
-    // Explicit Visibility-typed properties — bool->Visibility implicit conversion
-    // via x:Bind can be flaky on re-eval; returning Visibility directly is reliable.
-    public Visibility RingVisibility =>
-        _state == InstallItemState.Pending ? Visibility.Visible : Visibility.Collapsed;
+    // Ladder-style advance: stage only moves forward, never backwards.
+    public void AdvanceStage(int target) => Stage = Math.Max(_stage, target);
 
-    public Visibility IndeterminateVisibility =>
-        _state == InstallItemState.Installing && !_hasProgress ? Visibility.Visible : Visibility.Collapsed;
+    // ProgressRing value — Maximum is TotalStages so the ring fills fully at stage 4.
+    public double StageValue => _stage;
 
-    public Visibility DeterminateVisibility =>
-        _state == InstallItemState.Installing && _hasProgress ? Visibility.Visible : Visibility.Collapsed;
+    public string StageText => _stage == 0 ? string.Empty : $"{_stage}/{TotalStages}";
 
-    public Visibility GlyphVisibility =>
-        _state is InstallItemState.Success or InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
-
-    public Visibility MessageVisibility =>
-        string.IsNullOrEmpty(_message) ? Visibility.Collapsed : Visibility.Visible;
-
-    // Glyph is only rendered in terminal states — Pending uses ProgressRing,
-    // Installing uses ProgressBar, so no glyph needed there.
-    public string Glyph => _state switch
+    public string StageLabel => _stage switch
     {
-        InstallItemState.Success => "\uE73E",   // CheckMark
-        InstallItemState.Failed => "\uEA39",    // ErrorBadge
+        1 => "Downloading",
+        2 => "Verifying",
+        3 => "Installing",
+        4 => "Done",
         _ => string.Empty
     };
 
-    public Brush IconBrush => _state switch
+    // One visibility per visual element so x:Bind always has a clean signal.
+    public Visibility PendingRingVisibility =>
+        _state == InstallItemState.Pending ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility BarVisibility =>
+        _state == InstallItemState.Installing ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility StageRingVisibility =>
+        _state == InstallItemState.Installing ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility CheckVisibility =>
+        _state == InstallItemState.Success ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility ErrorVisibility =>
+        _state == InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility MessageVisibility =>
+        _state == InstallItemState.Installing && !string.IsNullOrEmpty(_message)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    // Text state label (right column) only shown outside the Installing phase;
+    // during install the stage ring occupies that column instead.
+    public Visibility StateLabelVisibility =>
+        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.Failed
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public Brush StateLabelBrush => _state switch
     {
-        InstallItemState.Success => new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)),
-        InstallItemState.Failed => new SolidColorBrush(Color.FromArgb(0xFF, 0xE8, 0x1A, 0x3B)),
-        InstallItemState.Installing => (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+        InstallItemState.Success => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
+        InstallItemState.Failed => (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
         _ => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
     };
 
     public string StateLabel => _state switch
     {
         InstallItemState.Pending => "Waiting",
-        InstallItemState.Installing => "Installing",
-        InstallItemState.Success => "Done",
+        InstallItemState.Success => "Installed",
         InstallItemState.Failed => "Failed",
         _ => string.Empty
     };

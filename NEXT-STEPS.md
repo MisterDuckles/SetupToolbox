@@ -164,12 +164,48 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 - [x] Installing met percentage: determinate `ProgressBar` met `Value` uit geparste "X MB / Y MB" winget output
 - [x] Percentage parser: regex met unit normalization (B/KB/MB/GB), clamp op [0,1]
 - [x] `HasProgress` flag — zodra eerste percentage binnenkomt flipt de bar van indeterminate naar determinate, blijft daarna determinate (install phase na download emit geen percentages)
+- [x] Install dialog card-based layout — elke app in een Border met CardBackground, bredere bar (Stretch), 15px app-naam, message alleen tijdens Installing (verdwijnt bij Success/Failed)
+- [x] Split Visibility props (RingVisibility / CheckVisibility / ErrorVisibility / Indeterminate / Determinate) zodat x:Bind OneWay altijd correct re-evalueert
+- [x] Theme-aware success/error brushes (SystemFillColorSuccessBrush / SystemFillColorCriticalBrush) i.p.v. hardcoded RGB
+
+### v0.4.3 - Quick uninstall onder Debloat (tijdelijk)
+- [x] Simpele lijst van geïnstalleerde apps uit onze `apps.json` catalogus onder Debloat tab
+- [x] Per app een Uninstall button met bevestigings-ContentDialog
+- [x] `WingetService.UninstallAppAsync()` via `winget uninstall --id <id> --silent --accept-source-agreements`
+- [x] Refresh installed-apps lijst na elke uninstall
+- **Note:** Dit is een tijdelijke minimal-viable versie zodat user apps kan verwijderen tijdens testen. Wordt later vervangen door de full Debloat-pagina (zie v0.6.0 hieronder).
+
+### v0.4.4 - Install dialog stage ring + Fluent polish
+- [x] 4-stage ProgressRing (60×60) rechts per app: 1/4 Downloading → 2/4 Verifying → 3/4 Installing → 4/4 Done
+- [x] Indeterminate ProgressBar altijd zichtbaar tijdens install (= "er gebeurt iets", geen vals 100%-gevoel)
+- [x] Stage-parsing uit winget stdout ("installer hash" → 2, "Starting package install" → 3)
+- [x] Char-per-char stream reader in `WingetService.RunWingetCommandAsync` die ook op `\r` splitst — winget overschrijft z'n download-progressbar met carriage returns, default `OutputDataReceived` miste daardoor alle live updates
+- [x] ContentDialog sizing via `ContentDialogMinWidth`/`ContentDialogMaxWidth` resource keys (attributen op element werken niet)
+- [x] Afgeronde hoeken via `CornerRadius="8"` attribuut op de ContentDialog
+- [x] Vast 120px kolom voor de stage ring zodat die niet van scherm afvalt
 
 ### v0.5.0 - Polish + release
 - [ ] Segoe Fluent Icons per categorie
 - [ ] Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)
 - [ ] Eigen GitHub release artifact
 - [ ] Eventueel `WingetAppDeployer.Core/` extractie van Models+Services
+
+### v0.6.0 - Debloat tab (full implementation)
+- [ ] **Windows bloatware removal** — lijst van Microsoft "standaard" bloat apps die in Win11 meekomen (Xbox, Teams consumer, Solitaire, Weather, etc.) met checkboxes en "Remove selected" batch-actie. Gebruikt `Get-AppxPackage | Remove-AppxPackage` (PowerShell) of `winget uninstall`. Moet runnen als admin.
+- [ ] **User-installed apps uninstaller** — vervanger voor de tijdelijke v0.4.3 lijst. Toont alle geïnstalleerde apps uit onze `apps.json` catalogus in een nette card-based layout met multi-select + batch uninstall, zelfde stijl als de install flow. Progress per app zoals bij install.
+- [ ] **Categorieën in Debloat** — Microsoft apps / OEM bloat / User installed, met counts per categorie
+- [ ] Integratie met bestaande Windows11-Unattended-Debloat logica (scripts hergebruiken of naar C# porten)
+
+### v0.7.0 - Tweaks tab
+- [ ] **Windows tweaks UI** — toggles en knoppen voor veelgebruikte Windows customizations:
+  - Explorer: show hidden files, show file extensions, classic context menu, taskbar align left
+  - Privacy: telemetry uit, ad ID uit, location tracking uit
+  - Performance: visual effects (best performance / balanced), disable startup apps
+  - UI: dark mode systeem-wide, accent kleur, transparency effects
+  - Updates: pause updates voor N dagen, active hours
+- [ ] **Registry-backed** — elke tweak is een `HKCU` of `HKLM` registry edit; groepeer per categorie in `SettingsCard`-stijl rows met ToggleSwitch
+- [ ] **Apply/revert** — tweaks onthouden wat de originele waarde was zodat user kan terugdraaien
+- [ ] **Preset profiles** — "Privacy-focused", "Performance", "Minimal UI" als één-klik batches
 
 ### Out of scope voor dit track
 - Decoratieve themes (Sunset/Aurora/OceanBreeze) — exclusief in de WPF app, nooit in WinUI 3

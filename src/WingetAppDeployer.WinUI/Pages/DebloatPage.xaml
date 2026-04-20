@@ -5,26 +5,135 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:WingetAppDeployer_WinUI.Models"
     mc:Ignorable="d"
     Background="Transparent">
 
     <Grid Padding="36,24,36,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+
         <TextBlock Grid.Row="0"
                    Text="Debloat"
                    Style="{StaticResource TitleTextBlockStyle}"
-                   Margin="0,0,0,16" />
+                   Margin="0,0,0,8" />
+
         <InfoBar Grid.Row="1"
                  Severity="Informational"
-                 Title="Coming soon"
-                 Message="Windows debloat integratie volgt in een latere release. Voor nu kan je de standalone Windows11-Unattended-Debloat gebruiken."
+                 Title="Work in progress"
+                 Message="Volledige Windows debloat integratie volgt in v0.6.0. Voor nu kan je hier apps die je via deze tool geïnstalleerd hebt snel verwijderen."
                  IsOpen="True"
                  IsClosable="False"
-                 VerticalAlignment="Top"
                  MaxWidth="720"
-                 HorizontalAlignment="Left" />
+                 HorizontalAlignment="Left"
+                 Margin="0,0,0,20" />
+
+        <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="Installed apps"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       VerticalAlignment="Center" />
+
+            <Button Grid.Column="1"
+                    x:Name="RefreshButton"
+                    Click="RefreshButton_Click"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    <TextBlock Text="Refresh" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <Grid Grid.Row="3">
+            <!-- Loading state -->
+            <StackPanel x:Name="LoadingPanel"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <ProgressRing IsIndeterminate="True" Width="40" Height="40" />
+                <TextBlock Text="Checking installed apps..."
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <!-- Empty state -->
+            <StackPanel x:Name="EmptyPanel"
+                        Visibility="Collapsed"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <FontIcon Glyph="&#xE74C;"
+                          FontSize="32"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                          HorizontalAlignment="Center" />
+                <TextBlock Text="Geen apps uit deze tool gevonden"
+                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="Alleen apps uit de WingetAppDeployer catalogus die ook daadwerkelijk op dit systeem geïnstalleerd staan worden hier getoond."
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           MaxWidth="420" />
+            </StackPanel>
+
+            <!-- Installed apps list -->
+            <ScrollViewer x:Name="AppsScroller"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsRepeater x:Name="InstalledAppsList">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="8" />
+                    </ItemsRepeater.Layout>
+
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="models:App">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="16,12">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="{x:Bind Name}"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                   FontSize="15" />
+                                        <TextBlock Text="{x:Bind WingetId}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+
+                                    <Button Grid.Column="1"
+                                            Click="UninstallButton_Click"
+                                            Tag="{x:Bind WingetId}"
+                                            VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                            <TextBlock Text="Uninstall" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </Page>

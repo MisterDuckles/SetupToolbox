@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -78,6 +79,35 @@ public sealed class WingetService
         finally
         {
             _installedLock.Release();
+        }
+    }
+
+    public async Task<(bool success, string message)> UninstallAppAsync(string wingetId)
+    {
+        try
+        {
+            var (exitCode, output, error) = await RunWingetCommandAsync(
+                $"uninstall --id {wingetId} --exact --silent --accept-source-agreements");
+
+            if (exitCode == 0)
+            {
+                // Invalidate cache so the next GetInstalledAppIdsAsync call re-queries.
+                await _installedLock.WaitAsync();
+                try { _installedIdsCache = null; }
+                finally { _installedLock.Release(); }
+                return (true, "Uninstalled");
+            }
+
+            var combined = error + output;
+            if (combined.Contains("No installed package found", StringComparison.OrdinalIgnoreCase))
+                return (false, "Not installed.");
+            if (combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
+                return (false, "Access denied. Try running as administrator.");
+            return (false, "Uninstall failed.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
         }
     }
 
@@ -178,26 +208,56 @@ public sealed class WingetService
         var outputBuilder = new StringBuilder();
         var errorBuilder = new StringBuilder();
 
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                outputBuilder.AppendLine(e.Data);
-                outputCallback?.Invoke(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                errorBuilder.AppendLine(e.Data);
-        };
-
         process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+
+        // winget updates its download progress bar by overwriting the current
+        // terminal line with '\r' instead of emitting a new line. The default
+        // OutputDataReceived / BeginOutputReadLine only triggers on '\n', so we'd
+        // miss every intermediate "X MB / Y MB" update and only see the final
+        // snapshot when the download finishes. Read char-by-char and split on
+        // either '\r' or '\n' so each progress tick surfaces as its own line.
+        var stdoutTask = ReadStreamAsync(process.StandardOutput, line =>
+        {
+            outputBuilder.AppendLine(line);
+            outputCallback?.Invoke(line);
+        });
+        var stderrTask = ReadStreamAsync(process.StandardError, line =>
+        {
+            errorBuilder.AppendLine(line);
+        });
+
+        await Task.WhenAll(stdoutTask, stderrTask);
         await process.WaitForExitAsync();
 
         return (process.ExitCode, outputBuilder.ToString(), errorBuilder.ToString());
+    }
+
+    private static async Task ReadStreamAsync(StreamReader reader, Action<string> onLine)
+    {
+        var buf = new char[4096];
+        var carry = new StringBuilder();
+        while (true)
+        {
+            int read = await reader.ReadAsync(buf, 0, buf.Length);
+            if (read <= 0) break;
+            for (int i = 0; i < read; i++)
+            {
+                var c = buf[i];
+                if (c == '\r' || c == '\n')
+                {
+                    if (carry.Length > 0)
+                    {
+                        onLine(carry.ToString());
+                        carry.Clear();
+                    }
+                }
+                else
+                {
+                    carry.Append(c);
+                }
+            }
+        }
+        if (carry.Length > 0) onLine(carry.ToString());
     }
 }
 

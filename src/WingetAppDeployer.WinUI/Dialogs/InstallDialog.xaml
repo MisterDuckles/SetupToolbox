@@ -10,12 +10,20 @@
     Title="Install apps"
     PrimaryButtonText="Close"
     IsPrimaryButtonEnabled="False"
-    DefaultButton="Primary">
+    DefaultButton="Primary"
+    CornerRadius="8">
 
-    <Grid Width="560" MinHeight="260">
+    <ContentDialog.Resources>
+        <!-- ContentDialog ignores the MinWidth/MaxWidth attributes on the element
+             itself; it honours these resource keys instead. -->
+        <x:Double x:Key="ContentDialogMinWidth">680</x:Double>
+        <x:Double x:Key="ContentDialogMaxWidth">720</x:Double>
+    </ContentDialog.Resources>
+
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
@@ -24,71 +32,101 @@
                    Style="{StaticResource BodyStrongTextBlockStyle}"
                    Margin="0,0,0,16" />
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="380">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="420">
             <ItemsControl x:Name="AppItemList">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="dialogs:InstallItem">
-                        <Grid Padding="0,10" ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="28" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" MinWidth="90" />
-                            </Grid.ColumnDefinitions>
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="16,14"
+                                Margin="0,0,0,8">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="120" />
+                                </Grid.ColumnDefinitions>
 
-                            <!-- Status indicator column: ring while pending, glyph on terminal state.
-                                 Both are mutually exclusive via Visibility. -->
-                            <Grid Grid.Column="0"
-                                  Width="20" Height="20"
-                                  VerticalAlignment="Top"
-                                  Margin="0,2,0,0">
-                                <ProgressRing Width="20" Height="20"
-                                              IsActive="True"
-                                              Visibility="{x:Bind RingVisibility, Mode=OneWay}" />
-                                <FontIcon Glyph="{x:Bind Glyph, Mode=OneWay}"
-                                          FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                          FontSize="16"
-                                          Foreground="{x:Bind IconBrush, Mode=OneWay}"
-                                          Visibility="{x:Bind GlyphVisibility, Mode=OneWay}" />
+                                <!-- Status icon column: ring while pending, check/error on terminal state.
+                                     Collapsed during Installing (the stage ring on the right takes over). -->
+                                <Grid Grid.Column="0"
+                                      Width="20" Height="20"
+                                      VerticalAlignment="Center">
+                                    <ProgressRing Width="20" Height="20"
+                                                  IsActive="True"
+                                                  Visibility="{x:Bind PendingRingVisibility, Mode=OneWay}" />
+                                    <FontIcon Glyph="&#xE73E;"
+                                              FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                              FontSize="18"
+                                              Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                              Visibility="{x:Bind CheckVisibility, Mode=OneWay}" />
+                                    <FontIcon Glyph="&#xEA39;"
+                                              FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                              FontSize="18"
+                                              Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                              Visibility="{x:Bind ErrorVisibility, Mode=OneWay}" />
+                                </Grid>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
+                                    <TextBlock Text="{x:Bind Name}"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               FontSize="15" />
+
+                                    <!-- Single indeterminate bar throughout the entire install — signals
+                                         "still working" regardless of which sub-phase. The stage ring on the
+                                         right is the actual progress indicator. -->
+                                    <ProgressBar HorizontalAlignment="Stretch"
+                                                 IsIndeterminate="True"
+                                                 ShowPaused="False"
+                                                 ShowError="False"
+                                                 Visibility="{x:Bind BarVisibility, Mode=OneWay}" />
+
+                                    <!-- Live winget stdout line under the bar while installing -->
+                                    <TextBlock Text="{x:Bind Message, Mode=OneWay}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Visibility="{x:Bind MessageVisibility, Mode=OneWay}" />
+                                </StackPanel>
+
+                                <!-- Right column: stage ring while installing OR state label otherwise -->
+                                <Grid Grid.Column="2" VerticalAlignment="Center">
+                                    <!-- Stage ring: fills 1/4 → 4/4 as winget works through stages -->
+                                    <StackPanel Orientation="Vertical"
+                                                Spacing="4"
+                                                HorizontalAlignment="Center"
+                                                Visibility="{x:Bind StageRingVisibility, Mode=OneWay}">
+                                        <Grid Width="60" Height="60" HorizontalAlignment="Center">
+                                            <ProgressRing Width="60" Height="60"
+                                                          IsIndeterminate="False"
+                                                          Minimum="0"
+                                                          Maximum="4"
+                                                          Value="{x:Bind StageValue, Mode=OneWay}"
+                                                          Background="{ThemeResource ControlStrokeColorDefaultBrush}" />
+                                            <TextBlock Text="{x:Bind StageText, Mode=OneWay}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       FontWeight="SemiBold" />
+                                        </Grid>
+                                        <TextBlock Text="{x:Bind StageLabel, Mode=OneWay}"
+                                                   HorizontalAlignment="Center"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+
+                                    <!-- Text label for terminal/pending states -->
+                                    <TextBlock Text="{x:Bind StateLabel, Mode=OneWay}"
+                                               Style="{StaticResource BodyTextBlockStyle}"
+                                               Foreground="{x:Bind StateLabelBrush, Mode=OneWay}"
+                                               TextAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               Visibility="{x:Bind StateLabelVisibility, Mode=OneWay}" />
+                                </Grid>
                             </Grid>
-
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
-                                <TextBlock Text="{x:Bind Name}"
-                                           Style="{StaticResource BodyTextBlockStyle}" />
-
-                                <!-- Indeterminate bar while winget is starting / no percent seen yet -->
-                                <ProgressBar Width="150"
-                                             HorizontalAlignment="Left"
-                                             IsIndeterminate="True"
-                                             ShowPaused="False"
-                                             ShowError="False"
-                                             Visibility="{x:Bind IndeterminateVisibility, Mode=OneWay}" />
-
-                                <!-- Determinate bar once we've parsed an "X MB / Y MB" line -->
-                                <ProgressBar Width="150"
-                                             HorizontalAlignment="Left"
-                                             Minimum="0"
-                                             Maximum="1"
-                                             Value="{x:Bind Progress, Mode=OneWay}"
-                                             ShowPaused="False"
-                                             ShowError="False"
-                                             Visibility="{x:Bind DeterminateVisibility, Mode=OneWay}" />
-
-                                <!-- Live winget stdout line (e.g. "97.3 MB / 154 MB") -->
-                                <TextBlock Text="{x:Bind Message, Mode=OneWay}"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           Visibility="{x:Bind MessageVisibility, Mode=OneWay}" />
-                            </StackPanel>
-
-                            <TextBlock Grid.Column="2"
-                                       Text="{x:Bind StateLabel, Mode=OneWay}"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{x:Bind IconBrush, Mode=OneWay}"
-                                       TextAlignment="Right"
-                                       VerticalAlignment="Top"
-                                       Margin="0,4,0,0" />
-                        </Grid>
+                        </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
