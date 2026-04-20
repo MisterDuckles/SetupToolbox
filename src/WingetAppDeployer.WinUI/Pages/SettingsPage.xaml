@@ -8,23 +8,76 @@
     mc:Ignorable="d"
     Background="Transparent">
 
-    <Grid Padding="36,24,36,24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <TextBlock Grid.Row="0"
-                   Text="Settings"
-                   Style="{StaticResource TitleTextBlockStyle}"
-                   Margin="0,0,0,16" />
-        <InfoBar Grid.Row="1"
-                 Severity="Informational"
-                 Title="Placeholder"
-                 Message="Settings (theme, updates, auto-update schedule) komen in een latere versie — dan bouwen we ze met SettingsCard en ToggleSwitch zoals Windows Settings zelf."
-                 IsOpen="True"
-                 IsClosable="False"
-                 VerticalAlignment="Top"
-                 MaxWidth="720"
-                 HorizontalAlignment="Left" />
-    </Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Padding="36,24,36,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Text="Settings"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       Margin="0,0,0,20" />
+
+            <TextBlock Grid.Row="1"
+                       Text="Auto-updates"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,12" />
+
+            <!-- Auto-update schedule card -->
+            <Border Grid.Row="2"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xE823;"
+                              FontSize="20"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="Scheduled auto-updates"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Name="ScheduleStatusText"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Checking status..." />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
+                        <Button x:Name="DisableButton"
+                                Click="DisableButton_Click"
+                                Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                <TextBlock Text="Disable" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="ScheduleButton"
+                                Click="ScheduleButton_Click"
+                                Style="{ThemeResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE787;" FontSize="14" />
+                                <TextBlock x:Name="ScheduleButtonText" Text="Set up" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </ScrollViewer>
 </Page>

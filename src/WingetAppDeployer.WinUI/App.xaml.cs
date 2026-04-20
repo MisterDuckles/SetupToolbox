@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
@@ -34,6 +35,7 @@ public partial class App : Application
     // App-wide singleton services. Pages reach them via App.Database / App.Winget.
     public static AppDatabaseService Database { get; } = new();
     public static WingetService Winget { get; } = new();
+    public static TaskSchedulerService TaskScheduler { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
@@ -50,7 +52,25 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        // When launched by the scheduled task with "/autoupdate", run winget
+        // upgrade --all silently and exit — no window, no UI.
+        var cmdArgs = Environment.GetCommandLineArgs();
+        if (cmdArgs.Length > 1 && IsAutoUpdateArg(cmdArgs[1]))
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await Winget.UpdateAllAppsAsync(); }
+                finally { Environment.Exit(0); }
+            });
+            return;
+        }
+
         Window = new MainWindow();
         Window.Activate();
     }
+
+    private static bool IsAutoUpdateArg(string arg) =>
+        arg.Equals("/autoupdate", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("--autoupdate", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("autoupdate", StringComparison.OrdinalIgnoreCase);
 }

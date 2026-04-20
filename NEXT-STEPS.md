@@ -148,7 +148,7 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 ### v0.4.0 - Install flow + winget integratie
 - [x] WingetService porten / hergebruiken
 - [x] Install dialog met echte Fluent `ProgressBar` + log
-- [ ] Schedule dialog voor auto-update
+- [x] Schedule dialog voor auto-update
 
 ### v0.4.1 - Install UX polish + installed-state detectie
 - [x] InstallDialog redesign — overall progress bar weg, per-app indeterminate bar, live winget stdout line ("97.3 MB / 154 MB")
@@ -183,6 +183,15 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 - [x] ContentDialog sizing via `ContentDialogMinWidth`/`ContentDialogMaxWidth` resource keys (attributen op element werken niet)
 - [x] Afgeronde hoeken via `CornerRadius="8"` attribuut op de ContentDialog
 - [x] Vast 120px kolom voor de stage ring zodat die niet van scherm afvalt
+
+### v0.4.5 - Schedule dialog voor auto-update
+- [x] `TaskSchedulerService` geport (WinUI-specifieke taaknaam `WingetAppDeployer_WinUI_AutoUpdate` zodat 'ie niet botst met de WPF-taak)
+- [x] `WingetService.UpdateAllAppsAsync()` via `winget upgrade --all --silent`
+- [x] `/autoupdate` command-line handler in `App.xaml.cs` — runt update, `Environment.Exit(0)` zonder window te openen
+- [x] `ScheduleDialog` met Daily/Weekly/OnStartup radio's + TimePicker (verbergt bij OnStartup)
+- [x] Fout-afhandeling via `InfoBar` in de dialog — UserCancelled (UAC geweigerd) en Failed krijgen elk hun eigen bericht
+- [x] SettingsPage met status-card: toont of taak actief is + Set up / Change / Disable knoppen
+- [x] `App.TaskScheduler` singleton alongside `App.Database` / `App.Winget`
 
 ### v0.5.0 - Polish + release
 - [ ] Segoe Fluent Icons per categorie

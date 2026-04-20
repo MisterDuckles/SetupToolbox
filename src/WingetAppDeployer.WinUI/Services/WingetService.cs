@@ -82,6 +82,23 @@ public sealed class WingetService
         }
     }
 
+    /// <summary>
+    /// Upgrades all installed apps via winget. Used by the scheduled auto-update task.
+    /// </summary>
+    public async Task<bool> UpdateAllAppsAsync()
+    {
+        try
+        {
+            var (exitCode, _, _) = await RunWingetCommandAsync(
+                "upgrade --all --silent --accept-source-agreements --accept-package-agreements");
+            return exitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<(bool success, string message)> UninstallAppAsync(string wingetId)
     {
         try
