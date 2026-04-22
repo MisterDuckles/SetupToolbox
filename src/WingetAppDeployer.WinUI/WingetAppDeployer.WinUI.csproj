@@ -36,10 +36,11 @@
     package has not yet been restored.
   -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <ProjectCapability Include="Msix"/>
+    <ProjectCapability Include="Msix" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="*" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="*" />
   </ItemGroup>

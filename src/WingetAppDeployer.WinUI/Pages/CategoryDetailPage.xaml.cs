@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
+using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 using WingetAppDeployer_WinUI.Services;
 using AppModel = WingetAppDeployer_WinUI.Models.App;
@@ -68,9 +69,22 @@ public sealed partial class CategoryDetailPage : Page
     private void ApplyFilter(string? query)
     {
         var trimmed = (query ?? string.Empty).Trim();
-        _visibleApps = trimmed.Length == 0
-            ? _allApps
-            : _allApps.Where(a => Matches(a, trimmed)).ToList();
+        if (trimmed.Length == 0)
+        {
+            _visibleApps = _allApps;
+        }
+        else
+        {
+            // Fuzzy-score per app + sort descending zodat de best matchende apps
+            // bovenaan staan (zelfde scoring als AppsPage voor consistentie).
+            _visibleApps = _allApps
+                .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.Description, a.WingetId)))
+                .Where(pair => pair.Score >= FuzzyMatcher.MinScore)
+                .OrderByDescending(pair => pair.Score)
+                .ThenBy(pair => pair.App.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => pair.App)
+                .ToList();
+        }
 
         AppList.ItemsSource = _visibleApps;
 
@@ -84,12 +98,6 @@ public sealed partial class CategoryDetailPage : Page
             NoResultsText.Visibility = Visibility.Collapsed;
         }
     }
-
-    private static bool Matches(AppModel a, string query) =>
-        Contains(a.Name, query) || Contains(a.Description, query) || Contains(a.WingetId, query);
-
-    private static bool Contains(string? haystack, string needle) =>
-        !string.IsNullOrEmpty(haystack) && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
     private async Task RefreshInstalledStateAsync(bool forceRefresh = false)
     {

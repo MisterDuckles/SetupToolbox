@@ -234,12 +234,7 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 - [ ] **Echte app icons per app** — shared met WPF v1.2.0. Plan uitwerken: icons op git repo / URL-veld in apps.json / icon pack download. Fallback op categorie-glyph als geen icon beschikbaar
 - [x] **AutoSuggestBox search over de catalogus** in AppsPage (bovenaan, filter de categorie-grid) en in CategoryDetailPage (filter de app-lijst). Matcht op categorie-naam + app-naam + beschrijving + winget ID uit onze eigen `apps.json`. Category-match slaat ook aan wanneer een app in die categorie matcht (search "chrome" → Browsers card blijft)
 - [x] **Search-uitbreiding naar de volledige winget repository** — resultaten die niet in onze `apps.json` staan verschijnen onder een aparte "Results from winget repository" sectie op AppsPage. Gebruikt `winget search <query> --source winget`, char-per-char stream reader voor live progress, debounced 300ms met epoch-check zodat oudere calls niet overschrijven wat de newer call oplevert. Duplicaten met de catalog worden gefilterd. Selectie integreert via `SelectionHelper.ExtraSelectedApps` (synthetische App-objecten naast de catalog) — telt mee in de globale footer en gaat mee met "Install selected apps"
-- [ ] **Fuzzy search algoritme** — vervangt de huidige `string.Contains`-match. Moet matchen op:
-  - Typo's: "chrm" → Chrome, "fierfox" → Firefox
-  - Deels / verkeerde volgorde: "studio visual" → "Visual Studio"
-  - Initialen / afkortingen: "vsc" → "Visual Studio Code", "npp" → "Notepad++"
-
-  Implementatie-opties: `FuzzySharp` NuGet package (port van Python's `fuzzywuzzy`, gebruikt Levenshtein distance + token-set ratio) of zelf schrijven met eenvoudige Damerau-Levenshtein. Scoring per resultaat, sorteren op relevantie. Werkt op zowel de lokale `apps.json`-resultaten als de `winget search` resultaten (zelfde scoring-pipeline). Gedeelde WPF + WinUI roadmap-item (WPF v1.4.0 "Fuzzy search in app lijst")
+- [x] **Fuzzy search algoritme** — `FuzzySharp` NuGet (2.0.2), `WeightedRatio` (combineert token-set + partial + full). `Helpers/FuzzyMatcher.cs` scoort query tegen Name + Description + WingetId, neemt het maximum, threshold 55/100. Exacte case-insensitive substring match shortcut naar score 100. Results gesort op score DESC, tie-breaker op naam. Toegepast op AppsPage catalog-results en CategoryDetailPage filter. Winget-repo resultaten niet gefuzzyt (winget CLI doet z'n eigen matching al).
 
 ### v0.5.2 - Search UX + klikbare cards (gedaan)
 - [x] Search-modus: categorie-grid verdwijnt, platte "In your curated list" + "Results from winget repository" secties tonen matchende apps direct zonder categorie-drill
