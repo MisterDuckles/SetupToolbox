@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
 using WingetAppDeployer_WinUI.Models;
+using WingetAppDeployer_WinUI.Services;
 using AppModel = WingetAppDeployer_WinUI.Models.App;
 
 namespace WingetAppDeployer_WinUI.Pages;
@@ -15,6 +16,8 @@ public sealed partial class CategoryDetailPage : Page
 {
     private Category? _category;
     private List<AppModel> _allApps = new();
+    private List<AppModel> _visibleApps = new();
+    private AppDatabase? _db;
 
     public CategoryDetailPage()
     {
@@ -39,7 +42,11 @@ public sealed partial class CategoryDetailPage : Page
             foreach (var sub in category.Subcategories)
                 _allApps.AddRange(sub.Apps);
 
-        AppList.ItemsSource = _allApps;
+        // Cache the full DB so the footer can count / clear / collect selections
+        // across every category (global selection, not per-page).
+        _db = await App.Database.GetAppDatabaseAsync();
+
+        ApplyFilter(SearchBox.Text);
         UpdateSelectionCount();
         UpdateSelectAllButton();
 
@@ -47,6 +54,40 @@ public sealed partial class CategoryDetailPage : Page
         // renders immediately; badges pop in once winget list returns.
         await RefreshInstalledStateAsync();
     }
+
+    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        ApplyFilter(sender.Text);
+        UpdateSelectionCount();
+        UpdateSelectAllButton();
+    }
+
+    private void ApplyFilter(string? query)
+    {
+        var trimmed = (query ?? string.Empty).Trim();
+        _visibleApps = trimmed.Length == 0
+            ? _allApps
+            : _allApps.Where(a => Matches(a, trimmed)).ToList();
+
+        AppList.ItemsSource = _visibleApps;
+
+        if (_visibleApps.Count == 0 && trimmed.Length > 0)
+        {
+            NoResultsText.Text = $"No apps in this category matching \"{trimmed}\"";
+            NoResultsText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            NoResultsText.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private static bool Matches(AppModel a, string query) =>
+        Contains(a.Name, query) || Contains(a.Description, query) || Contains(a.WingetId, query);
+
+    private static bool Contains(string? haystack, string needle) =>
+        !string.IsNullOrEmpty(haystack) && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
     private async Task RefreshInstalledStateAsync(bool forceRefresh = false)
     {
@@ -64,9 +105,10 @@ public sealed partial class CategoryDetailPage : Page
 
         if (changed)
         {
-            // Re-trigger x:Bind evaluation for the list by reassigning.
+            // Re-trigger x:Bind evaluation for the list by reassigning. Keep the
+            // active filter so search results don't jump back to the full list.
             AppList.ItemsSource = null;
-            AppList.ItemsSource = _allApps;
+            AppList.ItemsSource = _visibleApps;
         }
     }
 
@@ -94,13 +136,17 @@ public sealed partial class CategoryDetailPage : Page
 
     private void SelectAllButton_Click(object sender, RoutedEventArgs e)
     {
-        var allSelected = _allApps.Count > 0 && _allApps.All(a => a.IsSelected);
-        foreach (var app in _allApps)
+        // Operate on the currently visible subset so "Select all" respects the
+        // active search filter — if a user typed "jetbrains" they only want to
+        // toggle JetBrains apps, not every app in the category.
+        if (_visibleApps.Count == 0) return;
+        var allSelected = _visibleApps.All(a => a.IsSelected);
+        foreach (var app in _visibleApps)
             app.IsSelected = !allSelected;
 
         // Refresh ItemsRepeater by reassigning the source
         AppList.ItemsSource = null;
-        AppList.ItemsSource = _allApps;
+        AppList.ItemsSource = _visibleApps;
 
         UpdateSelectionCount();
         UpdateSelectAllButton();
@@ -108,7 +154,10 @@ public sealed partial class CategoryDetailPage : Page
 
     private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
-        var selected = _allApps.Where(a => a.IsSelected).ToList();
+        // Install ALL globally selected apps, not just the ones in this category.
+        // Otherwise a user that selected Chrome in Browsers and Notepad++ in
+        // Utilities would lose half their selection on install.
+        var selected = SelectionHelper.GetSelectedApps(_db);
         if (selected.Count == 0) return;
 
         var dialog = new InstallDialog(selected)
@@ -117,25 +166,39 @@ public sealed partial class CategoryDetailPage : Page
         };
         await dialog.ShowAsync();
 
-        // After install finishes, de-select everything so the user can start a
-        // fresh batch, then re-query winget list so just-installed apps show the
-        // Installed badge.
+        // De-select every installed app globally so the next batch starts clean,
+        // then re-query winget list so the new Installed badges show up.
         foreach (var app in selected) app.IsSelected = false;
         await RefreshInstalledStateAsync(forceRefresh: true);
         UpdateSelectionCount();
         UpdateSelectAllButton();
     }
 
+    private async void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        SelectionHelper.ClearSelection(_db);
+        // Force the list to re-bind so all visible checkboxes update visually.
+        AppList.ItemsSource = null;
+        AppList.ItemsSource = _visibleApps;
+        UpdateSelectionCount();
+        UpdateSelectAllButton();
+        await Task.CompletedTask;
+    }
+
     private void UpdateSelectionCount()
     {
-        var count = _allApps.Count(a => a.IsSelected);
+        var count = SelectionHelper.GetSelectedCount(_db);
         SelectionCountText.Text = $"{count} app{(count == 1 ? "" : "s")} selected";
         InstallButton.IsEnabled = count > 0;
+        ClearSelectionButton.IsEnabled = count > 0;
     }
 
     private void UpdateSelectAllButton()
     {
-        var allSelected = _allApps.Count > 0 && _allApps.All(a => a.IsSelected);
+        // Reflects the visible subset — if everything the user currently sees
+        // is checked, the button flips to "Deselect all".
+        var allSelected = _visibleApps.Count > 0 && _visibleApps.All(a => a.IsSelected);
         SelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        SelectAllButton.IsEnabled = _visibleApps.Count > 0;
     }
 }

@@ -33,22 +33,41 @@
             </StackPanel>
         </Button>
 
-        <!-- Title + select all -->
-        <Grid Grid.Row="1" Margin="0,4,0,16">
+        <!-- Title + search + select all -->
+        <Grid Grid.Row="1" Margin="0,4,0,16" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
                        x:Name="CategoryTitle"
                        Style="{StaticResource TitleTextBlockStyle}"
                        VerticalAlignment="Center" />
-            <Button Grid.Column="1"
+            <AutoSuggestBox Grid.Column="1"
+                            x:Name="SearchBox"
+                            PlaceholderText="Filter apps"
+                            QueryIcon="Find"
+                            Width="260"
+                            VerticalAlignment="Center"
+                            TextChanged="SearchBox_TextChanged" />
+            <Button Grid.Column="2"
                     x:Name="SelectAllButton"
                     Content="Select all"
                     Click="SelectAllButton_Click"
                     VerticalAlignment="Center" />
         </Grid>
+
+        <!-- No results state -->
+        <TextBlock Grid.Row="2"
+                   x:Name="NoResultsText"
+                   Text=""
+                   Style="{StaticResource BodyTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Top"
+                   Margin="0,24,0,0"
+                   Visibility="Collapsed" />
 
         <!-- App list -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
@@ -116,23 +135,37 @@
             </ItemsRepeater>
         </ScrollViewer>
 
-        <!-- Footer with selection count -->
+        <!-- Footer with GLOBAL selection count (across all categories) -->
         <Grid Grid.Row="3"
               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
               BorderThickness="0,1,0,0"
               Padding="0,12,0,0"
-              Margin="0,16,0,0">
-            <TextBlock x:Name="SelectionCountText"
+              Margin="0,16,0,0"
+              ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       x:Name="SelectionCountText"
                        Text="0 apps selected"
                        Style="{StaticResource BodyTextBlockStyle}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        VerticalAlignment="Center" />
-            <Button x:Name="InstallButton"
+            <Button Grid.Column="1"
+                    x:Name="ClearSelectionButton"
+                    Content="Clear all"
+                    IsEnabled="False"
+                    Click="ClearSelectionButton_Click"
+                    VerticalAlignment="Center" />
+            <Button Grid.Column="2"
+                    x:Name="InstallButton"
                     Content="Install selected apps"
                     Style="{StaticResource AccentButtonStyle}"
                     IsEnabled="False"
-                    HorizontalAlignment="Right"
-                    Click="InstallButton_Click" />
+                    Click="InstallButton_Click"
+                    VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Page>
