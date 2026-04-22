@@ -43,21 +43,21 @@
 ### High Priority
 - [x] Exe direct downloaden van GitHub opent niet — gefixed: self-contained exe (bevat .NET runtime)
 - [x] Auto-update loop: app detecteert steeds "nieuwe versie" en download zichzelf opnieuw (gefixed: versie komt nu dynamisch uit assembly i.p.v. hardcoded)
-- [ ] Subcategorie layout onoverzichtelijk — subcats (IDE & Editors, Version Control, etc.) lopen in elkaar over, moet overzichtelijker. Hier moeten we nog over nadenken hoe dit beter kan
+- [ ] Subcategorie layout onoverzichtelijk — subcats (IDE & Editors, Version Control, etc.) lopen in elkaar over, moet overzichtelijker. Hier moeten we nog over nadenken hoe dit beter kan. **Geldt ook voor WinUI** (CategoryDetailPage flattent subcats nu — zie WinUI v0.5.0)
 - [x] Select All moet ook Deselect All zijn (toggle)
 - [x] Auto-update schedule werkt niet — gefixed: `UseShellExecute=true` + `Verb="runas"` geeft nu daadwerkelijk UAC-prompt, met onderscheid tussen geannuleerd en mislukt (v1.1.2)
 - [x] Smooth scroll verbeteren — werkt maar voelt nog niet 100% vloeiend (165Hz monitor). Uitzoeken of WPF dit beter kan
 
 ### Medium Priority
-- [ ] Echte app icons — plan uitdenken zodat elke app een eigen icon krijgt. Mogelijkheden: icons hosten op git repo, URL per app in apps.json, of icon pack downloaden. Nu emoji placeholder per category
+- [ ] Echte app icons — plan uitdenken zodat elke app een eigen icon krijgt. Mogelijkheden: icons hosten op git repo, URL per app in apps.json, of icon pack downloaden. Nu emoji placeholder per category. **Geldt ook voor WinUI** (alleen Segoe icons per categorie nu, zie WinUI v0.5.0)
 - [x] Settings window styling kan nog mooier (buttons, combobox, checkbox niet theme-aware)
 - [x] WPF default ComboBox/CheckBox/RadioButton styling lekt door in dark mode
 - [x] Searchbox placeholder tekst ("Search apps...")
 
 ### Low Priority
-- [ ] Welcome banner gradient zou theme-kleuren moeten volgen (niet altijd blauw)
-- [ ] Category card search: matcht nu op naam, zou ook op app-naam moeten filteren
-- [ ] Integratie documentatie updaten (INTEGRATIE.md) — verwijst nog naar oude namen/structuur
+- [ ] Welcome banner gradient zou theme-kleuren moeten volgen (niet altijd blauw) — **WPF-only** (WinUI gebruikt native Fluent, geen eigen themes)
+- [ ] Category card search: matcht nu op naam, zou ook op app-naam moeten filteren — **Geldt ook voor WinUI** (WinUI heeft überhaupt nog geen search, zie WinUI v0.5.0)
+- [ ] Integratie documentatie updaten (INTEGRATIE.md) — verwijst nog naar oude namen/structuur — **Gedeeld** (niet WinUI-specifiek)
 
 ---
 
@@ -81,40 +81,40 @@
 - [x] v1.2.1: WPF-UI NuGet integratie + Fluent sandbox PoC (verworpen als UI-pad — zie losse WinUI 3 track hieronder). Sandbox-files staan nog in `Views/Fluent/` voor referentie; WPF-UI package blijft in csproj.
 
 ### v1.3.0 - Enhanced UX
-- [ ] Auto-update toast notificatie — na een `/autoupdate` run een **native Windows toast** in Action Center tonen ("Alle apps succesvol geüpdatet" / "X apps geüpdatet, Y gefaald"). Nu draait de update volledig stil, user krijgt geen feedback dat de scheduled task heeft gelopen. Implementatie: `CommunityToolkit.WinUI.Notifications` NuGet package (opvolger van `Microsoft.Toolkit.Uwp.Notifications`) — werkt vanuit WPF zonder UWP-packaging, landt in Action Center
+- [ ] Auto-update toast notificatie — na een `/autoupdate` run een **native Windows toast** in Action Center tonen ("Alle apps succesvol geüpdatet" / "X apps geüpdatet, Y gefaald"). Nu draait de update volledig stil, user krijgt geen feedback dat de scheduled task heeft gelopen. Implementatie: `CommunityToolkit.WinUI.Notifications` NuGet package (opvolger van `Microsoft.Toolkit.Uwp.Notifications`) — werkt vanuit WPF zonder UWP-packaging, landt in Action Center. **Geldt ook voor WinUI** (zie WinUI v0.9.0)
 - [ ] **Global search field in MainWindow** — groot, prominent zoekveld bovenaan de MainWindow (boven de category cards) waarmee je direct op app-naam kan zoeken, ook als je niet weet in welke categorie de app staat. Moet *twee* bronnen doorzoeken:
   1. **Lokale apps.json** — alle apps uit onze gecureerde categorieen (snel, instant results)
   2. **Winget repository** — alle beschikbare apps via `winget search <query>` zodat je ook apps kan vinden en installeren die *niet* in onze categorieen staan. Resultaten moeten duidelijk gelabeld worden (bijv. "In je lijst" vs "Via winget") en via dezelfde install-flow kunnen worden geïnstalleerd.
 
-  Styling: moderne "gave" search box met glassmorphism/frosted glass effect, gradient glow erachter (zie reference image), search icon links, clear icon rechts. Moet theme-aware zijn (werkt met alle 4 themes in light + dark mode). Debounced input (300ms) zodat we niet bij elke toetsaanslag `winget search` aanroepen.
-- [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden
-- [ ] Installation profiles (Gaming, Developer, Office, etc.)
-- [ ] Parallel installaties (meerdere apps tegelijk)
-- [ ] Progress bar per app tijdens installatie
-- [ ] Export/Import selectie naar JSON
-- [ ] Filter opties (alleen popular, al geinstalleerd, etc.)
-- [ ] Installatie geschiedenis/logs
-- [ ] Category card search: ook filteren op app-naam binnen categories
+  Styling: moderne "gave" search box met glassmorphism/frosted glass effect, gradient glow erachter (zie reference image), search icon links, clear icon rechts. Moet theme-aware zijn (werkt met alle 4 themes in light + dark mode). Debounced input (300ms) zodat we niet bij elke toetsaanslag `winget search` aanroepen. **Geldt ook voor WinUI** (zonder glassmorphism — WinUI gebruikt native `AutoSuggestBox`, zie WinUI v0.5.0)
+- [ ] App deinstallatie — geinstalleerde apps kunnen verwijderen vanuit de app. Uitzoeken: kan `winget list` detecteren welke apps al geinstalleerd zijn? Zo ja: installed status tonen (checkmark) + uninstall optie aanbieden — **Al gedaan in WinUI** (v0.4.1 installed-badge + v0.4.3 Debloat quick uninstall + v0.6.0 full Debloat)
+- [ ] Installation profiles (Gaming, Developer, Office, etc.) — **Geldt ook voor WinUI** (zie WinUI v0.9.0)
+- [ ] Parallel installaties (meerdere apps tegelijk) — **Geldt ook voor WinUI** (zie WinUI v0.9.0)
+- [ ] Progress bar per app tijdens installatie — **Al gedaan in WinUI** (v0.4.2 determinate bar + v0.4.4 stage ring)
+- [ ] Export/Import selectie naar JSON — **Geldt ook voor WinUI** (zie WinUI v0.9.0)
+- [ ] Filter opties (alleen popular, al geinstalleerd, etc.) — **Geldt ook voor WinUI** (zie WinUI v0.5.0)
+- [ ] Installatie geschiedenis/logs — **Geldt ook voor WinUI** (zie WinUI v0.9.0)
+- [ ] Category card search: ook filteren op app-naam binnen categories — **Geldt ook voor WinUI** (onderdeel van WinUI v0.5.0 search werk)
 
 ### v1.4.0 - Advanced Features
-- [ ] Multi-language support (NL/EN toggle)
-- [ ] Fuzzy search in app lijst
-- [ ] Update checker voor geinstalleerde apps
-- [ ] Notifications bij voltooide installaties
-- [ ] Welcome banner styling volgt theme kleuren
+- [ ] Multi-language support (NL/EN toggle) — **Geldt ook voor WinUI**
+- [ ] Fuzzy search in app lijst — **Geldt ook voor WinUI** (onderdeel van search werk)
+- [ ] Update checker voor geinstalleerde apps — **Geldt ook voor WinUI** (aparte dashboard-view naast auto-update scheduler)
+- [ ] Notifications bij voltooide installaties — **Geldt ook voor WinUI** (overlap met toast notificaties in v1.3.0)
+- [ ] Welcome banner styling volgt theme kleuren — **WPF-only** (WinUI heeft native Fluent)
 
 ### v1.5.0 - Integratie & Deployment
-- [ ] Integratie met Windows11-Unattended-Debloat updaten en testen
-- [ ] deploy.ps1 script updaten voor nieuwe exe naam
-- [ ] INTEGRATIE.md bijwerken met nieuwe instructies
+- [ ] Integratie met Windows11-Unattended-Debloat updaten en testen — **Geldt ook voor WinUI** (past bij WinUI v0.6.0 full Debloat)
+- [ ] deploy.ps1 script updaten voor nieuwe exe naam — **WPF-only** (WinUI heeft eigen publish flow, zie WinUI v0.5.0)
+- [ ] INTEGRATIE.md bijwerken met nieuwe instructies — **Gedeeld** (documenteert beide apps)
 
 ### v2.0.0 - Major Update
-- [ ] Plugin systeem voor custom app sources
-- [ ] Cloud sync voor settings en app selecties
-- [ ] Custom app repositories toevoegen
-- [ ] Portable mode (geen installatie nodig)
-- [ ] CLI interface (`winget-deployer install --profile gaming`)
-- [ ] Backup/restore functionaliteit
+- [ ] Plugin systeem voor custom app sources — **Geldt ook voor WinUI**
+- [ ] Cloud sync voor settings en app selecties — **Geldt ook voor WinUI**
+- [ ] Custom app repositories toevoegen — **Geldt ook voor WinUI**
+- [ ] Portable mode (geen installatie nodig) — **Al standaard in WinUI** (unpackaged exe)
+- [ ] CLI interface (`winget-deployer install --profile gaming`) — **Geldt ook voor WinUI**
+- [ ] Backup/restore functionaliteit — **Geldt ook voor WinUI**
 
 ---
 
@@ -123,6 +123,39 @@
 Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen versie-lijn. Echte **WinUI 3 / Windows App SDK** stack — geen WPF, geen lepoco workarounds. Dit wordt de "Windows native" versie van de app. De bestaande WPF app blijft parallel bestaan voor de decoratieve themes (Sunset/OceanBreeze/Aurora) en voor gebruikers die die stijl willen.
 
 **Stack:** .NET 10 + Windows App SDK 1.8 + WinUI 3 + unpackaged exe. DesktopAcrylicController voor backdrop, echte `Microsoft.UI.Xaml` controls (TitleBar, ToggleSwitch, InfoBar, SymbolIcon, NavigationView etc.).
+
+### Feature-parity met WPF app — gap-overzicht
+
+Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland in de versie, met ❌ nog niet gepland / WPF-only.
+
+| Feature / behavior | WPF | WinUI | Waar in WinUI roadmap |
+|---|---|---|---|
+| Category grid + navigatie | ✅ | ✅ | v0.3.0 |
+| App-selectie + install flow | ✅ | ✅ | v0.4.0 |
+| Install progress per app | ✅ | ✅ (stage ring) | v0.4.2 / v0.4.4 |
+| Installed-state detectie | ✅ | ✅ | v0.4.1 |
+| Schedule dialog + auto-update | ✅ | ✅ | v0.4.5 |
+| App uninstall | ✅ (via winget) | ✅ (Debloat quick) | v0.4.3 / v0.6.0 full |
+| Search (category + app) | ✅ | ⏳ | **v0.5.0** |
+| Subcategorie grouping | ✅ | ⏳ (nu flattened) | **v0.5.0** |
+| Filter opties (popular/installed/all) | ❌ geplaand | ⏳ | **v0.5.0** |
+| Echte app icons (per app) | ❌ geplaand | ⏳ (nu alleen Segoe cat-icons) | **v0.5.0** (shared plan) |
+| Settings persistence (JSON file) | ✅ | ⏳ | **v0.8.0** |
+| App self-update check (GitHub) | ✅ | ⏳ | **v0.8.0** |
+| Welcome banner (dismissible) | ✅ | ⏳ | **v0.8.0** |
+| Theme selector (Sunset/Aurora/...) | ✅ | ❌ **WPF-only** | niet porten — WinUI gebruikt native Fluent + systeem-theme |
+| Post-install "schedule?" prompt | ✅ | ⏳ | **v0.9.0** |
+| Toast notificatie bij silent update | ❌ geplaand | ⏳ | **v0.9.0** |
+| Parallel installaties | ❌ geplaand | ⏳ | **v0.9.0** |
+| Installation profiles (Gaming/...) | ❌ geplaand | ⏳ | **v0.9.0** |
+| Export/Import selectie | ❌ geplaand | ⏳ | **v0.9.0** |
+| Install history / log | ❌ geplaand | ⏳ | **v0.9.0** |
+| Full Debloat (Windows bloatware) | ❌ | ⏳ | **v0.6.0** |
+| Tweaks tab (registry toggles) | ❌ | ⏳ | **v0.7.0** |
+| Smooth scroll custom physics | ✅ (165Hz lerp) | ❌ | niet porten — WinUI ScrollViewer is al native vloeiend |
+| Multi-language (NL/EN) | ❌ geplaand | ⏳ | v1.4.0 shared |
+| Fuzzy search | ❌ geplaand | ⏳ | onderdeel van v0.5.0 search werk |
+| `/fluentsandbox` arg | ✅ (WPF legacy) | ❌ **WPF-only** | niet porten — sandbox was WPF-UI experiment, WinUI ís het native pad |
 
 ### v0.1.0 - Sandbox foundation (huidig)
 - [x] Nieuw WinUI 3 project aangemaakt + toegevoegd aan solution
@@ -193,11 +226,17 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 - [x] SettingsPage met status-card: toont of taak actief is + Set up / Change / Disable knoppen
 - [x] `App.TaskScheduler` singleton alongside `App.Database` / `App.Winget`
 
-### v0.5.0 - Polish + release
-- [ ] Segoe Fluent Icons per categorie
+### v0.5.0 - Polish + release (feature parity met WPF)
+**Doel:** dichten van de grootste gaten t.o.v. de WPF app, dan de eerste public release.
+
+- [ ] **Segoe Fluent Icons per categorie** — vervang de emoji icons (🌐 💼 🔐 etc.) door Segoe Fluent code points (Globe, Code, Shield, Document, Chat, Music, Repair, Color). Mapping via een helper in `Models/` of `Helpers/`, zodat het los staat van `apps.json`
+- [ ] **Echte app icons per app** — shared met WPF v1.2.0. Plan uitwerken: icons op git repo / URL-veld in apps.json / icon pack download. Fallback op categorie-glyph als geen icon beschikbaar
+- [ ] **AutoSuggestBox search** in AppsPage (bovenaan, filter de categorie-grid) en in CategoryDetailPage (filter de app-lijst). Matcht op categorie-naam + app-naam. Debounced 200-300ms. Nu ontbreekt search volledig — WPF heeft dit wel (MainWindow.xaml.cs SearchBox_TextChanged rond regel 623)
+- [ ] **Subcategorie grouping in CategoryDetailPage** — CategoryDetailPage flattent nu de subcategorieën (zie comment "v0.3.0" in `CategoryDetailPage.xaml.cs` rond regel 34-35). Port de subcat-layout: `Expander` of headered section per subcat ("IDE & Editors", "Version Control") met de apps eronder. Hangt samen met het "Subcategorie layout onoverzichtelijk" issue in de WPF track
+- [ ] **Filter opties** (popular / installed / all) boven de app-lijst op CategoryDetailPage — shared met WPF v1.3.0
 - [ ] Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)
-- [ ] Eigen GitHub release artifact
-- [ ] Eventueel `WingetAppDeployer.Core/` extractie van Models+Services
+- [ ] Eigen GitHub release artifact (aparte release-lijn naast de WPF releases, bijv `WingetAppDeployer.WinUI-v0.5.0.exe`)
+- [ ] Eventueel `WingetAppDeployer.Core/` extractie van Models+Services zodat WPF en WinUI shared code gebruiken
 
 ### v0.6.0 - Debloat tab (full implementation)
 - [ ] **Windows bloatware removal** — lijst van Microsoft "standaard" bloat apps die in Win11 meekomen (Xbox, Teams consumer, Solitaire, Weather, etc.) met checkboxes en "Remove selected" batch-actie. Gebruikt `Get-AppxPackage | Remove-AppxPackage` (PowerShell) of `winget uninstall`. Moet runnen als admin.
@@ -215,6 +254,33 @@ Apart product, apart project (`src/WingetAppDeployer.WinUI/`), aparte exe, eigen
 - [ ] **Registry-backed** — elke tweak is een `HKCU` of `HKLM` registry edit; groepeer per categorie in `SettingsCard`-stijl rows met ToggleSwitch
 - [ ] **Apply/revert** — tweaks onthouden wat de originele waarde was zodat user kan terugdraaien
 - [ ] **Preset profiles** — "Privacy-focused", "Performance", "Minimal UI" als één-klik batches
+
+### v0.8.0 - Settings + app self-update
+**Gap fix:** WPF heeft al persistente app-settings en een update-checker voor de app zelf. WinUI heeft alleen de scheduled-task card in de Settings tab en geen update-check.
+
+- [ ] **`SettingsService` port** — JSON-backed settings file (bijv. `%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json`). Velden die *wél* relevant zijn voor WinUI:
+  - `CheckForUpdatesOnStartup` (bool, default true)
+  - `ShowWelcomeBanner` (bool, default true)
+  - `AutoUpdateEnabled` + `AutoUpdateSchedule` (kan nu al uit TaskScheduler gelezen worden, maar persist ook hier voor snelle check zonder schtasks-call)
+  - **Niet porten:** `Theme` / `DarkMode` (WinUI volgt het Windows systeem-theme native via Mica)
+- [ ] **`GitHubService` port** — check `api.github.com/repos/MisterDuckles/WinGetAppDeployer/releases/latest` op startup, vergelijk met `Assembly.GetExecutingAssembly().GetName().Version`. Download + launch nieuwe exe via launcher-pattern (zoals WPF doet)
+- [ ] **Welcome banner** op AppsPage (bovenaan, dismissible via X en via `ShowWelcomeBanner` setting). Korte uitleg wat de app doet + link naar repo
+- [ ] **Update-beschikbaar InfoBar** in MainWindow (boven de NavigationView) wanneer GitHubService nieuwe release vindt — met "Update now" knop
+- [ ] **Settings UI uitbreiden** met toggles voor:
+  - ToggleSwitch "Check for updates on startup"
+  - ToggleSwitch "Show welcome banner on Apps page"
+  - Button "Check for updates now"
+
+### v0.9.0 - Install flow UX polish
+**Gap fix:** overgebleven UX-items uit de WPF v1.3.0/v1.4.0 roadmap die ook voor WinUI gelden.
+
+- [ ] **Post-install "Schedule auto-updates?" prompt** — na een succesvolle InstallDialog-run (als er nog geen scheduled task is) een ContentDialog tonen met "Wil je voortaan automatisch updates laten draaien?" → opent de ScheduleDialog. WPF heeft dit (InstallWindow.xaml.cs rond regel 607-618)
+- [ ] **Toast notificatie** na `/autoupdate` — `CommunityToolkit.WinUI.Notifications` NuGet package. Toont in Action Center: "WingetAppDeployer: X apps geüpdatet" (bij success) of "Y gefaald" (bij failure). Nu draait de silent update 100% stil
+- [ ] **Parallel installaties** (optioneel, met warning) — nu draait `InstallAppsAsync` strict sequentieel. Overweeg een `MaxParallelism=2` optie in settings zodat 2 apps tegelijk geïnstalleerd kunnen worden. Complexiteit: winget lockt per package, maar globale concurrent runs zijn meestal safe
+- [ ] **Installation profiles** (Gaming / Developer / Office / Productivity) — preset-selecties. Ofwel hardcoded in apps.json (extra `profiles` section), ofwel als aparte `profiles.json`. Eén klik = alle apps in die profile geselecteerd
+- [ ] **Export/Import selectie naar JSON** — user kan huidige selectie opslaan als `my-apps.json` en later importeren, bijv. voor verse installs op nieuwe machines
+- [ ] **Installatie geschiedenis/log** — append-log file (`%LOCALAPPDATA%\WingetAppDeployer.WinUI\install-history.log`) met timestamp + app + outcome. Settings pagina heeft een "View install history" button die de log in-app toont
+- [ ] **Notificaties bij voltooide install** — overlap met toast item hierboven; kan ook gewoon de native `AppNotificationBuilder` zijn na elke InstallDialog-sessie
 
 ### Out of scope voor dit track
 - Decoratieve themes (Sunset/Aurora/OceanBreeze) — exclusief in de WPF app, nooit in WinUI 3
