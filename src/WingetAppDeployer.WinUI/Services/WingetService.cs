@@ -83,6 +83,87 @@ public sealed class WingetService
     }
 
     /// <summary>
+    /// Zoekt in de volledige winget repository naar apps die matchen op de query.
+    /// Returned synthetische App-objecten (zonder category-koppeling) zodat ze in
+    /// dezelfde install-flow meegenomen kunnen worden als catalog-apps.
+    /// </summary>
+    public async Task<List<AppModel>> SearchWingetRepoAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return new List<AppModel>();
+
+        try
+        {
+            // --source winget forceert alleen de community repo (niet msstore), wat
+            // scheelt in output-ruis en dubbele hits. --accept-source-agreements
+            // voorkomt dat een eerstkeer-prompt de exit code 0x8A150049 geeft.
+            var escaped = query.Replace("\"", "");
+            var (exitCode, output, _) = await RunWingetCommandAsync(
+                $"search \"{escaped}\" --source winget --accept-source-agreements");
+
+            if (exitCode != 0 && string.IsNullOrWhiteSpace(output))
+                return new List<AppModel>();
+
+            return ParseSearchOutput(output);
+        }
+        catch
+        {
+            return new List<AppModel>();
+        }
+    }
+
+    private static List<AppModel> ParseSearchOutput(string output)
+    {
+        var results = new List<AppModel>();
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                          .Select(l => l.TrimEnd('\r'))
+                          .ToList();
+
+        // Header line bevat altijd "Name" en "Id". Daaronder staat een separator
+        // met dashes. Gebruik de kolom-posities uit de header om correct te parsen;
+        // app-namen mogen spaties bevatten dus whitespace-split werkt niet.
+        var headerIdx = lines.FindIndex(l => l.StartsWith("Name", StringComparison.Ordinal)
+                                          && l.Contains("Id", StringComparison.Ordinal));
+        if (headerIdx < 0 || headerIdx + 2 >= lines.Count) return results;
+
+        var header = lines[headerIdx];
+        var idPos = header.IndexOf("Id", StringComparison.Ordinal);
+        var versionPos = header.IndexOf("Version", StringComparison.Ordinal);
+        var sourcePos = header.IndexOf("Source", StringComparison.Ordinal);
+        if (idPos < 0 || versionPos < 0 || versionPos <= idPos) return results;
+
+        for (int i = headerIdx + 2; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            if (line.Length < versionPos) continue;
+
+            var name = line.Substring(0, idPos).Trim();
+
+            var idEnd = versionPos;
+            var id = line.Substring(idPos, idEnd - idPos).Trim();
+
+            var versionEnd = sourcePos > versionPos ? sourcePos : line.Length;
+            var version = line.Substring(versionPos, versionEnd - versionPos).Trim();
+
+            // Alleen entries die eruit zien als een echte winget-ID. Filter header
+            // noise ("Match", "Moniker", ">") en regels zonder dot in de ID.
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(id)) continue;
+            if (!id.Contains('.')) continue;
+            if (id.Length < 3 || id.Contains(' ')) continue;
+
+            results.Add(new AppModel
+            {
+                Name = name,
+                WingetId = id,
+                Description = string.IsNullOrEmpty(version)
+                    ? "Available via winget"
+                    : $"Available via winget (v{version})"
+            });
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Upgrades all installed apps via winget. Used by the scheduled auto-update task.
     /// </summary>
     public async Task<bool> UpdateAllAppsAsync()

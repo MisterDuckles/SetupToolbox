@@ -2,13 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
 using WingetAppDeployer_WinUI.Models;
 using WingetAppDeployer_WinUI.Services;
+using AppModel = WingetAppDeployer_WinUI.Models.App;
 
 namespace WingetAppDeployer_WinUI.Pages;
 
@@ -17,10 +21,23 @@ public sealed partial class AppsPage : Page
     private List<Category> _allCategories = new();
     private AppDatabase? _db;
 
+    // Debounce voor de winget-repo search: winget search duurt ~1-2s en mag
+    // niet op elke toetsaanslag vuren. 300ms is een prima balans tussen snappy
+    // en niet-spammy.
+    private DispatcherQueueTimer? _searchDebounce;
+    private string _pendingWingetQuery = string.Empty;
+    private int _wingetSearchEpoch = 0;
+    private List<AppModel> _wingetResults = new();
+
     public AppsPage()
     {
         InitializeComponent();
         Loaded += AppsPage_Loaded;
+
+        _searchDebounce = DispatcherQueue.CreateTimer();
+        _searchDebounce.Interval = TimeSpan.FromMilliseconds(300);
+        _searchDebounce.IsRepeating = false;
+        _searchDebounce.Tick += SearchDebounce_Tick;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -29,6 +46,22 @@ public sealed partial class AppsPage : Page
         // Refresh the footer whenever the user comes back to this page — e.g.
         // returned from CategoryDetailPage after tweaking selections.
         UpdateSelectionFooter();
+    }
+
+    /// <summary>
+    /// Reset de pagina naar de categorie-grid: wist de search box en laat
+    /// eventuele winget-resultaten verdwijnen. Aangeroepen vanuit MainWindow
+    /// wanneer de user op "Apps" in de sidebar klikt terwijl AppsPage al open
+    /// staat — dan verwacht de user dat hij terug naar het rootbeeld gaat.
+    /// </summary>
+    public void ResetToRoot()
+    {
+        // Programmatisch SearchBox leegmaken firet TextChanged met reason
+        // ProgrammaticChange, en die slaan we over in de handler. Dus hier
+        // expliciet de filter + winget-zoekactie terugdraaien.
+        SearchBox.Text = string.Empty;
+        ApplyFilter(string.Empty);
+        ScheduleWingetSearch(string.Empty);
     }
 
     private async void AppsPage_Loaded(object sender, RoutedEventArgs e)
@@ -96,6 +129,119 @@ public sealed partial class AppsPage : Page
         // the text (e.g. on page load). The ProgrammaticChange reason flags that.
         if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
         ApplyFilter(sender.Text);
+        ScheduleWingetSearch(sender.Text);
+    }
+
+    private void ScheduleWingetSearch(string query)
+    {
+        var trimmed = (query ?? string.Empty).Trim();
+        _pendingWingetQuery = trimmed;
+
+        // Lege query: geen winget-call, verberg sectie + clear resultaten.
+        if (trimmed.Length < 2)
+        {
+            _searchDebounce?.Stop();
+            WingetSearchingRing.Visibility = Visibility.Collapsed;
+            WingetSection.Visibility = Visibility.Collapsed;
+            _wingetResults = new List<AppModel>();
+            WingetResultsList.ItemsSource = null;
+            return;
+        }
+
+        // Toon de sectie + spinner meteen zodat user weet dat we aan het zoeken
+        // zijn; de echte call wacht tot de debounce-timer afloopt.
+        WingetSection.Visibility = Visibility.Visible;
+        WingetEmptyText.Visibility = Visibility.Collapsed;
+        WingetSearchingRing.Visibility = Visibility.Visible;
+
+        _searchDebounce?.Stop();
+        _searchDebounce?.Start();
+    }
+
+    private async void SearchDebounce_Tick(DispatcherQueueTimer sender, object args)
+    {
+        var query = _pendingWingetQuery;
+        if (string.IsNullOrWhiteSpace(query)) return;
+
+        // Epoch check voorkomt dat een oudere winget-call resultaten van een
+        // nieuwere query overschrijft (user typt sneller dan winget searcht).
+        var myEpoch = ++_wingetSearchEpoch;
+        var results = await App.Winget.SearchWingetRepoAsync(query);
+        if (myEpoch != _wingetSearchEpoch) return;
+
+        // Verwijder resultaten die al in onze catalogus zitten — die ziet de user
+        // immers al in de categorie-grid. Voor duplicaten re-usen we het bestaande
+        // "extra"-object zodat een eerder aangevinkt item aangevinkt blijft.
+        var filtered = new List<AppModel>();
+        foreach (var app in results)
+        {
+            if (SelectionHelper.IsInCatalog(_db, app.WingetId)) continue;
+
+            var existing = SelectionHelper.FindExtra(app.WingetId);
+            filtered.Add(existing ?? app);
+        }
+
+        _wingetResults = filtered;
+        WingetResultsList.ItemsSource = _wingetResults;
+        WingetSearchingRing.Visibility = Visibility.Collapsed;
+
+        if (_wingetResults.Count == 0)
+        {
+            WingetEmptyText.Text = $"No winget apps matching \"{query}\" (outside our curated list).";
+            WingetEmptyText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            WingetEmptyText.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void CatalogCard_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        // Tag="{x:Bind}" in de DataTemplate zorgt dat fe.Tag het App-object is —
+        // betrouwbaarder dan FrameworkElement.DataContext onder ItemsRepeater.
+        if (sender is not FrameworkElement fe || fe.Tag is not AppModel app) return;
+
+        app.IsSelected = !app.IsSelected;
+        // Re-bind zodat de CheckBox z'n nieuwe IsSelected pickup (App heeft
+        // geen INotifyPropertyChanged).
+        if (CatalogResultsList.ItemsSource is IEnumerable<AppModel> items)
+        {
+            CatalogResultsList.ItemsSource = null;
+            CatalogResultsList.ItemsSource = items;
+        }
+        UpdateSelectionFooter();
+    }
+
+    private void WingetCard_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not AppModel app) return;
+
+        app.IsSelected = !app.IsSelected;
+
+        // Sync de globale "extra selected" lijst: winget-result apps zitten niet
+        // in onze apps.json, dus SelectionHelper moet ze apart tracken.
+        if (app.IsSelected)
+            SelectionHelper.AddExtraSelected(app);
+        else
+            SelectionHelper.RemoveExtraSelected(app.WingetId);
+
+        // Re-bind zodat CheckBox refresht.
+        WingetResultsList.ItemsSource = null;
+        WingetResultsList.ItemsSource = _wingetResults;
+        UpdateSelectionFooter();
+    }
+
+    private void AppCard_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Grid g)
+            g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorSecondaryBrush"];
+    }
+
+    private void AppCard_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Grid g)
+            g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
 
     private void ApplyFilter(string? query)
@@ -105,48 +251,57 @@ public sealed partial class AppsPage : Page
         var trimmed = (query ?? string.Empty).Trim();
         if (trimmed.Length == 0)
         {
+            // Geen search: categorie-grid is de hoofd-view, geen app-lijsten
+            // of winget-sectie nodig.
             CategoryList.ItemsSource = _allCategories;
+            CategoryList.Visibility = Visibility.Visible;
+            CatalogResultsSection.Visibility = Visibility.Collapsed;
             NoResultsText.Visibility = Visibility.Collapsed;
             return;
         }
 
-        var filtered = _allCategories.Where(c => MatchesCategory(c, trimmed)).ToList();
-        CategoryList.ItemsSource = filtered;
+        // Search-modus: verberg de categorie-grid en toon een platte lijst van
+        // matchende apps uit onze catalogus. Categorie-navigatie voegt tijdens
+        // zoeken niks toe — user wil de app zelf direct kunnen aanvinken.
+        CategoryList.Visibility = Visibility.Collapsed;
+        CatalogResultsSection.Visibility = Visibility.Visible;
 
-        if (filtered.Count == 0)
+        var matchingApps = FlattenApps()
+            .Where(a => MatchesApp(a, trimmed))
+            .ToList();
+        CatalogResultsList.ItemsSource = matchingApps;
+
+        if (matchingApps.Count == 0)
         {
-            NoResultsText.Text = $"No categories or apps matching \"{trimmed}\"";
-            NoResultsText.Visibility = Visibility.Visible;
+            CatalogEmptyText.Text = $"No apps in your curated list matching \"{trimmed}\"";
+            CatalogEmptyText.Visibility = Visibility.Visible;
         }
         else
         {
-            NoResultsText.Visibility = Visibility.Collapsed;
+            CatalogEmptyText.Visibility = Visibility.Collapsed;
+        }
+
+        // NoResultsText (de oude boven-de-grid melding) niet meer nodig — de
+        // twee sectie-specifieke empty states nemen de rol over.
+        NoResultsText.Visibility = Visibility.Collapsed;
+    }
+
+    private IEnumerable<AppModel> FlattenApps()
+    {
+        foreach (var cat in _allCategories)
+        {
+            if (cat.Apps != null)
+                foreach (var app in cat.Apps) yield return app;
+            if (cat.Subcategories != null)
+                foreach (var sub in cat.Subcategories)
+                    foreach (var app in sub.Apps) yield return app;
         }
     }
 
-    private static bool MatchesCategory(Category c, string query)
-    {
-        if (Contains(c.Name, query) || Contains(c.Description, query)) return true;
-
-        // Match on any app name or description inside the category — so searching
-        // "chrome" surfaces the Browsers card even though Chrome isn't in the
-        // category name itself.
-        if (c.Apps != null)
-            foreach (var app in c.Apps)
-                if (Contains(app.Name, query) || Contains(app.Description, query) || Contains(app.WingetId, query))
-                    return true;
-
-        if (c.Subcategories != null)
-            foreach (var sub in c.Subcategories)
-            {
-                if (Contains(sub.Name, query) || Contains(sub.Description, query)) return true;
-                foreach (var app in sub.Apps)
-                    if (Contains(app.Name, query) || Contains(app.Description, query) || Contains(app.WingetId, query))
-                        return true;
-            }
-
-        return false;
-    }
+    private static bool MatchesApp(AppModel a, string query) =>
+        Contains(a.Name, query)
+        || Contains(a.Description, query)
+        || Contains(a.WingetId, query);
 
     private static bool Contains(string? haystack, string needle) =>
         !string.IsNullOrEmpty(haystack) && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);

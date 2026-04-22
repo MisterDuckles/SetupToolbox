@@ -46,4 +46,29 @@ public sealed partial class MainWindow : Window
 
         ContentFrame.Navigate(pageType, null, new EntranceNavigationTransitionInfo());
     }
+
+    private void NavView_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+    {
+        // ItemInvoked fired ook bij een klik op het ál-geselecteerde item, waar
+        // SelectionChanged stil blijft. Dat hebben we nodig voor twee scenarios:
+        //   1. User staat in een CategoryDetailPage — NavView's selectie is nog
+        //      steeds "Apps", dus normale navigatie doet niks. We pakken het hier.
+        //   2. User staat op AppsPage met een actieve search — zelfde verhaal.
+        if (args.IsSettingsInvoked) return;
+        if (args.InvokedItemContainer is not NavigationViewItem item) return;
+        if (item.Tag is not string tag || tag != "Apps") return;
+
+        if (ContentFrame.CurrentSourcePageType == typeof(CategoryDetailPage))
+        {
+            // Terug uit detail-page naar de categorie-grid.
+            ContentFrame.Navigate(typeof(AppsPage), null, new EntranceNavigationTransitionInfo());
+            return;
+        }
+
+        if (ContentFrame.Content is AppsPage apps)
+        {
+            // Al op AppsPage: wis de search zodat categorie-grid weer zichtbaar wordt.
+            apps.ResetToRoot();
+        }
+    }
 }

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
 using WingetAppDeployer_WinUI.Models;
@@ -117,21 +119,37 @@ public sealed partial class CategoryDetailPage : Page
         if (Frame.CanGoBack) Frame.GoBack();
     }
 
-    private void AppCheckBox_Changed(object sender, RoutedEventArgs e)
+    private void AppCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        // The TwoWay x:Bind updates App.IsSelected as part of the same event
-        // batch. Defer the count to run after the dispatcher completes the
-        // current event so the backing list definitely has the new state.
-        DispatcherQueue.TryEnqueue(() =>
+        // De hele kaart is klikbaar (CheckBox staat op IsHitTestVisible=False).
+        // Via Tag="{x:Bind}" in de DataTemplate zit het App-object op de Grid,
+        // wat betrouwbaarder is dan FrameworkElement.DataContext in
+        // ItemsRepeater + x:DataType (daar blijft die soms null).
+        if (sender is FrameworkElement fe && fe.Tag is AppModel app)
         {
-            // Safety net — also sync from the actual CheckBox state in case
-            // the binding direction is reversed for some reason.
-            if (sender is CheckBox cb && cb.DataContext is AppModel app)
-                app.IsSelected = cb.IsChecked == true;
+            app.IsSelected = !app.IsSelected;
+
+            // Re-bind zodat de CheckBox z'n nieuwe IsSelected oppikt — App
+            // implementeert geen INotifyPropertyChanged, dus TwoWay x:Bind
+            // krijgt de wijziging anders niet mee.
+            AppList.ItemsSource = null;
+            AppList.ItemsSource = _visibleApps;
 
             UpdateSelectionCount();
             UpdateSelectAllButton();
-        });
+        }
+    }
+
+    private void AppCard_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Grid g)
+            g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorSecondaryBrush"];
+    }
+
+    private void AppCard_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Grid g)
+            g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
 
     private void SelectAllButton_Click(object sender, RoutedEventArgs e)

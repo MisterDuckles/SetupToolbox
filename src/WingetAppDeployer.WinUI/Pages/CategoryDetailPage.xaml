@@ -70,7 +70,7 @@
                    Visibility="Collapsed" />
 
         <!-- App list -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,14,0">
             <ItemsRepeater x:Name="AppList">
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="4" />
@@ -82,7 +82,11 @@
                               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                               BorderThickness="1"
                               CornerRadius="4"
-                              Padding="16,12">
+                              Padding="16,12"
+                              Tag="{x:Bind}"
+                              Tapped="AppCard_Tapped"
+                              PointerEntered="AppCard_PointerEntered"
+                              PointerExited="AppCard_PointerExited">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -127,8 +131,7 @@
                                       IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
                                       VerticalAlignment="Center"
                                       MinWidth="0"
-                                      Checked="AppCheckBox_Changed"
-                                      Unchecked="AppCheckBox_Changed" />
+                                      IsHitTestVisible="False" />
                         </Grid>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>

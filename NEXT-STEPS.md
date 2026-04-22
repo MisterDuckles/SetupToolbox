@@ -136,7 +136,7 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 | Installed-state detectie | ✅ | ✅ | v0.4.1 |
 | Schedule dialog + auto-update | ✅ | ✅ | v0.4.5 |
 | App uninstall | ✅ (via winget) | ✅ (Debloat quick) | v0.4.3 / v0.6.0 full |
-| Search (category + app) | ✅ | ⏳ | **v0.5.0** |
+| Search over catalogus (apps.json) | ✅ | ✅ | v0.5.1 |
 | Subcategorie grouping | ✅ | ⏳ (nu flattened) | **v0.5.0** |
 | Filter opties (popular/installed/all) | ❌ geplaand | ⏳ | **v0.5.0** |
 | Echte app icons (per app) | ❌ geplaand | ⏳ (nu alleen Segoe cat-icons) | **v0.5.0** (shared plan) |
@@ -154,7 +154,8 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 | Tweaks tab (registry toggles) | ❌ | ⏳ | **v0.7.0** |
 | Smooth scroll custom physics | ✅ (165Hz lerp) | ❌ | niet porten — WinUI ScrollViewer is al native vloeiend |
 | Multi-language (NL/EN) | ❌ geplaand | ⏳ | v1.4.0 shared |
-| Fuzzy search | ❌ geplaand | ⏳ | onderdeel van v0.5.0 search werk |
+| Winget-repo search (buiten catalogus) | ❌ geplaand | ⏳ | **v0.5.0** |
+| Fuzzy search (typo/afkortingen) | ❌ geplaand | ⏳ | **v0.5.0** |
 | `/fluentsandbox` arg | ✅ (WPF legacy) | ❌ **WPF-only** | niet porten — sandbox was WPF-UI experiment, WinUI ís het native pad |
 
 ### v0.1.0 - Sandbox foundation (huidig)
@@ -231,7 +232,21 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 
 - [ ] **Segoe Fluent Icons per categorie** — vervang de emoji icons (🌐 💼 🔐 etc.) door Segoe Fluent code points (Globe, Code, Shield, Document, Chat, Music, Repair, Color). Mapping via een helper in `Models/` of `Helpers/`, zodat het los staat van `apps.json`
 - [ ] **Echte app icons per app** — shared met WPF v1.2.0. Plan uitwerken: icons op git repo / URL-veld in apps.json / icon pack download. Fallback op categorie-glyph als geen icon beschikbaar
-- [x] **AutoSuggestBox search** in AppsPage (bovenaan, filter de categorie-grid) en in CategoryDetailPage (filter de app-lijst). Matcht op categorie-naam + app-naam + beschrijving + winget ID. Category-match slaat ook aan wanneer een app in die categorie matcht (search "chrome" → Browsers card blijft)
+- [x] **AutoSuggestBox search over de catalogus** in AppsPage (bovenaan, filter de categorie-grid) en in CategoryDetailPage (filter de app-lijst). Matcht op categorie-naam + app-naam + beschrijving + winget ID uit onze eigen `apps.json`. Category-match slaat ook aan wanneer een app in die categorie matcht (search "chrome" → Browsers card blijft)
+- [x] **Search-uitbreiding naar de volledige winget repository** — resultaten die niet in onze `apps.json` staan verschijnen onder een aparte "Results from winget repository" sectie op AppsPage. Gebruikt `winget search <query> --source winget`, char-per-char stream reader voor live progress, debounced 300ms met epoch-check zodat oudere calls niet overschrijven wat de newer call oplevert. Duplicaten met de catalog worden gefilterd. Selectie integreert via `SelectionHelper.ExtraSelectedApps` (synthetische App-objecten naast de catalog) — telt mee in de globale footer en gaat mee met "Install selected apps"
+- [ ] **Fuzzy search algoritme** — vervangt de huidige `string.Contains`-match. Moet matchen op:
+  - Typo's: "chrm" → Chrome, "fierfox" → Firefox
+  - Deels / verkeerde volgorde: "studio visual" → "Visual Studio"
+  - Initialen / afkortingen: "vsc" → "Visual Studio Code", "npp" → "Notepad++"
+
+  Implementatie-opties: `FuzzySharp` NuGet package (port van Python's `fuzzywuzzy`, gebruikt Levenshtein distance + token-set ratio) of zelf schrijven met eenvoudige Damerau-Levenshtein. Scoring per resultaat, sorteren op relevantie. Werkt op zowel de lokale `apps.json`-resultaten als de `winget search` resultaten (zelfde scoring-pipeline). Gedeelde WPF + WinUI roadmap-item (WPF v1.4.0 "Fuzzy search in app lijst")
+
+### v0.5.2 - Search UX + klikbare cards (gedaan)
+- [x] Search-modus: categorie-grid verdwijnt, platte "In your curated list" + "Results from winget repository" secties tonen matchende apps direct zonder categorie-drill
+- [x] Klik op een sidebar-item "Apps" (via `NavigationView.ItemInvoked`, fired ook op re-click van het geselecteerde item): reset naar rootbeeld (clear search) of navigeer terug uit CategoryDetailPage
+- [x] Hele app-card is klikbaar om te (de)selecteren (niet alleen de CheckBox-hitbox). CheckBox op `IsHitTestVisible="False"`, Grid heeft `Tapped` handler. `Tag="{x:Bind}"` in de DataTemplate zodat het App-object betrouwbaar beschikbaar is (DataContext is onder ItemsRepeater + x:DataType niet altijd gezet)
+- [x] Subtiele hover-kleur op cards via `PointerEntered`/`Exited` → `CardBackgroundFillColorSecondaryBrush`
+- [x] Padding rechts van scrollbar (14px) zodat cards niet tegen de scrollbar aan plakken
 - [x] **Globale selectie footer** (bug-fix): selectie wordt nu cross-category geteld en geïnstalleerd. `SelectionHelper` service centraliseert tellen/ophalen/clearen over de hele AppDatabase. Footer met "X apps selected" + "Clear all" + "Install selected apps" staat nu op AppsPage EN CategoryDetailPage, beide tonen dezelfde globale count. Install installeert alle selected apps over álle categorieën, niet alleen de huidige. Select all respecteert de actieve search-filter (lokaal), de footer telt globaal
 - [ ] **Subcategorie grouping in CategoryDetailPage** — CategoryDetailPage flattent nu de subcategorieën (zie comment "v0.3.0" in `CategoryDetailPage.xaml.cs` rond regel 34-35). Port de subcat-layout: `Expander` of headered section per subcat ("IDE & Editors", "Version Control") met de apps eronder. Hangt samen met het "Subcategorie layout onoverzichtelijk" issue in de WPF track
 - [ ] **Filter opties** (popular / installed / all) boven de app-lijst op CategoryDetailPage — shared met WPF v1.3.0
@@ -244,6 +259,18 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 - [ ] **User-installed apps uninstaller** — vervanger voor de tijdelijke v0.4.3 lijst. Toont alle geïnstalleerde apps uit onze `apps.json` catalogus in een nette card-based layout met multi-select + batch uninstall, zelfde stijl als de install flow. Progress per app zoals bij install.
 - [ ] **Categorieën in Debloat** — Microsoft apps / OEM bloat / User installed, met counts per categorie
 - [ ] Integratie met bestaande Windows11-Unattended-Debloat logica (scripts hergebruiken of naar C# porten)
+- [ ] **"ALLES op de PC" search** — niet alleen winget-geïnstalleerde apps, maar écht alle geïnstalleerde programma's op het systeem. Bronnen combineren:
+  - `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` + `HKCU\...\Uninstall` + `HKLM\...\Wow6432Node\...\Uninstall` (klassieke Win32 apps, met `DisplayName`, `UninstallString`, `InstallLocation`, `Publisher`)
+  - `Get-AppxPackage` (UWP/Store apps, incl. bloat)
+  - `winget list` (voor winget-beheerde apps zodat we kunnen onderscheiden welke via winget te verwijderen zijn)
+  - Debounced search-box bovenaan die over alle bronnen matcht (naam, publisher, install location)
+  - Tag per resultaat waar het vandaan komt ("Winget", "UWP", "Win32 registry") zodat de juiste uninstall-methode gekozen wordt
+- [ ] **Restant-opruiming bij uninstall** — na een `winget uninstall` / `Remove-AppxPackage` / registry-uninstaller laten uitvoeren, scan het systeem op achtergebleven sporen en bied aan ze op te ruimen:
+  - Registry keys: `HKLM\SOFTWARE\<Publisher>\<AppName>`, `HKCU\SOFTWARE\<Publisher>\<AppName>`, installer cache in `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\Products`, `RunOnce` / startup-entries van de app
+  - Bestanden: `%ProgramFiles%\<Publisher>\<AppName>`, `%ProgramFiles(x86)%\<Publisher>\<AppName>`, `%LocalAppData%\<AppName>`, `%AppData%\<AppName>`, `%ProgramData%\<AppName>`, `%Temp%\<AppName>*`
+  - Scheduled tasks in `\Microsoft\<Publisher>\...` of met de app-naam in de path
+  - Services die nog geregistreerd staan (`sc queryex state=all` filteren op `DisplayName`/`PathName` die naar de install-locatie wijst)
+  - UI: na een succesvolle uninstall een ContentDialog "We found leftover traces" met per item een checkbox (registry key X, folder Y, service Z) + "Clean up" knop. Altijd admin-prompt, altijd preview voordat er gewist wordt, nooit auto-delete. Loggen in een install-history file wat er weg is gehaald
 
 ### v0.7.0 - Tweaks tab
 - [ ] **Windows tweaks UI** — toggles en knoppen voor veelgebruikte Windows customizations:
