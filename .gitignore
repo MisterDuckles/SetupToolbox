@@ -88,3 +88,6 @@ appsettings.local.json
 
 # Claude Code personal settings
 .claude/settings.local.json
+
+# Lokale config met URL + token voor private apps.json fetch — bevat secrets
+data-source.local.txt

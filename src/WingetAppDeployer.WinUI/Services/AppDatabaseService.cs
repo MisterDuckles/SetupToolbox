@@ -1,45 +1,43 @@
 using System;
-using System.Net.Http;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using WingetAppDeployer_WinUI.Models;
 
 namespace WingetAppDeployer_WinUI.Services;
 
-// Minimal read-only service that pulls apps.json from the shared repository.
-// Mirrors the WPF WingetAppDeployer.Services.GitHubService.DownloadAppDatabaseAsync
-// but keeps the WinUI project self-contained (no cross-project reference).
+// Read-only service voor de curated apps.json. Leest het bundled bestand
+// data/apps.json dat naast de exe staat (via csproj <Content> CopyToOutputDirectory).
+//
+// Distributie-model: repo blijft private, gebundelde exe wordt verspreid via
+// public GitHub Releases. Geen remote fetch — apps.json updates komen mee met
+// nieuwe exe-releases, niet via een live HTTP-call. Werkt offline en heeft
+// geen auth-tokens nodig.
 public sealed class AppDatabaseService
 {
-    private const string AppsJsonUrl =
-        "https://raw.githubusercontent.com/MisterDuckles/WinGetAppDeployer/main/data/apps.json";
-
-    private readonly HttpClient _httpClient;
     private AppDatabase? _cached;
 
-    public AppDatabaseService()
-    {
-        _httpClient = new HttpClient();
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "WingetAppDeployer.WinUI");
-    }
-
-    public async Task<AppDatabase?> GetAppDatabaseAsync(bool forceRefresh = false)
+    public Task<AppDatabase?> GetAppDatabaseAsync(bool forceRefresh = false)
     {
         if (_cached != null && !forceRefresh)
-            return _cached;
+            return Task.FromResult<AppDatabase?>(_cached);
+
+        var path = Path.Combine(AppContext.BaseDirectory, "data", "apps.json");
+        if (!File.Exists(path))
+            return Task.FromResult<AppDatabase?>(null);
 
         try
         {
-            var json = await _httpClient.GetStringAsync(AppsJsonUrl);
+            var json = File.ReadAllText(path);
             _cached = JsonSerializer.Deserialize<AppDatabase>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
-            return _cached;
+            return Task.FromResult(_cached);
         }
-        catch (Exception)
+        catch
         {
-            return null;
+            return Task.FromResult<AppDatabase?>(null);
         }
     }
 }
