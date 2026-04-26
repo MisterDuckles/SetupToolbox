@@ -209,14 +209,21 @@ public sealed class WingetService
         }
     }
 
-    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null)
+    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget")
     {
         try
         {
             progress?.Report($"Installing {wingetId}...");
 
+            // Source-bewust: msstore-only apps zoals WhatsApp en Apple Music
+            // (product-codes als 9NKSQGP7F2NH) hebben --source msstore nodig,
+            // anders kan winget ze niet vinden in de community-repo.
+            var sourceFlag = string.IsNullOrEmpty(source) || source == "winget"
+                ? string.Empty
+                : $" --source {source}";
+
             var (exitCode, output, error) = await RunWingetCommandAsync(
-                $"install --id {wingetId} --exact --silent --accept-source-agreements --accept-package-agreements",
+                $"install --id {wingetId} --exact --silent --accept-source-agreements --accept-package-agreements{sourceFlag}",
                 line => progress?.Report(line));
 
             if (exitCode == 0)
@@ -253,7 +260,7 @@ public sealed class WingetService
             var perApp = new Progress<string>(msg =>
                 overall?.Report(new InstallProgress(index, total, app, InstallPhase.Running, msg)));
 
-            var (success, message) = await InstallAppAsync(app.WingetId, perApp);
+            var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source);
             results[app.WingetId] = (success, message);
 
             overall?.Report(new InstallProgress(

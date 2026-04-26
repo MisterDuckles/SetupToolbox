@@ -65,6 +65,13 @@ public class App
     [JsonPropertyName("popular")]
     public bool Popular { get; set; }
 
+    // Welke winget-source we moeten gebruiken bij install. Default = "winget"
+    // (de community-repo). Voor Microsoft Store-only apps zoals WhatsApp en
+    // Apple Music staat hier "msstore" — dan voegt WingetService.InstallAppAsync
+    // de --source msstore vlag toe.
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = "winget";
+
     [JsonIgnore]
     public bool IsSelected { get; set; }
 

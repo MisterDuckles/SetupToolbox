@@ -304,6 +304,16 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 - [ ] **Export/Import selectie naar JSON** — user kan huidige selectie opslaan als `my-apps.json` en later importeren, bijv. voor verse installs op nieuwe machines
 - [ ] **Installatie geschiedenis/log** — append-log file (`%LOCALAPPDATA%\WingetAppDeployer.WinUI\install-history.log`) met timestamp + app + outcome. Settings pagina heeft een "View install history" button die de log in-app toont
 - [ ] **Notificaties bij voltooide install** — overlap met toast item hierboven; kan ook gewoon de native `AppNotificationBuilder` zijn na elke InstallDialog-sessie
+- [ ] **"Fallback to download page" toggle** voor apps die niet op winget staan. Optionele setting in SettingsPage. Wanneer aan: apps zoals VMware Workstation Pro, ON1 Photo RAW, Nvidia App, etc. mogen in `apps.json` staan met een `downloadUrl` veld i.p.v. (of naast) `wingetId`. Install-knop voor zo'n app opent de vendor-pagina i.p.v. winget aan te roepen. Houdt curated lijst compleet ook al ondersteunt winget de app niet. Apps krijgen een "Manual download" badge in de UI
+
+### v1.0.0 - Curated apps.json (gedaan)
+- [x] Trim van 125 → ~60 apps op basis van curated wishlist (geen niche/dode/onbekende apps meer)
+- [x] Nieuwe top-level "Gaming" categorie (was subcat onder Media)
+- [x] Nieuwe top-level "App Suites" — Proton (5 apps) en Adobe (Creative Cloud + Acrobat Pro)
+- [x] Productivity uitgebreid: AI Assistants subcat (ChatGPT msstore + Claude), Cloud Storage subcat (OneDrive)
+- [x] Security met aparte subcats Password Managers / VPN / Antivirus
+- [x] `App.Source` veld + `WingetService` --source flag voor msstore-only apps (WhatsApp, Apple Music, ChatGPT). Auto-update via `winget upgrade --all` blijft werken (Store API geeft updates terug zelfs als versie-display "Unknown" toont)
+- [x] `apps.json` versie bump naar 2.0.0
 
 ### Out of scope voor dit track
 - Decoratieve themes (Sunset/Aurora/OceanBreeze) — exclusief in de WPF app, nooit in WinUI 3
