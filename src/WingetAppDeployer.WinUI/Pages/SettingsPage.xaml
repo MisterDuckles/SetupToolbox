@@ -8,7 +8,8 @@
     mc:Ignorable="d"
     Background="Transparent">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollView VerticalScrollBarVisibility="Auto"
+                ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
         <Grid Padding="36,24,36,24">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -79,5 +80,5 @@
                 </Grid>
             </Border>
         </Grid>
-    </ScrollViewer>
+    </ScrollView>
 </Page>

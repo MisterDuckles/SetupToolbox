@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 using AppModel = WingetAppDeployer_WinUI.Models.App;
 
@@ -133,4 +134,7 @@ public sealed partial class DebloatPage : Page
         // Refresh list regardless of outcome so the UI reflects reality.
         await LoadAsync(forceRefresh: true);
     }
+
+    private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
+        ScrollViewSpeedup.OnStarting(sender, args);
 }

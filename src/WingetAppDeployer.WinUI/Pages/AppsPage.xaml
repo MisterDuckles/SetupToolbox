@@ -67,13 +67,15 @@
                      HorizontalAlignment="Left" />
 
             <!-- Category grid + winget search results — share one scroller so
-                 the whole search result surface scrolls together. Padding-rechts
-                 geeft ademruimte naast de scrollbar zodat kaarten niet tegen de
-                 rail aan plakken. -->
-            <ScrollViewer x:Name="CategoryScroller"
-                          Visibility="Collapsed"
-                          VerticalScrollBarVisibility="Auto"
-                          Padding="0,0,14,12">
+                 the whole search result surface scrolls together. ScrollView
+                 i.p.v. ScrollViewer (legacy) — moderne input handling werkt
+                 met Parsec en Win11 input system. Padding-rechts geeft ademruimte
+                 naast de scrollbar zodat kaarten niet tegen de rail aan plakken. -->
+            <ScrollView x:Name="CategoryScroller"
+                        Visibility="Collapsed"
+                        VerticalScrollBarVisibility="Auto"
+                        Padding="0,0,14,12"
+                        ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
                 <StackPanel Spacing="24">
                     <ItemsRepeater x:Name="CategoryList">
                         <ItemsRepeater.Layout>
@@ -307,7 +309,7 @@
                         </ItemsRepeater>
                     </StackPanel>
                 </StackPanel>
-            </ScrollViewer>
+            </ScrollView>
         </Grid>
 
         <!-- Global selection footer — same totals as CategoryDetailPage so the

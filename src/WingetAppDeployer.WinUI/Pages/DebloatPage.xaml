@@ -89,9 +89,10 @@
             </StackPanel>
 
             <!-- Installed apps list -->
-            <ScrollViewer x:Name="AppsScroller"
-                          Visibility="Collapsed"
-                          VerticalScrollBarVisibility="Auto">
+            <ScrollView x:Name="AppsScroller"
+                        Visibility="Collapsed"
+                        VerticalScrollBarVisibility="Auto"
+                        ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
                 <ItemsRepeater x:Name="InstalledAppsList">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="8" />
@@ -133,7 +134,7 @@
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
-            </ScrollViewer>
+            </ScrollView>
         </Grid>
     </Grid>
 </Page>

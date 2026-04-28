@@ -199,25 +199,17 @@ public sealed partial class AppsPage : Page
 
     private void CatalogCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        // Tag="{x:Bind}" in de DataTemplate zorgt dat fe.Tag het App-object is —
-        // betrouwbaarder dan FrameworkElement.DataContext onder ItemsRepeater.
+        // Tag="{x:Bind}" in de DataTemplate zet het App-object op de Grid.
+        // App heeft INPC, dus IsSelected wijzigen propageert direct naar de
+        // CheckBox — geen rebind nodig.
         if (sender is not FrameworkElement fe || fe.Tag is not AppModel app) return;
-
         app.IsSelected = !app.IsSelected;
-        // Re-bind zodat de CheckBox z'n nieuwe IsSelected pickup (App heeft
-        // geen INotifyPropertyChanged).
-        if (CatalogResultsList.ItemsSource is IEnumerable<AppModel> items)
-        {
-            CatalogResultsList.ItemsSource = null;
-            CatalogResultsList.ItemsSource = items;
-        }
         UpdateSelectionFooter();
     }
 
     private void WingetCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
         if (sender is not FrameworkElement fe || fe.Tag is not AppModel app) return;
-
         app.IsSelected = !app.IsSelected;
 
         // Sync de globale "extra selected" lijst: winget-result apps zitten niet
@@ -227,9 +219,6 @@ public sealed partial class AppsPage : Page
         else
             SelectionHelper.RemoveExtraSelected(app.WingetId);
 
-        // Re-bind zodat CheckBox refresht.
-        WingetResultsList.ItemsSource = null;
-        WingetResultsList.ItemsSource = _wingetResults;
         UpdateSelectionFooter();
     }
 
@@ -244,6 +233,9 @@ public sealed partial class AppsPage : Page
         if (sender is Grid g)
             g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
+
+    private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
+        ScrollViewSpeedup.OnStarting(sender, args);
 
     private void ApplyFilter(string? query)
     {

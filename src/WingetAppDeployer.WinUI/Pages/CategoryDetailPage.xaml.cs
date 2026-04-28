@@ -18,6 +18,8 @@ namespace WingetAppDeployer_WinUI.Pages;
 public sealed partial class CategoryDetailPage : Page
 {
     private Category? _category;
+    private List<SubcategoryGroup> _allGroups = new();
+    private List<SubcategoryGroup> _visibleGroups = new();
     private List<AppModel> _allApps = new();
     private List<AppModel> _visibleApps = new();
     private AppDatabase? _db;
@@ -37,25 +39,40 @@ public sealed partial class CategoryDetailPage : Page
             ? category.Name
             : $"{category.Icon} {category.Name}";
 
-        // Flatten apps across subcategories for v0.3.0. Subcategory grouping
-        // comes later.
-        _allApps = new List<AppModel>();
-        if (category.Apps != null) _allApps.AddRange(category.Apps);
-        if (category.Subcategories != null)
-            foreach (var sub in category.Subcategories)
-                _allApps.AddRange(sub.Apps);
+        // Bouw groep-structuur. Categorieën zonder subcats krijgen één lege-name
+        // groep (header verborgen), categorieën mét subcats krijgen één groep
+        // per subcategorie met de subcat-naam als sectie-header.
+        _allGroups = BuildGroups(category);
+        _allApps = _allGroups.SelectMany(g => g.Apps).ToList();
 
-        // Cache the full DB so the footer can count / clear / collect selections
-        // across every category (global selection, not per-page).
+        // Cache de full DB voor de globale footer (count / clear / install
+        // werken cross-category).
         _db = await App.Database.GetAppDatabaseAsync();
 
         ApplyFilter(SearchBox.Text);
         UpdateSelectionCount();
         UpdateSelectAllButton();
 
-        // Kick off installed-state detection in the background so the page
-        // renders immediately; badges pop in once winget list returns.
+        // Installed-state detection draait async — badges popup zodra winget
+        // list klaar is.
         await RefreshInstalledStateAsync();
+    }
+
+    private static List<SubcategoryGroup> BuildGroups(Category category)
+    {
+        var groups = new List<SubcategoryGroup>();
+
+        // Direct apps onder de category zelf (categorieën zonder subcats:
+        // Browsers, Communication, Gaming) → één lege-name groep zonder header.
+        if (category.Apps != null && category.Apps.Count > 0)
+            groups.Add(new SubcategoryGroup(string.Empty, category.Apps.ToList()));
+
+        // Eén groep per subcategorie met de subcat-naam als header.
+        if (category.Subcategories != null)
+            foreach (var sub in category.Subcategories)
+                groups.Add(new SubcategoryGroup(sub.Name, sub.Apps.ToList()));
+
+        return groups;
     }
 
     private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -69,24 +86,34 @@ public sealed partial class CategoryDetailPage : Page
     private void ApplyFilter(string? query)
     {
         var trimmed = (query ?? string.Empty).Trim();
+
         if (trimmed.Length == 0)
         {
-            _visibleApps = _allApps;
+            // Geen filter — kopieer groepen 1-op-1 (nieuwe SubcategoryGroup-instanties
+            // zodat ItemsRepeater een fresh source krijgt).
+            _visibleGroups = _allGroups
+                .Select(g => new SubcategoryGroup(g.Name, g.Apps.ToList()))
+                .ToList();
         }
         else
         {
-            // Fuzzy-score per app + sort descending zodat de best matchende apps
-            // bovenaan staan (zelfde scoring als AppsPage voor consistentie).
-            _visibleApps = _allApps
-                .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.Description, a.WingetId)))
-                .Where(pair => pair.Score >= FuzzyMatcher.MinScore)
-                .OrderByDescending(pair => pair.Score)
-                .ThenBy(pair => pair.App.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(pair => pair.App)
+            // Per groep fuzzy-filter de apps; lege groepen na filter eruit.
+            _visibleGroups = _allGroups
+                .Select(g => new SubcategoryGroup(
+                    g.Name,
+                    g.Apps
+                        .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.Description, a.WingetId)))
+                        .Where(p => p.Score >= FuzzyMatcher.MinScore)
+                        .OrderByDescending(p => p.Score)
+                        .ThenBy(p => p.App.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(p => p.App)
+                        .ToList()))
+                .Where(g => g.Apps.Count > 0)
                 .ToList();
         }
 
-        AppList.ItemsSource = _visibleApps;
+        _visibleApps = _visibleGroups.SelectMany(g => g.Apps).ToList();
+        GroupList.ItemsSource = _visibleGroups;
 
         if (_visibleApps.Count == 0 && trimmed.Length > 0)
         {
@@ -101,26 +128,15 @@ public sealed partial class CategoryDetailPage : Page
 
     private async Task RefreshInstalledStateAsync(bool forceRefresh = false)
     {
+        // App.IsInstalled heeft INotifyPropertyChanged, dus de "Installed"-badge
+        // refresht automatisch zodra we de property zetten — geen rebind nodig.
         var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh);
-        var changed = false;
         foreach (var app in _allApps)
-        {
-            var nowInstalled = installedIds.Contains(app.WingetId);
-            if (app.IsInstalled != nowInstalled)
-            {
-                app.IsInstalled = nowInstalled;
-                changed = true;
-            }
-        }
-
-        if (changed)
-        {
-            // Re-trigger x:Bind evaluation for the list by reassigning. Keep the
-            // active filter so search results don't jump back to the full list.
-            AppList.ItemsSource = null;
-            AppList.ItemsSource = _visibleApps;
-        }
+            app.IsInstalled = installedIds.Contains(app.WingetId);
     }
+
+    private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
+        ScrollViewSpeedup.OnStarting(sender, args);
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
@@ -129,23 +145,27 @@ public sealed partial class CategoryDetailPage : Page
 
     private void AppCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        // De hele kaart is klikbaar (CheckBox staat op IsHitTestVisible=False).
-        // Via Tag="{x:Bind}" in de DataTemplate zit het App-object op de Grid,
-        // wat betrouwbaarder is dan FrameworkElement.DataContext in
-        // ItemsRepeater + x:DataType (daar blijft die soms null).
-        if (sender is FrameworkElement fe && fe.Tag is AppModel app)
-        {
-            app.IsSelected = !app.IsSelected;
+        // CheckBox staat op IsHitTestVisible=False, dus de hele Grid vangt taps.
+        // App heeft nu INotifyPropertyChanged, dus IsSelected toggelen propageert
+        // automatisch naar de gebonden CheckBox — geen rebind nodig.
+        var app = ResolveApp(sender);
+        if (app == null) return;
 
-            // Re-bind zodat de CheckBox z'n nieuwe IsSelected oppikt — App
-            // implementeert geen INotifyPropertyChanged, dus TwoWay x:Bind
-            // krijgt de wijziging anders niet mee.
-            AppList.ItemsSource = null;
-            AppList.ItemsSource = _visibleApps;
+        app.IsSelected = !app.IsSelected;
+        UpdateSelectionCount();
+        UpdateSelectAllButton();
+    }
 
-            UpdateSelectionCount();
-            UpdateSelectAllButton();
-        }
+    private AppModel? ResolveApp(object sender)
+    {
+        if (sender is not FrameworkElement fe) return null;
+        if (fe.DataContext is AppModel direct) return direct;
+
+        // Fallback via Tag (string WingetId) zoeken in _allApps.
+        if (fe.Tag is string wingetId)
+            return _allApps.FirstOrDefault(a => a.WingetId == wingetId);
+
+        return null;
     }
 
     private void AppCard_PointerEntered(object sender, PointerRoutedEventArgs e)
@@ -162,17 +182,12 @@ public sealed partial class CategoryDetailPage : Page
 
     private void SelectAllButton_Click(object sender, RoutedEventArgs e)
     {
-        // Operate on the currently visible subset so "Select all" respects the
-        // active search filter — if a user typed "jetbrains" they only want to
-        // toggle JetBrains apps, not every app in the category.
+        // Werkt op de zichtbare subset zodat "Select all" de search-filter
+        // respecteert. INPC propageert de IsSelected-changes naar elke CheckBox.
         if (_visibleApps.Count == 0) return;
         var allSelected = _visibleApps.All(a => a.IsSelected);
         foreach (var app in _visibleApps)
             app.IsSelected = !allSelected;
-
-        // Refresh ItemsRepeater by reassigning the source
-        AppList.ItemsSource = null;
-        AppList.ItemsSource = _visibleApps;
 
         UpdateSelectionCount();
         UpdateSelectAllButton();
@@ -180,35 +195,24 @@ public sealed partial class CategoryDetailPage : Page
 
     private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
-        // Install ALL globally selected apps, not just the ones in this category.
-        // Otherwise a user that selected Chrome in Browsers and Notepad++ in
-        // Utilities would lose half their selection on install.
+        // Install ALLE globally selected apps, niet alleen die van deze categorie.
         var selected = SelectionHelper.GetSelectedApps(_db);
         if (selected.Count == 0) return;
 
-        var dialog = new InstallDialog(selected)
-        {
-            XamlRoot = this.XamlRoot
-        };
+        var dialog = new InstallDialog(selected) { XamlRoot = this.XamlRoot };
         await dialog.ShowAsync();
 
-        // De-select every installed app globally so the next batch starts clean,
-        // then re-query winget list so the new Installed badges show up.
         foreach (var app in selected) app.IsSelected = false;
         await RefreshInstalledStateAsync(forceRefresh: true);
         UpdateSelectionCount();
         UpdateSelectAllButton();
     }
 
-    private async void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
+    private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
     {
         SelectionHelper.ClearSelection(_db);
-        // Force the list to re-bind so all visible checkboxes update visually.
-        AppList.ItemsSource = null;
-        AppList.ItemsSource = _visibleApps;
         UpdateSelectionCount();
         UpdateSelectAllButton();
-        await Task.CompletedTask;
     }
 
     private void UpdateSelectionCount()
@@ -221,8 +225,6 @@ public sealed partial class CategoryDetailPage : Page
 
     private void UpdateSelectAllButton()
     {
-        // Reflects the visible subset — if everything the user currently sees
-        // is checked, the button flips to "Deselect all".
         var allSelected = _visibleApps.Count > 0 && _visibleApps.All(a => a.IsSelected);
         SelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
         SelectAllButton.IsEnabled = _visibleApps.Count > 0;

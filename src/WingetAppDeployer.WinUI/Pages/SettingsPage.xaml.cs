@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
+using WingetAppDeployer_WinUI.Helpers;
 
 namespace WingetAppDeployer_WinUI.Pages;
 
@@ -74,4 +75,7 @@ public sealed partial class SettingsPage : Page
 
         await RefreshScheduleStatusAsync();
     }
+
+    private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
+        ScrollViewSpeedup.OnStarting(sender, args);
 }

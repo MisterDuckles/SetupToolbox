@@ -243,11 +243,23 @@ Status per april 2026. Items met ✅ zitten al in WinUI, met ⏳ staan ingepland
 - [x] Subtiele hover-kleur op cards via `PointerEntered`/`Exited` → `CardBackgroundFillColorSecondaryBrush`
 - [x] Padding rechts van scrollbar (14px) zodat cards niet tegen de scrollbar aan plakken
 - [x] **Globale selectie footer** (bug-fix): selectie wordt nu cross-category geteld en geïnstalleerd. `SelectionHelper` service centraliseert tellen/ophalen/clearen over de hele AppDatabase. Footer met "X apps selected" + "Clear all" + "Install selected apps" staat nu op AppsPage EN CategoryDetailPage, beide tonen dezelfde globale count. Install installeert alle selected apps over álle categorieën, niet alleen de huidige. Select all respecteert de actieve search-filter (lokaal), de footer telt globaal
-- [ ] **Subcategorie grouping in CategoryDetailPage** — CategoryDetailPage flattent nu de subcategorieën (zie comment "v0.3.0" in `CategoryDetailPage.xaml.cs` rond regel 34-35). Port de subcat-layout: `Expander` of headered section per subcat ("IDE & Editors", "Version Control") met de apps eronder. Hangt samen met het "Subcategorie layout onoverzichtelijk" issue in de WPF track
+- [x] **Subcategorie grouping in CategoryDetailPage** — section-headers per subcat ("IDE & Editors", "Version Control", etc.) met de apps eronder. Categorieën zonder subcats (Browsers/Communication/Gaming) krijgen één groep met lege Name → header verborgen. Implementatie via SubcategoryGroup model + nested ItemsControl. Search filtert binnen elke groep, lege groepen vallen na filter weg.
 - [ ] **Filter opties** (popular / installed / all) boven de app-lijst op CategoryDetailPage — shared met WPF v1.3.0
 - [ ] Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)
 - [ ] Eigen GitHub release artifact (aparte release-lijn naast de WPF releases, bijv `WingetAppDeployer.WinUI-v0.5.0.exe`)
 - [ ] Eventueel `WingetAppDeployer.Core/` extractie van Models+Services zodat WPF en WinUI shared code gebruiken
+
+### v0.5.6 - Subcategorie grouping (gedaan)
+- [x] CategoryDetailPage rendert apps gegroepeerd per subcategorie met sectie-header
+- [x] `SubcategoryGroup` model (UI-only) met Name + Apps + HasName Visibility
+- [x] Nested ItemsRepeater (outer = groepen, inner = apps per groep)
+- [x] Search filtert per groep, lege groepen na filter onzichtbaar
+- [x] Select all werkt op zichtbare apps in álle visible groepen
+
+### v0.5.7 - INotifyPropertyChanged op App (gedaan)
+- [x] `App` implementeert `INotifyPropertyChanged` met INPC op `IsSelected` en `IsInstalled`
+- [x] Verwijderde alle `ItemsSource = null; ItemsSource = ...` rebind hacks in CategoryDetailPage en AppsPage — TwoWay x:Bind reageert nu automatisch op property changes
+- [x] Bijwerking: app voelt sneller (geen full card-rebuild per click) en geen valse hover-events op buren tijdens click. De heavy "force fresh SubcategoryGroup instances" hack uit v0.5.6 was nodig voor 1-group categorieën omdat ItemsRepeater containers cached — INPC maakt al die werkarounds overbodig.
 
 ### v0.6.0 - Debloat tab (full implementation)
 - [ ] **Windows bloatware removal** — lijst van Microsoft "standaard" bloat apps die in Win11 meekomen (Xbox, Teams consumer, Solitaire, Weather, etc.) met checkboxes en "Remove selected" batch-actie. Gebruikt `Get-AppxPackage | Remove-AppxPackage` (PowerShell) of `winget uninstall`. Moet runnen als admin.
