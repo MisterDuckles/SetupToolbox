@@ -1,192 +1,50 @@
 # Integratie met Windows11-Unattended-Debloat
 
-Dit document legt uit hoe je WingetAppDeployer integreert met je bestaande Windows 11 unattended installatie.
+> **Status:** integratie wordt nog uitgewerkt voor de nieuwe WinUI app. De WPF
+> launcher van de oude versie is gearchiveerd onder de git tag
+> `wpf-final-v1.2.1`. De nieuwe WinUI launcher staat op de roadmap (zie
+> [NEXT-STEPS.md](NEXT-STEPS.md) → v0.9.0+).
 
-## Optie 1: Integreren in bestaande debloat.ps1
+## Voorlopige aanpak (zonder launcher)
 
-Voeg het volgende toe aan je `debloat.ps1` script (aan het einde):
-
-```powershell
-# ============================================
-# Install WingetAppDeployer
-# ============================================
-Write-Host "Installing WingetAppDeployer..." -ForegroundColor Cyan
-
-try {
-    # Configuration
-    $gitHubUser = "MisterDuckles"
-    $repoName = "WingetAppDeployer"
-    $installDir = "$env:ProgramFiles\WingetAppDeployer"
-    $launcherUrl = "https://github.com/$gitHubUser/$repoName/releases/latest/download/Launcher.exe"
-    $launcherPath = Join-Path $installDir "WingetAppDeployer-Launcher.exe"
-
-    # Create directory
-    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-
-    # Download launcher
-    Invoke-WebRequest -Uri $launcherUrl -OutFile $launcherPath -UseBasicParsing
-    Write-Host "✓ Downloaded WingetAppDeployer Launcher" -ForegroundColor Green
-
-    # Create desktop shortcut for all users
-    $publicDesktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonDesktopDirectory)
-    $shortcutPath = Join-Path $publicDesktop "WinApp Installer.lnk"
-
-    $WshShell = New-Object -ComObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-    $Shortcut.TargetPath = $launcherPath
-    $Shortcut.WorkingDirectory = $installDir
-    $Shortcut.Description = "Install Windows applications using Winget"
-    $Shortcut.Save()
-
-    Write-Host "✓ Created desktop shortcut" -ForegroundColor Green
-
-    # Auto-launch on first logon (optional)
-    # Uncomment if you want to launch automatically:
-    # Start-Process $launcherPath
-
-} catch {
-    Write-Host "✗ Failed to install WingetAppDeployer: $($_.Exception.Message)" -ForegroundColor Red
-}
-```
-
-## Optie 2: Aparte scheduled task (First Logon)
-
-Als je WingetAppDeployer wil runnen bij eerste login (zoals je nu met je debloat script doet):
-
-### Methode A: Via Registry RunOnce
-
-Voeg toe aan je autounattend.xml of setup script:
+Tot de WinUI launcher er is kun je de complete `.exe` direct downloaden uit een
+GitHub release. De exe is self-contained (~80 MB) en heeft geen runtime
+dependencies — kopieer hem ergens en run.
 
 ```powershell
-# Download launcher
-$launcherUrl = "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/Launcher.exe"
-$launcherPath = "$env:ProgramFiles\WingetAppDeployer\Launcher.exe"
-
-New-Item -ItemType Directory -Path (Split-Path $launcherPath) -Force | Out-Null
-Invoke-WebRequest -Uri $launcherUrl -OutFile $launcherPath -UseBasicParsing
-
-# Add to RunOnce registry
-$runOncePath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
-Set-ItemProperty -Path $runOncePath -Name "WingetAppDeployer" -Value $launcherPath
-```
-
-### Methode B: Via Scheduled Task (zoals je huidige debloat setup)
-
-Voeg toe aan je `autounattend.xml` in de `<FirstLogonCommands>` sectie:
-
-```xml
-<SynchronousCommand wcm:action="add">
-    <Order>20</Order>
-    <CommandLine>powershell.exe -ExecutionPolicy Bypass -File C:\Setup\Scripts\install-winappinstaller.ps1</CommandLine>
-    <Description>Install WingetAppDeployer</Description>
-</SynchronousCommand>
-```
-
-En maak `C:\Setup\Scripts\install-winappinstaller.ps1`:
-
-```powershell
-# Install and setup WingetAppDeployer
-$taskName = "WingetAppDeployer-FirstRun"
-$gitHubUser = "MisterDuckles"
-$repoName = "WingetAppDeployer"
-
-# Download launcher
+# In je debloat / autounattend setup script
+$exeUrl = "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/WingetAppDeployer.WinUI.exe"
 $installDir = "$env:ProgramFiles\WingetAppDeployer"
-$launcherPath = Join-Path $installDir "Launcher.exe"
-$launcherUrl = "https://github.com/$gitHubUser/$repoName/releases/latest/download/Launcher.exe"
+$exePath = Join-Path $installDir "WingetAppDeployer.WinUI.exe"
 
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-Invoke-WebRequest -Uri $launcherUrl -OutFile $launcherPath -UseBasicParsing
+Invoke-WebRequest -Uri $exeUrl -OutFile $exePath -UseBasicParsing
 
-# Create scheduled task to run on first logon
-$action = New-ScheduledTaskAction -Execute $launcherPath
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$env:USERNAME" -LogonType Interactive -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-
-# Register task
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
-
-# Create desktop shortcut
-$desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
-$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut("$desktop\WinApp Installer.lnk")
-$shortcut.TargetPath = $launcherPath
+# Desktop shortcut voor alle users
+$publicDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut(
+    (Join-Path $publicDesktop 'WingetAppDeployer.lnk'))
+$shortcut.TargetPath = $exePath
 $shortcut.Save()
 ```
 
-## Optie 3: Volledig Standalone (Geen Integratie)
+## Geplande aanpak (na launcher port)
 
-Als je WingetAppDeployer gewoon beschikbaar wil maken zonder automatische installatie:
+In v0.9.0+ komt er een kleine bootstrap-launcher die:
 
-1. Build het project
-2. Upload releases naar GitHub
-3. Gebruikers kunnen het handmatig downloaden en installeren
-4. Of: Plaats de launcher in je Windows installatie media en kopieer het naar C:\ tijdens setup
+- ~5 KB groot is (download via firstlogon-script blijft snel)
+- bij eerste run de full `.exe` downloadt naar `%ProgramFiles%`
+- self-update check doet en automatisch de nieuwste versie downloadt
 
-## Voorbeeld: Volledige Integratie Flow
+Daarna kan deze sectie het launcher-pad gebruiken in plaats van de full exe.
 
-Hier is een compleet voorbeeld van hoe je huidige setup eruit kan zien:
+## Auto-update scheduled task
 
-```
-autounattend.xml
-  ↓
-FirstLogonCommands
-  ↓
-C:\Setup\Scripts\launcher.ps1 (jouw huidige launcher)
-  ↓ (downloads debloat.ps1 from GitHub)
-  ↓
-debloat.ps1
-  ├─ Debloat Windows
-  ├─ Remove OneDrive
-  ├─ Install Firefox/Chrome
-  └─ ✨ NEW: Install WingetAppDeployer
-       ├─ Download Launcher.exe
-       ├─ Create Desktop Shortcut
-       └─ (Optionally) Auto-launch
-```
-
-### Aangepaste launcher.ps1
-
-Update je bestaande `launcher.ps1` om ook WingetAppDeployer te installeren:
-
-```powershell
-# ... jouw bestaande code ...
-
-# Run debloat script
-Invoke-Expression $debloatScript
-
-# NEW: Install WingetAppDeployer
-Write-Host "Installing WingetAppDeployer..." -ForegroundColor Cyan
-$installerScript = Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MisterDuckles/WingetAppDeployer/main/scripts/deploy.ps1" -UseBasicParsing
-Invoke-Expression $installerScript.Content
-
-Write-Host "Setup complete!" -ForegroundColor Green
-```
-
-## Best Practices
-
-1. **Test eerst lokaal** - Test de integratie in een VM voordat je het in production neemt
-2. **Error handling** - Voeg try/catch blocks toe voor betere error reporting
-3. **Logging** - Log alle stappen naar een file voor troubleshooting
-4. **User choice** - Overweeg om te vragen of user WingetAppDeployer wil installeren
-5. **Timing** - Launch WingetAppDeployer NA de debloat is voltooid
-
-## Troubleshooting
-
-### WingetAppDeployer start niet
-- Check of Winget beschikbaar is (`winget --version`)
-- Check internet connectie
-- Check Windows Defender/Firewall
-
-### Launcher download failed
-- Zorg dat GitHub release is gepubliceerd
-- Check download URL
-- Check of GitHub bereikbaar is tijdens setup
-
-### Desktop shortcut niet aangemaakt
-- Check permissions (moet als admin runnen)
-- Check of $publicDesktop path bestaat
+Onafhankelijk van de install-flow: zodra de WinUI app draait kan de gebruiker
+in **Settings** → **Scheduled auto-updates** een Daily / Weekly / OnStartup
+task aanmaken die `winget upgrade --all --silent` runt. Dit gaat via Windows
+Task Scheduler met admin rights, geen extra setup vereist.
 
 ## Vragen?
 
-Open een issue op GitHub of contact me! 🚀
+Open een issue op GitHub.

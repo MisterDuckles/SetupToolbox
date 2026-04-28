@@ -1,306 +1,139 @@
-# Winget App Deployer 🪟
+# WingetAppDeployer 🪟
 
-Een moderne, grafische applicatie voor het snel installeren van Windows-applicaties via Winget. Perfect om te gebruiken na een fresh Windows installatie!
+Native Windows 11 app voor het in batch installeren van Windows-applicaties via `winget`. Bedoeld voor fresh-install setups en debloat-flows.
+
+> **Status:** v0.5.x (pre-release). Code en releases komen via deze repo. Eerdere WPF-implementatie is per `wpf-final-v1.2.1` git tag gearchiveerd.
 
 ## ✨ Features
 
-- 🎨 **Moderne UI** met 3 thema's (Minimal, Fluent, Material Design)
-- 📦 **200+ apps** verdeeld over categorieën
-- 🔍 **Zoekfunctie** om apps snel te vinden
-- ⏰ **Auto-update** scheduled tasks voor geïnstalleerde apps
-- 🔄 **Zelf-updatende** app (download automatisch nieuwste versie van GitHub)
-- 🚀 **Bootstrap launcher** (~5KB) die main app download
-- 💾 **JSON-based app database** - eenvoudig apps toevoegen zonder recompile
-- 🎯 **Subcategorieën** voor betere organisatie
-- ⭐ **Populaire apps** markering
+- 🎨 **Native Win11 UI** — WinUI 3 + Windows App SDK met Mica backdrop, geen third-party UI libs
+- 📦 **~60 gecureerde apps** verdeeld over 10 categorieën (Browsers, Development, Security, Productivity, Communication, Media, Gaming, Utilities, Creative, App Suites)
+- 🔍 **Fuzzy search** in catalog + uitbreiding naar de volledige winget repository
+- ✅ **Bulk install** met live winget output, 4-stage progress per app (Downloading → Verifying → Installing → Done)
+- 🗑️ **Quick uninstall** onder Debloat tab voor catalog-apps
+- ⏰ **Auto-update scheduled task** — `winget upgrade --all` op Daily / Weekly / OnStartup trigger
+- 📦 **App Suites** — Proton + Adobe ecosystems met een klik
+- 🏪 **Microsoft Store apps** — WhatsApp, Apple Music, ChatGPT via `--source msstore`
 
 ## 🏗️ Project Structuur
 
 ```
 WingetAppDeployer/
 ├── src/
-│   ├── WingetAppDeployer/          # Main WPF app
-│   │   ├── Models/                # Data models (App, Category, Settings)
-│   │   ├── Services/              # Business logic (Winget, GitHub, TaskScheduler)
-│   │   ├── Views/                 # XAML windows (Install, Settings, Schedule)
-│   │   ├── Themes/                # UI themes
-│   │   └── App.xaml               # Main application
-│   └── Launcher/                  # Bootstrap launcher (klein exe)
+│   └── WingetAppDeployer.WinUI/      # Native Win11 app (WinUI 3 + WinAppSDK 1.8)
+│       ├── App.xaml / .xaml.cs
+│       ├── MainWindow.xaml / .xaml.cs    # NavigationView shell + Mica backdrop
+│       ├── Models/AppModels.cs            # App (INPC), Category, SubcategoryGroup
+│       ├── Pages/                         # Apps, CategoryDetail, Debloat, Tweaks, Settings
+│       ├── Dialogs/                       # InstallDialog, ScheduleDialog
+│       ├── Services/                      # AppDatabase, Winget, TaskScheduler, SelectionHelper
+│       └── Helpers/                       # FuzzyMatcher, ScrollViewSpeedup
 ├── data/
-│   └── apps.json                  # App database (200+ apps)
-├── scripts/
-│   └── deploy.ps1                 # Deploy script voor autounattend.xml
-└── README.md
+│   └── apps.json                          # Curated app catalog (gebundeld met exe)
+├── README.md
+└── NEXT-STEPS.md                          # Roadmap + decisions log
 ```
 
 ## 🚀 Quick Start
 
-### Optie 1: Build from Source
+### Voor gebruikers
 
-**Requirements:**
-- .NET 8 SDK
-- Visual Studio 2022 of JetBrains Rider
+Download de nieuwste `.exe` van de [Releases pagina](https://github.com/MisterDuckles/WinGetAppDeployer/releases) en run.
+
+### Voor developers
+
+**Requirements**
+- .NET 10 SDK
+- Windows 11 (build 26100 of nieuwer)
+- Visual Studio 2026 Community (of Rider) — niet strict nodig, `dotnet` CLI volstaat
 
 ```powershell
-# Clone repo
 git clone https://github.com/MisterDuckles/WinGetAppDeployer.git
-cd WingetAppDeployer
+cd WinGetAppDeployer
 
-# Build main app
-cd src/WingetAppDeployer
-dotnet build -c Release
+# Build + run
+dotnet run --project src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj -c Debug
 
-# Build launcher
-cd ../Launcher
-dotnet build -c Release
-
-# Executables zijn nu in:
-# - src/WingetAppDeployer/bin/Release/net8.0-windows/WingetAppDeployer.exe
-# - src/Launcher/bin/Release/net8.0-windows/Launcher.exe
+# Self-contained release publish
+dotnet publish src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj `
+    -c Release -r win-x64 --self-contained true `
+    -p:PublishSingleFile=true -o ./release
 ```
 
-### Optie 2: Download van GitHub Releases
+## 📝 Apps toevoegen / aanpassen
 
-Download de nieuwste release van de [Releases pagina](https://github.com/MisterDuckles/WinGetAppDeployer/releases).
-
-## 🔧 Setup voor Autounattend.xml
-
-Integreer WingetAppDeployer in je Windows unattended installatie:
-
-### 1. Voeg PowerShell script toe aan autounattend.xml
-
-```xml
-<RunSynchronousCommand wcm:action="add">
-    <Order>10</Order>
-    <Path>powershell.exe -ExecutionPolicy Bypass -File C:\Setup\Scripts\install-winappinstaller.ps1</Path>
-</RunSynchronousCommand>
-```
-
-### 2. Maak install script
-
-Maak `install-winappinstaller.ps1`:
-
-```powershell
-# Download launcher naar Program Files
-$launcherUrl = "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/Launcher.exe"
-$installDir = "C:\Program Files\WingetAppDeployer"
-$launcherPath = Join-Path $installDir "WingetAppDeployer-Launcher.exe"
-
-# Create directory
-New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-
-# Download launcher
-Invoke-WebRequest -Uri $launcherUrl -OutFile $launcherPath
-
-# Create desktop shortcut
-$desktopPath = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktopPath "WinApp Installer.lnk"
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $launcherPath
-$shortcut.IconLocation = $launcherPath
-$shortcut.Save()
-
-# Run launcher (will download and start main app)
-Start-Process $launcherPath
-```
-
-### 3. Of: Direct integreren met je huidige debloat script
-
-Voeg toe aan je `debloat.ps1`:
-
-```powershell
-# Install WingetAppDeployer
-Write-Host "Installing WingetAppDeployer..."
-$launcherUrl = "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/Launcher.exe"
-$installDir = "$env:ProgramFiles\WingetAppDeployer"
-New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-Invoke-WebRequest -Uri $launcherUrl -OutFile "$installDir\Launcher.exe"
-
-# Create shortcut
-$WshShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\WinApp Installer.lnk")
-$Shortcut.TargetPath = "$installDir\Launcher.exe"
-$Shortcut.Save()
-```
-
-## 📝 Apps Toevoegen/Aanpassen
-
-Apps worden beheerd in `data/apps.json`. Om een app toe te voegen:
+`data/apps.json` is de source of truth. Voeg een app toe als JSON-object onder de juiste categorie of subcategorie:
 
 ```json
 {
   "name": "Nieuwe App",
   "wingetId": "Publisher.AppName",
-  "description": "Korte beschrijving van de app",
+  "description": "Korte beschrijving",
   "popular": false
 }
 ```
 
+**Microsoft Store apps** (zoals WhatsApp, Apple Music, ChatGPT):
+
+```json
+{
+  "name": "WhatsApp Desktop",
+  "wingetId": "9NKSQGP7F2NH",
+  "source": "msstore",
+  "description": "..."
+}
+```
+
 **Winget ID vinden:**
+
 ```powershell
 winget search "App Name"
+winget search "App Name" --source msstore
 ```
 
-**Apps.json updaten:**
-1. Edit `data/apps.json`
-2. Commit en push naar GitHub
-3. Alle gebruikers zien automatisch de nieuwe apps!
+`apps.json` wordt gebundeld met de exe (csproj `<Content>` + PreserveNewest), dus updates komen via een nieuwe release — er wordt nu niet live van GitHub gefetcht.
 
-## 🎨 Thema's
+## ⏰ Auto-update setup
 
-De app ondersteunt 3 thema's:
+Open **Settings** → **Scheduled auto-updates** → **Set up**:
 
-1. **Minimal** (Default) - Clean, modern, veel witruimte
-2. **Fluent** - Windows 11 native look
-3. **Material** - Google Material Design 3
+- **Daily** / **Weekly** / **On user logon**
+- Tijd kiezen (behalve OnStartup)
+- UAC-prompt voor admin rechten (taak draait met highest privileges)
 
-Wissel van thema via: **Settings → Appearance → Theme**
+Achter de schermen maakt dit een Windows scheduled task `WingetAppDeployer_WinUI_AutoUpdate` die de exe runt met `/autoupdate` argument. App detecteert dat, runt `winget upgrade --all --silent`, en exit zonder window.
 
-## ⏰ Auto-Update Setup
+## 🛠️ Tech stack
 
-Na het installeren van apps wordt gevraagd of je auto-updates wil instellen:
+- **.NET 10** + **Windows App SDK 1.8** + **WinUI 3** (unpackaged)
+- **FuzzySharp** — fuzzy search met Levenshtein distance
+- **MicaBackdrop BaseAlt** — native Win11 transparency
+- **winget.exe CLI** — install / uninstall / upgrade / list / search
 
-- **Daily** - Check elke dag om [tijd]
-- **Weekly** - Check wekelijks op maandag
-- **On Startup** - Check bij elke Windows login
+Distributie: private repo + public GitHub Releases. App.json wordt gebundeld in de exe-output dus geen netwerk dependency tijdens runtime.
 
-Dit maakt een scheduled task aan in Task Scheduler die:
-```powershell
-WingetAppDeployer.exe /autoupdate
-```
-uitvoert, welke `winget upgrade --all` runt.
+## 🗺️ Roadmap
 
-## 🔄 App Updates
+Zie [NEXT-STEPS.md](NEXT-STEPS.md) voor de volledige feature roadmap. Highlights die nog komen:
 
-De app checkt automatisch bij opstarten naar nieuwe versies op GitHub. Als er een update is:
+- v0.5.0 — Filter opties, echte app-icons per app, eerste public release
+- v0.6.0 — Full Debloat tab (Windows bloatware removal + restant-cleanup)
+- v0.7.0 — Tweaks tab (registry toggles voor Explorer / Privacy / Performance)
+- v0.8.0 — Settings persistence + app self-update via GitHub
+- v0.9.0 — Install profiles, parallel installs, toast notificaties, install history
 
-1. Popup met nieuwe versie nummer
-2. "Yes" = Download en installeer update
-3. App herstart automatisch
+## 🐛 Troubleshooting
 
-**Handmatig checken:**
-```powershell
-# Windows Task Scheduler task
-schtasks /run /tn "WingetAppDeployer_AutoUpdate"
-```
+**"Winget not found"** — installeer **App Installer** via Microsoft Store (zit standaard in Win11).
 
-## 📦 GitHub Release Proces
+**Microsoft Store app installeert niet** — check of je ingelogd bent in de Store. Store apps vereisen een Microsoft account voor sommige licentiechecks.
 
-### 1. Build Release versie
-
-```powershell
-# Build main app
-cd src/WingetAppDeployer
-dotnet publish -c Release -r win-x64 --self-contained false
-
-# Build launcher
-cd ../Launcher
-dotnet publish -c Release -r win-x64 --self-contained false
-```
-
-### 2. Create GitHub Release
-
-1. Ga naar GitHub → Releases → New Release
-2. Tag version: `v1.0.0`
-3. Release title: `WinApp Installer v1.0.0`
-4. Upload:
-   - `WingetAppDeployer.exe` (main app)
-   - `Launcher.exe` (bootstrap launcher)
-5. Publish release
-
-### 3. Gebruikers krijgen automatisch update bij volgende start!
-
-## 🛠️ Development
-
-### Project opzetten
-
-```bash
-# Clone repository
-git clone https://github.com/MisterDuckles/WinGetAppDeployer.git
-cd WingetAppDeployer
-
-# Restore packages
-dotnet restore src/WingetAppDeployer/WingetAppDeployer.csproj
-dotnet restore src/Launcher/Launcher.csproj
-
-# Open in IDE
-# Visual Studio: Open WingetAppDeployer.sln
-# Rider: Open WingetAppDeployer.sln
-# VS Code: Open folder
-```
-
-### Belangrijke Files
-
-| File | Beschrijving |
-|------|--------------|
-| `data/apps.json` | App database - voeg hier apps toe |
-| `Services/WingetService.cs` | Winget installatie logica |
-| `Services/GitHubService.cs` | Download apps.json & check updates |
-| `Services/TaskSchedulerService.cs` | Scheduled tasks aanmaken |
-| `MainWindow.xaml.cs` | Main UI logica |
-| `Launcher/Program.cs` | Bootstrap launcher |
-
-### Dependencies
-
-- **MaterialDesignThemes** - Modern UI components
-- **Newtonsoft.Json** - JSON parsing
-- **CommunityToolkit.Mvvm** - MVVM helpers
-
-## 📋 TODO / Roadmap
-
-- [x] Basic app installatie via Winget
-- [x] JSON-based app database
-- [x] GitHub auto-update
-- [x] Bootstrap launcher
-- [x] Scheduled tasks voor auto-update
-- [x] Settings window
-- [ ] Dark mode theme
-- [ ] Installatie profiles (Gaming Setup, Dev Setup, etc.)
-- [ ] Export/Import geselecteerde apps
-- [ ] Check of apps al geïnstalleerd zijn (status indicator)
-- [ ] Parallel app installatie (meerdere tegelijk)
-- [ ] App icons tonen (download van GitHub/CDN)
-- [ ] Nederlands/Engels taalondersteuning
-
-## 🤝 Contributing
-
-Contributions zijn welkom! Om een app toe te voegen:
-
-1. Fork het project
-2. Edit `data/apps.json`
-3. Voeg je app toe met correcte wingetId
-4. Create Pull Request
+**Scheduled task failt** — taak vereist admin rights. Re-run **Set up** met UAC-acceptatie.
 
 ## 📜 License
 
-MIT License - zie LICENSE file
-
-## ⚡ Troubleshooting
-
-### "Winget not found"
-- Installeer **App Installer** via Microsoft Store
-- Of download van: https://github.com/microsoft/winget-cli/releases
-
-### "Failed to download app database"
-- Check internet verbinding
-- Check of GitHub bereikbaar is
-- Firewall kan GitHub blokkeren
-
-### "Scheduled task failed"
-- Run app als Administrator
-- Check Task Scheduler voor error logs
-- Task naam: `WingetAppDeployer_AutoUpdate`
-
-### App installeert niet
-- Check winget: `winget search <appname>`
-- Check winget ID in apps.json
-- Sommige apps vereisen admin rechten
-
-## 📞 Support
-
-Issues of vragen? Open een [GitHub Issue](https://github.com/MisterDuckles/WinGetAppDeployer/issues)!
+MIT — zie LICENSE.
 
 ---
 
-**Gemaakt met ❤️ voor eenvoudigere Windows installaties**
+**Built for fast Windows setups.**

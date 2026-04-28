@@ -23,7 +23,7 @@
 - Alleen committen als een issue/feature ECHT af is, niet halverwege (tenzij de gebruiker dit expliciet vraagt)
 - GEEN "Co-Authored-By" of andere AI-attributie in commit messages
 - Commit messages bevatten alleen relevante info over wat er is gewijzigd
-- Versienummer in code (csproj, AssemblyName, SettingsWindow) updaten als ONDERDEEL van dezelfde commit — NIET als aparte commit
+- Versienummer in code (csproj, AssemblyName, SettingsPage) updaten als ONDERDEEL van dezelfde commit — NIET als aparte commit
 - Alles in 1 commit: code wijziging + versienummer update + NEXT-STEPS.md update
 - 1 build check is voldoende — bouw pas NADAT alle wijzigingen (inclusief versienummer) zijn gedaan
 - GitHub Releases (met exe's) ALLEEN bij milestone versies (1.1.0, 1.2.0, 2.0.0 etc.), NIET bij patches (1.0.1, 1.0.2 etc.)
@@ -38,7 +38,7 @@
 ## Werkwijze
 
 - Lees relevante bestanden VOORDAT je wijzigingen maakt
-- Geen hardcoded kleuren in UI code — alles via DynamicResource en theme files
-- WPF hex kleuren gebruiken het AARRGGBB formaat (alpha eerst), NIET RRGGBBAA
-- Bouw altijd na wijzigingen (`dotnet build -c Debug`) en meld het resultaat
+- Geen hardcoded kleuren in UI code — gebruik `ThemeResource` keys uit het Fluent design system (zoals `CardBackgroundFillColorDefaultBrush`, `AccentFillColorDefaultBrush`)
+- Bouw altijd na wijzigingen (`dotnet build src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj -c Debug`) en meld het resultaat
+- Bij UI-wijzigingen ook `dotnet run` om visueel te verifiëren — build succeeded != feature werkt
 - Bij twijfel: vraag de gebruiker, maak geen aannames
