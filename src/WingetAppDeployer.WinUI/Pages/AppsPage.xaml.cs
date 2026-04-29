@@ -263,7 +263,7 @@ public sealed partial class AppsPage : Page
         // relevante resultaten bovenaan staan. Naam weegt het zwaarst (meest
         // betekenisvol), description en winget-ID zijn tiebreakers.
         var matchingApps = FlattenApps()
-            .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.Description, a.WingetId)))
+            .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.WingetId)))
             .Where(pair => pair.Score >= FuzzyMatcher.MinScore)
             .OrderByDescending(pair => pair.Score)
             .ThenBy(pair => pair.App.Name, StringComparer.OrdinalIgnoreCase)

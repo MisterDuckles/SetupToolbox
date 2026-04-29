@@ -113,6 +113,11 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - `Helpers/ScrollViewSpeedup.cs` zet scroll-animation duration op 20ms (default ~350ms voelt traag)
 - Toegepast op CategoryDetailPage, AppsPage, DebloatPage, SettingsPage
 
+### v0.5.10 — Strictere fuzzy search
+- `FuzzyMatcher` vervangt `WeightedRatio` door substring → prefix(90) → `PartialRatio` ladder. WeightedRatio's token_set matchte anagrammen ("steam" ↔ "teams" / "signal" / "keepass")
+- `MinScore` 55 → 75
+- `Description` niet meer mee-gescoord op AppsPage en CategoryDetailPage — alleen naam + winget ID
+
 ### v0.5.9 — WPF gearchiveerd
 - WPF source (`src/WingetAppDeployer/`) + Launcher (`src/Launcher/`) uit de repo verwijderd
 - Code blijft recoverable via git tag `wpf-final-v1.2.1`

@@ -11,34 +11,42 @@ internal static class FuzzyMatcher
     // Minimum score waarop een match wordt geaccepteerd. Lager = meer ruis,
     // hoger = typo's missen. 55 is een veilig middenmoot voor WeightedRatio
     // op korte queries zoals app-namen.
-    public const int MinScore = 55;
+    public const int MinScore = 75;
 
     /// <summary>
     /// Score een query tegen meerdere tekst-velden en geef de maximum terug.
-    /// Lege query → 0. Lege velden worden overgeslagen. Exacte substring match
-    /// geeft altijd 100.
+    /// Lege query → 0. Lege velden worden overgeslagen.
+    /// Exacte substring = 100, prefix = 90, anders Fuzz.Ratio (strikte Levenshtein).
+    /// WeightedRatio/token_set wordt NIET gebruikt — die is te permissief voor
+    /// korte namen (matcht "steam" op "teams" omdat ze dezelfde letters hebben).
     /// </summary>
     public static int Score(string query, params string?[] fields)
     {
         if (string.IsNullOrWhiteSpace(query)) return 0;
 
         var q = query.Trim();
+        var qLow = q.ToLowerInvariant();
         var best = 0;
 
         foreach (var raw in fields)
         {
             if (string.IsNullOrWhiteSpace(raw)) continue;
             var f = raw.Trim();
+            var fLow = f.ToLowerInvariant();
 
-            // Shortcut: exacte case-insensitive substring = 100. Vermijdt dat
-            // "chrome" lager scoort dan "chr" door Levenshtein-rekenwerk.
-            if (f.Contains(q, StringComparison.OrdinalIgnoreCase))
+            if (fLow.Contains(qLow))
             {
                 best = 100;
                 continue;
             }
 
-            var score = Fuzz.WeightedRatio(q.ToLowerInvariant(), f.ToLowerInvariant());
+            if (fLow.StartsWith(qLow))
+            {
+                if (90 > best) best = 90;
+                continue;
+            }
+
+            var score = Fuzz.PartialRatio(qLow, fLow);
             if (score > best) best = score;
         }
 

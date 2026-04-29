@@ -102,7 +102,7 @@ public sealed partial class CategoryDetailPage : Page
                 .Select(g => new SubcategoryGroup(
                     g.Name,
                     g.Apps
-                        .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.Description, a.WingetId)))
+                        .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.WingetId)))
                         .Where(p => p.Score >= FuzzyMatcher.MinScore)
                         .OrderByDescending(p => p.Score)
                         .ThenBy(p => p.App.Name, StringComparer.OrdinalIgnoreCase)

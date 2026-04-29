@@ -5,6 +5,14 @@ gearchiveerd onder de git tag `wpf-final-v1.2.1`.
 
 ## [Unreleased] — v0.5.x
 
+### v0.5.10 — Strictere fuzzy search (2026-04-29)
+
+- `WeightedRatio` vervangen door substring → prefix → `PartialRatio` ladder.
+  WeightedRatio's token_set matchte anagram-achtige namen zoals "steam" ↔
+  "teams" / "signal" / "keepass"
+- `MinScore` 55 → 75 voor minder ruis
+- `Description` niet langer mee-gescoord — alleen naam + winget ID
+
 ### v0.5.9 — WPF archived (2026-04-28)
 
 - WPF app + Launcher uit de repo verwijderd, code blijft recoverable via tag
