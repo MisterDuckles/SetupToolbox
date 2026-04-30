@@ -5,6 +5,16 @@ gearchiveerd onder de git tag `wpf-final-v1.2.1`.
 
 ## [Unreleased] — v0.5.x
 
+### v0.5.12 — Self-contained publish configuratie (2026-04-30)
+
+- `WindowsAppSDKSelfContained=true` in alle drie publish profiles —
+  exe bundelt nu de WinAppSDK runtime, geen aparte installer nodig op
+  doelmachine
+- `PublishTrimmed` uit: trimming brak `JsonSerializer.Deserialize` voor
+  `apps.json` ("Could not load categories"). WinUI 3 unpackaged + trim is
+  sowieso fragiel
+- Publish: ~262 MB folder, ~70-80 MB ge-ZIP'd voor distributie
+
 ### v0.5.11 — Filter opties op CategoryDetailPage (2026-04-30)
 
 - ComboBox met All / Popular / Installed naast de SearchBox

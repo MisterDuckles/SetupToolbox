@@ -126,6 +126,11 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.5.12 — Self-contained publish configuratie
+- `WindowsAppSDKSelfContained=true` in alle drie publish profiles (win-x64, win-arm64, win-x86) — exe heeft de WinAppSDK runtime nu meegebundeld, geen aparte WinAppSDK installer nodig op de doelmachine
+- `PublishTrimmed` uit gezet (was conditioneel aan voor non-Debug). Trimming brak `JsonSerializer.Deserialize<AppDatabase>` doordat de reflection-paden van System.Text.Json statisch onbereikbaar lijken — "Could not load categories" bij startup. WinUI 3 unpackaged is sowieso fragiel voor trim (XAML compiler, x:Bind, WinRT bridge leunen op reflection)
+- Resultaat: `dotnet publish -c Release -p:PublishProfile=win-x64` levert een drop-and-run folder van ~262 MB op (ZIP'd ~70-80 MB voor distributie)
+
 ### v0.5.9 — WPF gearchiveerd
 - WPF source (`src/WingetAppDeployer/`) + Launcher (`src/Launcher/`) uit de repo verwijderd
 - Code blijft recoverable via git tag `wpf-final-v1.2.1`
@@ -147,8 +152,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 ### v0.5.0 milestone — eerste public release
 
 - Echte app icons per app (plan eerst — waar hosten, hoe binden in apps.json)
-- Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)
-- Eigen GitHub release artifact
+- Eigen GitHub release artifact (publish-zip via GitHub Releases zodra v0.5.0 milestone-items af zijn)
 
 ### v0.6.0 — Debloat tab full
 

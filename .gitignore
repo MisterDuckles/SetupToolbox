@@ -78,8 +78,10 @@ $RECYCLE.BIN/
 !Launcher.exe
 !WingetAppDeployer.exe
 
-# Publish profiles
-*.pubxml
+# Publish profiles — *.pubxml.user blijft genegeerd (per-user state),
+# de profielen zelf checken we wel in zodat ze in sync blijven met de
+# publish-configuratie van de app.
+!*.pubxml
 *.pubxml.user
 
 # Application settings (don't commit user settings)
