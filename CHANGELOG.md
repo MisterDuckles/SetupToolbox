@@ -5,6 +5,15 @@ gearchiveerd onder de git tag `wpf-final-v1.2.1`.
 
 ## [Unreleased] — v0.5.x
 
+### v0.5.11 — Filter opties op CategoryDetailPage (2026-04-30)
+
+- ComboBox met All / Popular / Installed naast de SearchBox
+- Filter-mode + fuzzy search chained; lege subcat-headers verdwijnen tijdens
+  filter
+- Installed-filter herrendert wanneer `winget list` async binnenkomt
+- `_uiReady` guard tegen redundante render-cycle bij vroege ComboBox
+  SelectionChanged firing tijdens XAML-parse
+
 ### v0.5.10 — Strictere fuzzy search (2026-04-29)
 
 - `WeightedRatio` vervangen door substring → prefix → `PartialRatio` ladder.

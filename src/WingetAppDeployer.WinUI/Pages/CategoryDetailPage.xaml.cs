@@ -17,12 +17,16 @@ namespace WingetAppDeployer_WinUI.Pages;
 
 public sealed partial class CategoryDetailPage : Page
 {
+    private enum FilterMode { All, Popular, Installed }
+
     private Category? _category;
     private List<SubcategoryGroup> _allGroups = new();
     private List<SubcategoryGroup> _visibleGroups = new();
     private List<AppModel> _allApps = new();
     private List<AppModel> _visibleApps = new();
     private AppDatabase? _db;
+    private FilterMode _filterMode = FilterMode.All;
+    private bool _uiReady;
 
     public CategoryDetailPage()
     {
@@ -49,6 +53,9 @@ public sealed partial class CategoryDetailPage : Page
         // werken cross-category).
         _db = await App.Database.GetAppDatabaseAsync();
 
+        // _uiReady opent de filter-handlers; daarvoor blijven SearchBox- en
+        // FilterModeBox-events no-ops zodat we niet dubbel renderen.
+        _uiReady = true;
         ApplyFilter(SearchBox.Text);
         UpdateSelectionCount();
         UpdateSelectAllButton();
@@ -77,53 +84,87 @@ public sealed partial class CategoryDetailPage : Page
 
     private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
+        if (!_uiReady) return;
         if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
         ApplyFilter(sender.Text);
         UpdateSelectionCount();
         UpdateSelectAllButton();
     }
 
+    private void FilterModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Vuurt al tijdens XAML-parse dankzij IsSelected="True". Skippen tot
+        // OnNavigatedTo de UI klaar heeft staan.
+        if (!_uiReady) return;
+        if (FilterModeBox.SelectedIndex < 0) return;
+        _filterMode = (FilterMode)FilterModeBox.SelectedIndex;
+        ApplyFilter(SearchBox.Text);
+        UpdateSelectionCount();
+        UpdateSelectAllButton();
+    }
+
+    private bool MatchesFilterMode(AppModel app) => _filterMode switch
+    {
+        FilterMode.Popular => app.Popular,
+        FilterMode.Installed => app.IsInstalled,
+        _ => true,
+    };
+
     private void ApplyFilter(string? query)
     {
         var trimmed = (query ?? string.Empty).Trim();
+        var hasSearch = trimmed.Length > 0;
+        var hasModeFilter = _filterMode != FilterMode.All;
 
-        if (trimmed.Length == 0)
-        {
-            // Geen filter — kopieer groepen 1-op-1 (nieuwe SubcategoryGroup-instanties
-            // zodat ItemsRepeater een fresh source krijgt).
-            _visibleGroups = _allGroups
-                .Select(g => new SubcategoryGroup(g.Name, g.Apps.ToList()))
-                .ToList();
-        }
-        else
-        {
-            // Per groep fuzzy-filter de apps; lege groepen na filter eruit.
-            _visibleGroups = _allGroups
-                .Select(g => new SubcategoryGroup(
-                    g.Name,
-                    g.Apps
+        // Per groep eerst mode-filter, dan optioneel fuzzy search filter.
+        // Lege groepen verdwijnen zodra er ook maar één filter actief is, zodat
+        // we geen "lege" subcat-headers tonen.
+        _visibleGroups = _allGroups
+            .Select(g =>
+            {
+                IEnumerable<AppModel> apps = g.Apps.Where(MatchesFilterMode);
+                if (hasSearch)
+                {
+                    apps = apps
                         .Select(a => (App: a, Score: FuzzyMatcher.Score(trimmed, a.Name, a.WingetId)))
                         .Where(p => p.Score >= FuzzyMatcher.MinScore)
                         .OrderByDescending(p => p.Score)
                         .ThenBy(p => p.App.Name, StringComparer.OrdinalIgnoreCase)
-                        .Select(p => p.App)
-                        .ToList()))
-                .Where(g => g.Apps.Count > 0)
-                .ToList();
-        }
+                        .Select(p => p.App);
+                }
+                return new SubcategoryGroup(g.Name, apps.ToList());
+            })
+            .Where(g => g.Apps.Count > 0 || (!hasSearch && !hasModeFilter))
+            .ToList();
 
         _visibleApps = _visibleGroups.SelectMany(g => g.Apps).ToList();
         GroupList.ItemsSource = _visibleGroups;
 
-        if (_visibleApps.Count == 0 && trimmed.Length > 0)
+        if (_visibleApps.Count == 0 && (hasSearch || hasModeFilter))
         {
-            NoResultsText.Text = $"No apps in this category matching \"{trimmed}\"";
+            NoResultsText.Text = ComposeNoResultsMessage(trimmed, hasSearch, hasModeFilter);
             NoResultsText.Visibility = Visibility.Visible;
         }
         else
         {
             NoResultsText.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private string ComposeNoResultsMessage(string query, bool hasSearch, bool hasModeFilter)
+    {
+        var modeLabel = _filterMode switch
+        {
+            FilterMode.Popular => "popular apps",
+            FilterMode.Installed => "installed apps",
+            _ => "apps",
+        };
+
+        if (hasSearch && hasModeFilter)
+            return $"No {modeLabel} in this category matching \"{query}\"";
+        if (hasSearch)
+            return $"No apps in this category matching \"{query}\"";
+        return $"No {modeLabel} in this category";
     }
 
     private async Task RefreshInstalledStateAsync(bool forceRefresh = false)
@@ -133,6 +174,14 @@ public sealed partial class CategoryDetailPage : Page
         var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh);
         foreach (var app in _allApps)
             app.IsInstalled = installedIds.Contains(app.WingetId);
+
+        // Installed-filter draait op IsInstalled — als die filter actief is moeten
+        // we de zichtbare lijst opnieuw opbouwen wanneer de installed-state binnenkomt.
+        if (_filterMode == FilterMode.Installed)
+        {
+            ApplyFilter(SearchBox.Text);
+            UpdateSelectAllButton();
+        }
     }
 
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>

@@ -33,10 +33,11 @@
             </StackPanel>
         </Button>
 
-        <!-- Title + search + select all -->
+        <!-- Title + filter mode + search + select all -->
         <Grid Grid.Row="1" Margin="0,4,0,16" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -44,14 +45,27 @@
                        x:Name="CategoryTitle"
                        Style="{StaticResource TitleTextBlockStyle}"
                        VerticalAlignment="Center" />
-            <AutoSuggestBox Grid.Column="1"
+            <!-- IsSelected="True" zou tijdens XAML-parse al een SelectionChanged
+                 firen voordat SearchBox / GroupList / footer-elementen bestaan.
+                 De _uiReady-guard in de handler vangt dat af zodat we niet
+                 dubbel renderen. -->
+            <ComboBox Grid.Column="1"
+                      x:Name="FilterModeBox"
+                      MinWidth="140"
+                      VerticalAlignment="Center"
+                      SelectionChanged="FilterModeBox_SelectionChanged">
+                <ComboBoxItem Content="All apps" IsSelected="True" />
+                <ComboBoxItem Content="Popular" />
+                <ComboBoxItem Content="Installed" />
+            </ComboBox>
+            <AutoSuggestBox Grid.Column="2"
                             x:Name="SearchBox"
                             PlaceholderText="Filter apps"
                             QueryIcon="Find"
                             Width="260"
                             VerticalAlignment="Center"
                             TextChanged="SearchBox_TextChanged" />
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     x:Name="SelectAllButton"
                     Content="Select all"
                     Click="SelectAllButton_Click"

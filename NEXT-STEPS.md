@@ -118,6 +118,14 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - `MinScore` 55 → 75
 - `Description` niet meer mee-gescoord op AppsPage en CategoryDetailPage — alleen naam + winget ID
 
+### v0.5.11 — Filter opties op CategoryDetailPage
+- `ComboBox` met All / Popular / Installed naast de SearchBox
+- Filter-mode chained mét fuzzy search: eerst mode-filter (`Popular` → `App.Popular`, `Installed` → `App.IsInstalled`), dan optioneel fuzzy zoekquery
+- Lege subcat-headers verdwijnen zodra een filter actief is (geen kale section-headers meer)
+- Mode-aware "no results" message: "No popular apps in this category" / "No installed apps in this category matching 'X'"
+- Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
+- `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
+
 ### v0.5.9 — WPF gearchiveerd
 - WPF source (`src/WingetAppDeployer/`) + Launcher (`src/Launcher/`) uit de repo verwijderd
 - Code blijft recoverable via git tag `wpf-final-v1.2.1`
@@ -139,7 +147,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 ### v0.5.0 milestone — eerste public release
 
 - Echte app icons per app (plan eerst — waar hosten, hoe binden in apps.json)
-- Filter opties (popular / installed / all) op CategoryDetailPage
 - Self-contained publish configuratie (`dotnet publish -r win-x64 --self-contained`)
 - Eigen GitHub release artifact
 
