@@ -234,6 +234,14 @@ public sealed partial class AppsPage : Page
             g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
 
+    // Apps zonder bundled icon → verberg de Image zodat de 40x40 reservering
+    // blijft staan maar er geen broken-image glyph komt.
+    private void AppIcon_ImageFailed(object sender, ExceptionRoutedEventArgs e)
+    {
+        if (sender is Image img)
+            img.Visibility = Visibility.Collapsed;
+    }
+
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
         ScrollViewSpeedup.OnStarting(sender, args);
 
