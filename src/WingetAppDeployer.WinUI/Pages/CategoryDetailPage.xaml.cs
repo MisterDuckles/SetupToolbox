@@ -229,6 +229,14 @@ public sealed partial class CategoryDetailPage : Page
             g.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
 
+    // Apps zonder bundled icon (bv. PuTTY) → verberg de Image zodat de
+    // 40x40 reservering blijft staan maar er geen broken-image glyph komt.
+    private void AppIcon_ImageFailed(object sender, ExceptionRoutedEventArgs e)
+    {
+        if (sender is Image img)
+            img.Visibility = Visibility.Collapsed;
+    }
+
     private void SelectAllButton_Click(object sender, RoutedEventArgs e)
     {
         // Werkt op de zichtbare subset zodat "Select all" de search-filter

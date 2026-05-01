@@ -93,3 +93,7 @@ appsettings.local.json
 
 # Lokale config met URL + token voor private apps.json fetch — bevat secrets
 data-source.local.txt
+
+# Icon fetch artifacts
+data/icons-report.txt
+

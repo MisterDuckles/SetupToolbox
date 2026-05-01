@@ -37,6 +37,15 @@
     </Content>
   </ItemGroup>
 
+  <!-- Bundled app icons (128x128 PNG, transparante canvas, gecentreerd).
+       Gegenereerd door scripts/fetch-icons.ps1. App.IconPath verwijst naar
+       ms-appx:///Icons/<wingetId>.png. -->
+  <ItemGroup>
+    <Content Include="..\..\data\icons\*.png" Link="Icons\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
@@ -53,7 +62,11 @@
   <ItemGroup>
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="*" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="*" />
+    <!-- Pin op 1.8.* — Version="*" haalt 2.x op, maar dat vereist een aparte
+         WinAppRuntime 2.x install op de target machine ("Required components
+         of the Windows App Runtime are missing — Version 2.x"). 1.8 wordt
+         systeembreed gebruikt en self-contained gepublished naar exe. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
   </ItemGroup>
 
   <!--

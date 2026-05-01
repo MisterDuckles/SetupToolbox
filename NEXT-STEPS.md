@@ -51,7 +51,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Lijst van geïnstalleerde catalogus-apps onder Debloat tab
 - Per app uninstall-button met bevestigings-dialog
 - `WingetService.UninstallAppAsync()` via `winget uninstall --silent`
-- Wordt in v0.6.0 vervangen door full Debloat-pagina
+- Wordt in v0.7.0 vervangen door full Debloat-pagina
 
 ### v0.4.4 — Stage ring + Fluent polish
 - 4-stage ProgressRing rechts per app: Downloading → Verifying → Installing → Done
@@ -126,6 +126,21 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.6.0 — Icon system milestone
+- `scripts/fetch-icons.ps1`: PowerShell pipeline die per app een 128×128 PNG ophaalt en normaliseert naar transparante canvas (gecentreerd, aspect preserved). Ladder: `iconUrl` override → `iconFile` lokaal → Google favicon API (`sz=128`) → icon.horse fallback (scrapet `apple-touch-icon`, vaak 180-512px). Wikipedia REST API (`/api/rest_v1/page/summary/<title>`) gebruikt om voor probleemgevallen hi-res logo-URLs te vinden — Wikipedia eist gedetailleerde User-Agent met contact-info anders 400
+- Curated mix van bronnen: dashboard-icons (Homarr Labs), selfhst/icons, Wikipedia Commons, icons8, Steam GridDB, en `scripts/local-icons/` voor user-supplied PNGs (Everything via Gemini-render)
+- Post-processing pipeline op elke icon:
+  1. **Auto-crop** (opt-in via `autoCrop = $true` per app) — trimt whitespace borders rond het logo. Default OFF zodat designed icons (Claude, PowerToys, Office, Teams) hun bewuste padding behouden. Aan voor whitespace-heavy sources (Everything, WinRAR icons8 PNG)
+  2. **Scale-to-fit** — bewaart aspect ratio, centreert op 128×128 transparante canvas
+  3. **White-to-transparent** — BFS flood-fill vanaf canvas-corners met threshold 225 (R,G,B all ≥225 = "near-white"), maakt witte achtergronden transparant zonder logo-witte details kapot te maken
+  4. **Squircle rounded corners** (Apple-style, ~22% radius) — alleen toegepast als ALLE 4 hoek-pixels (bijna) volledig opaque zijn (alpha ≥250). Voorkomt clipping van designed icons met breathing room (Claude burst rays, CCleaner broom) en is redundant op al-ronde logos (Discord, Spotify)
+- Result: **92/92 icons OK**, 0 failed, 2 LAAG (LibreOffice + Insomnia, acceptabel op 48px UI)
+- 3 nieuwe Proton apps toegevoegd aan `apps.json`: Calendar, Wallet, Authenticator. Plus Sheets/Docs/Meet via een tweede ronde
+- `data/icons/<wingetId-met-hyphens>.png` gebundeld via `<Content>` + `PreserveNewest`. Filename gebruikt hyphens i.p.v. dots — Windows PRI parser ziet anders bv. `.64-bit.png` als scale qualifier en weigert te resolven
+- `App.IconImage` getter returnt `BitmapImage` (lazy + gecached) i.p.v. string-pad — x:Bind doet geen automatische `string` → `ImageSource` conversie (die werkt alleen via XAML markup TypeConverter)
+- CategoryDetailPage card layout uitgebreid met 3e column: 40×40 `Image` links, daarna text+badges, dan checkbox. `ImageFailed` event verbergt de Image bij missing icon zonder layout te breken
+- WinAppSDK pin: `1.8.*` (was `*` → restored 2.0.1 en crashte met "Required components of the Windows App Runtime are missing — Version 2.x" omdat alleen 1.8 systeembreed is geïnstalleerd)
+
 ### v0.5.12 — Self-contained publish configuratie
 - `WindowsAppSDKSelfContained=true` in alle drie publish profiles (win-x64, win-arm64, win-x86) — exe heeft de WinAppSDK runtime nu meegebundeld, geen aparte WinAppSDK installer nodig op de doelmachine
 - `PublishTrimmed` uit gezet (was conditioneel aan voor non-Debug). Trimming brak `JsonSerializer.Deserialize<AppDatabase>` doordat de reflection-paden van System.Text.Json statisch onbereikbaar lijken — "Could not load categories" bij startup. WinUI 3 unpackaged is sowieso fragiel voor trim (XAML compiler, x:Bind, WinRT bridge leunen op reflection)
@@ -149,12 +164,13 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Open / gepland
 
-### v0.5.0 milestone — eerste public release
+### v0.6.x — Icon system polish (lopend)
 
-- Echte app icons per app (plan eerst — waar hosten, hoe binden in apps.json)
-- Eigen GitHub release artifact (publish-zip via GitHub Releases zodra v0.5.0 milestone-items af zijn)
+- Optionele eerste publieke pre-release: GitHub Releases artifact (publish-zip + exe)
+- Open issues in icon set: 2 LAAG (LibreOffice, Insomnia) — handmatig vervangen wanneer een schoner logo opduikt
+- Icons voor toekomstige Debloat / Tweaks dialogs (per Windows-feature een eigen icon, optioneel)
 
-### v0.6.0 — Debloat tab full
+### v0.7.0 — Debloat tab full
 
 - Windows bloatware removal — Microsoft "standaard" bloat (Xbox, Teams consumer, Solitaire, etc.) met checkboxes + batch-actie via `Get-AppxPackage | Remove-AppxPackage` of `winget uninstall`. Vereist admin
 - User-installed apps uninstaller — vervanger voor v0.4.3 lijst, card-based met multi-select + batch + per-app progress
@@ -163,7 +179,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - "ALLES op de PC" search — combineert registry uninstall keys + `Get-AppxPackage` + `winget list` met source-tag per resultaat
 - Restant-opruiming bij uninstall — scan registry / Program Files / AppData / Temp / scheduled tasks / services voor leftover sporen, ContentDialog met checkboxes per item, altijd preview, nooit auto-delete
 
-### v0.7.0 — Tweaks tab
+### v0.8.0 — Tweaks tab
 
 - Windows tweaks UI met toggles per categorie:
   - Explorer: hidden files, file extensions, classic context menu, taskbar align left
@@ -175,7 +191,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Apply / revert (originele waardes onthouden)
 - Preset profiles ("Privacy-focused", "Performance", "Minimal UI") als één-klik batches
 
-### v0.8.0 — Settings + app self-update
+### v0.9.0 — Settings + app self-update
 
 - `SettingsService` — JSON-backed settings file (`%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json`):
   - `CheckForUpdatesOnStartup` (default true)
@@ -186,7 +202,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Update-beschikbaar InfoBar in MainWindow met "Update now" knop
 - Settings UI uitbreiden met ToggleSwitches + "Check for updates now" button
 
-### v0.9.0 — Install flow UX polish + Launcher port
+### v0.10.0 — Install flow UX polish + Launcher port
 
 - WinUI Launcher: kleine bootstrap exe (~5KB) die de full app downloadt naar `%ProgramFiles%`. Nodig voor Windows11-Unattended-Debloat integratie waarin we niet de hele 80MB app via firstlogon willen pushen
 - Post-install "Schedule auto-updates?" prompt — ContentDialog na succesvolle InstallDialog als er nog geen task is
@@ -200,8 +216,8 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 ### Latere milestones
 
 **v1.0.0 — eerste stable release**
-- Self-update via GitHub (v0.8.0) werkt
-- Launcher (v0.9.0) werkt voor unattended-debloat integratie
+- Self-update via GitHub (v0.9.0) werkt
+- Launcher (v0.10.0) werkt voor unattended-debloat integratie
 - Geen P0 bugs
 
 **v1.x.x — feature uitbreidingen**

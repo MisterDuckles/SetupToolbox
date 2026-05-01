@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace WingetAppDeployer_WinUI.Models;
 
@@ -123,6 +126,15 @@ public class App : INotifyPropertyChanged
             OnChanged();
         }
     }
+
+    // BitmapImage i.p.v. string-pad: x:Bind doet geen automatische conversie
+    // van string → ImageSource (alleen XAML-markup wel via TypeConverter).
+    // Filename = WingetId met dots vervangen door hyphens — Windows PRI parser
+    // ziet anders ".64-bit.png" als scale qualifier en weigert te resolven.
+    private ImageSource? _iconImage;
+    [JsonIgnore]
+    public ImageSource IconImage =>
+        _iconImage ??= new BitmapImage(new Uri($"ms-appx:///Icons/{WingetId.Replace('.', '-')}.png"));
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnChanged([CallerMemberName] string? name = null) =>

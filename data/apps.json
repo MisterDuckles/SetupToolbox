@@ -229,6 +229,21 @@
               "name": "KeePassXC",
               "wingetId": "KeePassXCTeam.KeePassXC",
               "description": "Offline password vault, KeePass compatible"
+            },
+            {
+              "name": "NordPass",
+              "wingetId": "NordSecurity.NordPass",
+              "description": "Password manager by Nord Security"
+            },
+            {
+              "name": "RoboForm",
+              "wingetId": "SiberSystems.RoboForm",
+              "description": "Password manager and form filler"
+            },
+            {
+              "name": "Keeper",
+              "wingetId": "KeeperSecurity.KeeperDesktop",
+              "description": "Enterprise-grade password manager and digital vault"
             }
           ]
         },
@@ -246,6 +261,16 @@
               "name": "Proton VPN",
               "wingetId": "Proton.ProtonVPN",
               "description": "Privacy-focused Swiss VPN by Proton"
+            },
+            {
+              "name": "Surfshark",
+              "wingetId": "Surfshark.Surfshark",
+              "description": "Unlimited devices VPN service"
+            },
+            {
+              "name": "IPVanish",
+              "wingetId": "IPVanish.IPVanish",
+              "description": "VPN service with strict no-logs policy"
             }
           ]
         },
@@ -258,6 +283,18 @@
               "name": "Malwarebytes",
               "wingetId": "Malwarebytes.Malwarebytes",
               "description": "Anti-malware and ransomware protection"
+            },
+            {
+              "name": "Norton 360",
+              "wingetId": "XPFNZKWN35KD6Z",
+              "source": "msstore",
+              "description": "All-in-one antivirus + VPN + password manager (Microsoft Store)"
+            },
+            {
+              "name": "Bitdefender",
+              "wingetId": "XP9K931FWBP5V5",
+              "source": "msstore",
+              "description": "Antivirus and threat protection (Microsoft Store)"
             }
           ]
         }
@@ -289,6 +326,16 @@
               "name": "OnlyOffice Desktop",
               "wingetId": "ONLYOFFICE.DesktopEditors",
               "description": "MS Office-compatible alternative"
+            },
+            {
+              "name": "Proton Docs",
+              "wingetId": "Proton.ProtonDocs",
+              "description": "Encrypted document editor by Proton"
+            },
+            {
+              "name": "Proton Sheets",
+              "wingetId": "Proton.ProtonSheets",
+              "description": "Encrypted spreadsheets by Proton"
             }
           ]
         },
@@ -302,6 +349,33 @@
               "wingetId": "Microsoft.OneDrive",
               "description": "Microsoft cloud storage and sync",
               "popular": true
+            },
+            {
+              "name": "Google Drive",
+              "wingetId": "Google.GoogleDrive",
+              "description": "Google cloud storage and sync",
+              "popular": true
+            },
+            {
+              "name": "Dropbox",
+              "wingetId": "Dropbox.Dropbox",
+              "description": "File sync and cloud storage"
+            },
+            {
+              "name": "iCloud",
+              "wingetId": "9PKTQ5699M62",
+              "source": "msstore",
+              "description": "Apple iCloud for Windows (Microsoft Store)"
+            },
+            {
+              "name": "Proton Drive",
+              "wingetId": "Proton.ProtonDrive",
+              "description": "Encrypted cloud storage by Proton"
+            },
+            {
+              "name": "Internxt Drive",
+              "wingetId": "Internxt.Drive",
+              "description": "Privacy-focused, zero-knowledge cloud storage"
             }
           ]
         },
@@ -363,6 +437,17 @@
               "wingetId": "Anthropic.Claude",
               "description": "Official Anthropic Claude desktop app",
               "popular": true
+            },
+            {
+              "name": "Perplexity",
+              "wingetId": "XP8JNQFBQH6PVF",
+              "source": "msstore",
+              "description": "AI-powered search and answer engine (Microsoft Store)"
+            },
+            {
+              "name": "Ollama",
+              "wingetId": "Ollama.Ollama",
+              "description": "Run open-weight LLMs locally (Llama, Mistral, etc.)"
             }
           ]
         }
@@ -694,6 +779,36 @@
               "name": "Proton Pass",
               "wingetId": "Proton.ProtonPass",
               "description": "Encrypted password manager by Proton"
+            },
+            {
+              "name": "Proton Calendar",
+              "wingetId": "Proton.ProtonCalendar",
+              "description": "End-to-end encrypted calendar by Proton"
+            },
+            {
+              "name": "Proton Wallet",
+              "wingetId": "Proton.ProtonWallet",
+              "description": "Self-custodial Bitcoin wallet by Proton"
+            },
+            {
+              "name": "Proton Authenticator",
+              "wingetId": "Proton.ProtonAuthenticator",
+              "description": "Encrypted 2FA / TOTP authenticator by Proton"
+            },
+            {
+              "name": "Proton Sheets",
+              "wingetId": "Proton.ProtonSheets",
+              "description": "Encrypted spreadsheets by Proton"
+            },
+            {
+              "name": "Proton Docs",
+              "wingetId": "Proton.ProtonDocs",
+              "description": "Encrypted document editor by Proton"
+            },
+            {
+              "name": "Proton Meet",
+              "wingetId": "Proton.ProtonMeet",
+              "description": "Encrypted video conferencing by Proton"
             }
           ]
         },
