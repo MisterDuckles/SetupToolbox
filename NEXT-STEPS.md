@@ -235,6 +235,8 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 **v1.0.0 — eerste stable release**
 - Self-update via GitHub (v0.9.0) werkt
 - Launcher (v0.10.0) werkt voor unattended-debloat integratie
+- **Inno Setup installer** met silent-install support (`/SILENT` + `/VERYSILENT` flags). Reden: ZIP+folder-distributie is OK voor early access maar is ruw — installer geeft proper Start Menu entry, uninstaller, en (cruciaal) **scriptable silent install** voor Windows11-Unattended-Debloat integratie. Inno Setup is gratis, geen licentiekosten. Note: sign-cert blijft buiten scope (kosten); SmartScreen reputation bouwt zich vanzelf op naarmate downloads stijgen
+- WinUI 3 single-file publish geprobeerd, faalt met `Microsoft.UI.Xaml.dll` 0xc000027b crash door XAML/WinRT activation lookups die filesystem-paden eisen — niet oplosbaar zonder bootstrap-launcher hack ([WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Daarom installer i.p.v. single-exe
 - Geen P0 bugs
 
 **v1.x.x — feature uitbreidingen**
