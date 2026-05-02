@@ -126,6 +126,12 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.7.2 — Settings-toggle voor manual download fallback
+- Nieuwe `SettingsService` (singleton via `App.Settings`) — JSON-backed store in `%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json`. Minimal start: alleen `FallbackToDownloadPage` (default `true` = bestaand v0.7.1 gedrag). Best-effort persist (try/catch op disk IO, in-memory state altijd consistent), camelCase JSON serializer. Wordt in v0.10.0 uitgebreid met de andere settings (`CheckForUpdatesOnStartup`, `ShowWelcomeBanner`, etc.)
+- Nieuwe **"Installation"** sectie op SettingsPage met `ToggleSwitch` "Open vendor download pages". Initial sync via `_suppressToggleEvent` guard zodat page-navigatie niet elke keer settings.json terugschrijft
+- `InstallDialog` respecteert de toggle: wanneer UIT worden manual-download apps geskipt met nieuwe `InstallItemState.Skipped` ("Skipped" label, secondary text colour) i.p.v. dat de browser geopend wordt. Final summary text combineert nu winget + manual-opened + skipped: "X installed, Y failed, Z manual downloads opened, N skipped"
+- Bonus fix: `manualOpenedCount` telt nu alleen state `ManualOpened` (i.p.v. raw count van manual apps), zodat een Failed manual-app niet dubbel in de summary verschijnt
+
 ### v0.7.1 — Fallback download URL voor non-winget apps
 - `App.DownloadUrl` (nullable string) JSON-veld + `IsManualDownload` + `ManualDownloadVisibility` properties op het model
 - Badge **"Manual download"** (caution-orange + Globe glyph E71B) in CategoryDetailPage en AppsPage app-cards naast de andere status badges
@@ -204,7 +210,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installation profiles (Gaming / Developer / Office / Productivity) — preset-selecties via extra section in apps.json of aparte profiles.json
 - Export/Import selectie naar JSON — `my-apps.json` voor verse installs op nieuwe machines
 - Installatie geschiedenis / log — append-log in `%LOCALAPPDATA%`, "View install history" in Settings
-- "Fallback to download page" toggle — apps die niet op winget staan (VMware Workstation Pro, ON1 Photo RAW, Nvidia App, etc.) krijgen een `downloadUrl` veld; install-knop opent vendor-pagina met "Manual download" badge
+- ~~"Fallback to download page" toggle~~ — gedaan in v0.7.1 (downloadUrl + Manual download badge) en v0.7.2 (Settings toggle)
 
 ### v0.8.0 — Debloat tab full
 

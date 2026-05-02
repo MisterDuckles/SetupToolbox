@@ -34,14 +34,26 @@ public sealed partial class InstallDialog : ContentDialog
 
     private async void InstallDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
-        // Manual-download apps eerst afhandelen — geen winget call, gewoon URL
-        // openen in default browser zodat user de installer handmatig kan downloaden.
+        // Manual-download apps eerst afhandelen — geen winget call. Als de
+        // FallbackToDownloadPage setting AAN staat openen we de vendor URL in
+        // de default browser; staat hij UIT dan slaan we de app over met een
+        // "Skipped" status zodat user weet waarom er niks gebeurde.
         var manualApps = _apps.Where(a => a.IsManualDownload).ToList();
         var wingetApps = _apps.Where(a => !a.IsManualDownload).ToList();
+        var fallbackEnabled = App.Settings.FallbackToDownloadPage;
 
         foreach (var app in manualApps)
         {
             var item = _items.FirstOrDefault(i => i.WingetId == app.WingetId);
+            if (item == null) continue;
+
+            if (!fallbackEnabled)
+            {
+                item.Message = "Manual downloads disabled in Settings";
+                item.State = InstallItemState.Skipped;
+                continue;
+            }
+
             try
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -49,27 +61,28 @@ public sealed partial class InstallDialog : ContentDialog
                     FileName = app.DownloadUrl,
                     UseShellExecute = true   // routes via shell → opent default browser
                 });
-                if (item != null)
-                {
-                    item.Message = "Opened vendor download page in browser";
-                    item.State = InstallItemState.ManualOpened;
-                }
+                item.Message = "Opened vendor download page in browser";
+                item.State = InstallItemState.ManualOpened;
             }
             catch (Exception ex)
             {
-                if (item != null)
-                {
-                    item.Message = $"Could not open URL: {ex.Message}";
-                    item.State = InstallItemState.Failed;
-                }
+                item.Message = $"Could not open URL: {ex.Message}";
+                item.State = InstallItemState.Failed;
             }
         }
+
+        var manualOpenedCount = _items.Count(i => i.State == InstallItemState.ManualOpened);
+        var skippedCount = _items.Count(i => i.State == InstallItemState.Skipped);
 
         if (wingetApps.Count == 0)
         {
             // Alleen manual downloads geselecteerd — geen winget run nodig
-            var manualOk = manualApps.Count(a => _items.FirstOrDefault(i => i.WingetId == a.WingetId)?.State == InstallItemState.ManualOpened);
-            ProgressHeader.Text = $"Opened {manualOk} download page{(manualOk == 1 ? "" : "s")} — install manually";
+            var parts = new List<string>();
+            if (manualOpenedCount > 0) parts.Add($"Opened {manualOpenedCount} download page{(manualOpenedCount == 1 ? "" : "s")}");
+            if (skippedCount > 0)      parts.Add($"{skippedCount} skipped");
+            ProgressHeader.Text = parts.Count > 0
+                ? string.Join(", ", parts)
+                : "No installable apps selected";
             _installFinished = true;
             IsPrimaryButtonEnabled = true;
             return;
@@ -82,14 +95,14 @@ public sealed partial class InstallDialog : ContentDialog
 
         var successCount = results.Count(kv => kv.Value.success);
         var failCount = results.Count - successCount;
-        var manualCount = manualApps.Count;
 
         // Final summary text — combineert winget + manual results
-        var parts = new List<string>();
-        if (successCount > 0) parts.Add($"{successCount} installed");
-        if (failCount > 0)    parts.Add($"{failCount} failed");
-        if (manualCount > 0)  parts.Add($"{manualCount} manual download{(manualCount == 1 ? "" : "s")} opened");
-        ProgressHeader.Text = string.Join(", ", parts);
+        var summaryParts = new List<string>();
+        if (successCount > 0)       summaryParts.Add($"{successCount} installed");
+        if (failCount > 0)          summaryParts.Add($"{failCount} failed");
+        if (manualOpenedCount > 0)  summaryParts.Add($"{manualOpenedCount} manual download{(manualOpenedCount == 1 ? "" : "s")} opened");
+        if (skippedCount > 0)       summaryParts.Add($"{skippedCount} skipped");
+        ProgressHeader.Text = string.Join(", ", summaryParts);
 
         _installFinished = true;
         IsPrimaryButtonEnabled = true;
@@ -154,7 +167,7 @@ public sealed partial class InstallDialog : ContentDialog
     }
 }
 
-public enum InstallItemState { Pending, Installing, Success, Failed, ManualOpened }
+public enum InstallItemState { Pending, Installing, Success, Failed, ManualOpened, Skipped }
 
 public sealed class InstallItem : INotifyPropertyChanged
 {
@@ -255,14 +268,14 @@ public sealed class InstallItem : INotifyPropertyChanged
         _state == InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility MessageVisibility =>
-        (_state == InstallItemState.Installing || _state == InstallItemState.ManualOpened) && !string.IsNullOrEmpty(_message)
+        (_state == InstallItemState.Installing || _state == InstallItemState.ManualOpened || _state == InstallItemState.Skipped) && !string.IsNullOrEmpty(_message)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
     // Text state label (right column) only shown outside the Installing phase;
     // during install the stage ring occupies that column instead.
     public Visibility StateLabelVisibility =>
-        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.Failed or InstallItemState.ManualOpened
+        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.Failed or InstallItemState.ManualOpened or InstallItemState.Skipped
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -271,6 +284,7 @@ public sealed class InstallItem : INotifyPropertyChanged
         InstallItemState.Success => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
         InstallItemState.Failed => (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
         InstallItemState.ManualOpened => (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
+        InstallItemState.Skipped => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         _ => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
     };
 
@@ -280,6 +294,7 @@ public sealed class InstallItem : INotifyPropertyChanged
         InstallItemState.Success => "Installed",
         InstallItemState.Failed => "Failed",
         InstallItemState.ManualOpened => "Browser opened",
+        InstallItemState.Skipped => "Skipped",
         _ => string.Empty
     };
 

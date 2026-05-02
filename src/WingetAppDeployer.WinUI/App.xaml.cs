@@ -36,6 +36,7 @@ public partial class App : Application
     public static AppDatabaseService Database { get; } = new();
     public static WingetService Winget { get; } = new();
     public static TaskSchedulerService TaskScheduler { get; } = new();
+    public static SettingsService Settings { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code

@@ -14,10 +14,25 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
     }
 
+    private bool _suppressToggleEvent;
+
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+
+        // Suppress Toggled event tijdens initial sync — anders schrijft elke
+        // page-navigatie de current value terug naar disk (no-op maar onnodig IO).
+        _suppressToggleEvent = true;
+        FallbackToggle.IsOn = App.Settings.FallbackToDownloadPage;
+        _suppressToggleEvent = false;
+
         await RefreshScheduleStatusAsync();
+    }
+
+    private void FallbackToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToggleEvent) return;
+        App.Settings.FallbackToDownloadPage = FallbackToggle.IsOn;
     }
 
     private async System.Threading.Tasks.Task RefreshScheduleStatusAsync()
