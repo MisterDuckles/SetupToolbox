@@ -108,16 +108,20 @@ function New-AppIcon {
     $blueDark1    = [System.Drawing.Color]::FromArgb(255,  24,  72, 160)
     $accentDeep   = [System.Drawing.Color]::FromArgb(255,  10,  60, 160)
 
-    # V36 design: straight stack (geen rotatie), 3 cards diagonaal gestapeld.
+    # V36 design: straight stack (geen rotatie), 3 cards diagonaal gestapeld
+    # met SYMMETRIC offsets zoals de originele V36 layout. Cards landscape
+    # (38:26 ≈ 1.46:1). Offset 5 geeft duidelijker zichtbare "stap" tussen
+    # cards (19% van card-hoogte zichtbaar) — niet zo krap als offset 4.
     [single]$cR  = 4.0 * $f
-    [single]$cW  = 36.0 * $f
-    [single]$cH  = 28.0 * $f
-    [single]$stackOffset = 6.0 * $f   # diagonale offset per card-laag
+    [single]$cW  = 38.0 * $f
+    [single]$cH  = 26.0 * $f
+    [single]$offset  = 5.0 * $f    # symmetric X+Y offset
+    [single]$startY  = 6.0 * $f    # verticaal gecentreerd (totaal hoogte=36)
 
     # ============================================================
     # Card 3 (back) — donker blauw
     # ============================================================
-    [single]$c3X = 0.0; [single]$c3Y = 0.0
+    [single]$c3X = 0.0; [single]$c3Y = $startY
     $p3 = New-RoundedRectPath $c3X $c3Y $cW $cH $cR
     Add-DropShadow -G $g -Path $p3 -OffsetX 0 -OffsetY ($f * 0.9) -Spread ($f * 2.1) -Opacity 110
     $b3 = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
@@ -127,7 +131,7 @@ function New-AppIcon {
     # ============================================================
     # Card 2 (middle) — medium blauw, diagonaal offset
     # ============================================================
-    [single]$c2X = $stackOffset; [single]$c2Y = $stackOffset
+    [single]$c2X = $offset; [single]$c2Y = $startY + $offset
     $p2 = New-RoundedRectPath $c2X $c2Y $cW $cH $cR
     Add-DropShadow -G $g -Path $p2 -OffsetX 0 -OffsetY ($f * 0.9) -Spread ($f * 2.1) -Opacity 110
     $b2 = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
@@ -135,9 +139,9 @@ function New-AppIcon {
     $g.FillPath($b2, $p2); $b2.Dispose(); $p2.Dispose()
 
     # ============================================================
-    # Card 1 (front) — wit/lichtblauw. Host voor Fluent icon.
+    # Card 1 (front) — wit/lichtblauw
     # ============================================================
-    [single]$c1X = $stackOffset * 2; [single]$c1Y = $stackOffset * 2
+    [single]$c1X = $offset * 2; [single]$c1Y = $startY + $offset * 2
     $p1 = New-RoundedRectPath $c1X $c1Y $cW $cH $cR
     Add-DropShadow -G $g -Path $p1 -OffsetX 0 -OffsetY ($f * 1.0) -Spread ($f * 2.4) -Opacity 130
     $b1 = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
@@ -150,7 +154,7 @@ function New-AppIcon {
     # ============================================================
     [single]$cx = $c1X + $cW / 2.0
     [single]$cy = $c1Y + $cH / 2.0
-    Draw-FluentDownloadIcon -G $g -Cx $cx -Cy $cy -Size ([single](22.0 * $f)) -f $f -Color $accentDeep -StrokeFactor 2.3
+    Draw-FluentDownloadIcon -G $g -Cx $cx -Cy $cy -Size ([single](22.0 * $f)) -f $f -Color $accentDeep -StrokeFactor 2.4
 
     $g.Dispose()
     return $bmp
