@@ -97,3 +97,6 @@ data-source.local.txt
 # Icon fetch artifacts
 data/icons-report.txt
 
+# AppIcon preview (gegenereerd door generate-app-icon.ps1, niet bron)
+data/app-icon-preview.png
+

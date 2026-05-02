@@ -13,6 +13,11 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <Nullable>enable</Nullable>
+    <!-- Exe-icoon: zichtbaar in taskbar, Explorer, alt-tab, run-dialog. Voor
+         unpackaged WinUI 3 apps wordt dit door MSBuild in de exe header gezet
+         via rc.exe. Multi-resolution ICO (16/24/32/48/64/128/256) — gegenereerd
+         door scripts/generate-app-icon.ps1. -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
