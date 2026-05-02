@@ -51,7 +51,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Lijst van geïnstalleerde catalogus-apps onder Debloat tab
 - Per app uninstall-button met bevestigings-dialog
 - `WingetService.UninstallAppAsync()` via `winget uninstall --silent`
-- Wordt in v0.7.0 vervangen door full Debloat-pagina
+- Wordt in v0.8.0 vervangen door full Debloat-pagina
 
 ### v0.4.4 — Stage ring + Fluent polish
 - 4-stage ProgressRing rechts per app: Downloading → Verifying → Installing → Done
@@ -126,6 +126,14 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.7.1 — Fallback download URL voor non-winget apps
+- `App.DownloadUrl` (nullable string) JSON-veld + `IsManualDownload` + `ManualDownloadVisibility` properties op het model
+- Badge **"Manual download"** (caution-orange + Globe glyph E71B) in CategoryDetailPage en AppsPage app-cards naast de andere status badges
+- `InstallDialog` splitst geselecteerde apps in winget-installable + manual-download. Voor manual-apps wordt de `downloadUrl` geopend in de default browser via `Process.Start(...UseShellExecute=true)` — geen winget call. Failure (URL invalid) → `InstallItemState.Failed` met "Could not open URL: ..." message
+- Nieuwe `InstallItemState.ManualOpened` met label "Browser opened" (caution color) en de message "Opened vendor download page in browser". Final-summary in dialog combineert winget-results + manual-opened count: "X installed, Y failed, Z manual downloads opened"
+- 3 voorbeeld-apps toegevoegd aan apps.json: **VMware Workstation Pro** (Development → VMs), **ON1 Photo RAW** (Creative → Graphics), **Nvidia App** (Utilities → System Tools, popular). Alle 3 met icons gefetched
+- Roadmap-swap meegenomen: install-features (v0.7.0) zijn nu de core focus i.p.v. Debloat eerst. Volgorde: v0.7=install polish, v0.8=Debloat, v0.9=Tweaks, v0.10=Settings + self-update
+
 ### v0.6.3 — AppIcon size + spacing polish
 - Cards opgeschaald van 28×20 → 38×26 (~3.5× oppervlakte) zodat icon visueel even groot oogt als andere taskbar-icons (Edge/VSCode/etc.). Cards blijven landscape (1.46:1 ratio)
 - Symmetric 5×5 stack-offset i.p.v. 4×4 — duidelijker zichtbare "stap" tussen gestapelde cards (~19% per card-rand zichtbaar i.p.v. 14%) zonder te krap te ogen
@@ -187,7 +195,18 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Open issues in icon set: 2 LAAG (LibreOffice, Insomnia) — handmatig vervangen wanneer een schoner logo opduikt
 - Icons voor toekomstige Debloat / Tweaks dialogs (per Windows-feature een eigen icon, optioneel)
 
-### v0.7.0 — Debloat tab full
+### v0.7.0 — Install flow UX polish + Launcher port
+
+- WinUI Launcher: kleine bootstrap exe (~5KB) die de full app downloadt naar `%ProgramFiles%`. Nodig voor Windows11-Unattended-Debloat integratie waarin we niet de hele 80MB app via firstlogon willen pushen
+- Post-install "Schedule auto-updates?" prompt — ContentDialog na succesvolle InstallDialog als er nog geen task is
+- Toast notificatie na `/autoupdate` via `CommunityToolkit.WinUI.Notifications` — landt in Action Center
+- Parallel installaties (optioneel) — `MaxParallelism=2` in settings, 2 apps tegelijk
+- Installation profiles (Gaming / Developer / Office / Productivity) — preset-selecties via extra section in apps.json of aparte profiles.json
+- Export/Import selectie naar JSON — `my-apps.json` voor verse installs op nieuwe machines
+- Installatie geschiedenis / log — append-log in `%LOCALAPPDATA%`, "View install history" in Settings
+- "Fallback to download page" toggle — apps die niet op winget staan (VMware Workstation Pro, ON1 Photo RAW, Nvidia App, etc.) krijgen een `downloadUrl` veld; install-knop opent vendor-pagina met "Manual download" badge
+
+### v0.8.0 — Debloat tab full
 
 - Windows bloatware removal — Microsoft "standaard" bloat (Xbox, Teams consumer, Solitaire, etc.) met checkboxes + batch-actie via `Get-AppxPackage | Remove-AppxPackage` of `winget uninstall`. Vereist admin
 - User-installed apps uninstaller — vervanger voor v0.4.3 lijst, card-based met multi-select + batch + per-app progress
@@ -196,7 +215,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - "ALLES op de PC" search — combineert registry uninstall keys + `Get-AppxPackage` + `winget list` met source-tag per resultaat
 - Restant-opruiming bij uninstall — scan registry / Program Files / AppData / Temp / scheduled tasks / services voor leftover sporen, ContentDialog met checkboxes per item, altijd preview, nooit auto-delete
 
-### v0.8.0 — Tweaks tab
+### v0.9.0 — Tweaks tab
 
 - Windows tweaks UI met toggles per categorie:
   - Explorer: hidden files, file extensions, classic context menu, taskbar align left
@@ -208,7 +227,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Apply / revert (originele waardes onthouden)
 - Preset profiles ("Privacy-focused", "Performance", "Minimal UI") als één-klik batches
 
-### v0.9.0 — Settings + app self-update
+### v0.10.0 — Settings + app self-update
 
 - `SettingsService` — JSON-backed settings file (`%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json`):
   - `CheckForUpdatesOnStartup` (default true)
@@ -219,22 +238,11 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Update-beschikbaar InfoBar in MainWindow met "Update now" knop
 - Settings UI uitbreiden met ToggleSwitches + "Check for updates now" button
 
-### v0.10.0 — Install flow UX polish + Launcher port
-
-- WinUI Launcher: kleine bootstrap exe (~5KB) die de full app downloadt naar `%ProgramFiles%`. Nodig voor Windows11-Unattended-Debloat integratie waarin we niet de hele 80MB app via firstlogon willen pushen
-- Post-install "Schedule auto-updates?" prompt — ContentDialog na succesvolle InstallDialog als er nog geen task is
-- Toast notificatie na `/autoupdate` via `CommunityToolkit.WinUI.Notifications` — landt in Action Center
-- Parallel installaties (optioneel) — `MaxParallelism=2` in settings, 2 apps tegelijk
-- Installation profiles (Gaming / Developer / Office / Productivity) — preset-selecties via extra section in apps.json of aparte profiles.json
-- Export/Import selectie naar JSON — `my-apps.json` voor verse installs op nieuwe machines
-- Installatie geschiedenis / log — append-log in `%LOCALAPPDATA%`, "View install history" in Settings
-- "Fallback to download page" toggle — apps die niet op winget staan (VMware Workstation Pro, ON1 Photo RAW, Nvidia App, etc.) krijgen een `downloadUrl` veld; install-knop opent vendor-pagina met "Manual download" badge
-
 ### Latere milestones
 
 **v1.0.0 — eerste stable release**
-- Self-update via GitHub (v0.9.0) werkt
-- Launcher (v0.10.0) werkt voor unattended-debloat integratie
+- Self-update via GitHub (v0.10.0) werkt
+- Launcher (v0.7.0) werkt voor unattended-debloat integratie
 - **Inno Setup installer** met silent-install support (`/SILENT` + `/VERYSILENT` flags). Reden: ZIP+folder-distributie is OK voor early access maar is ruw — installer geeft proper Start Menu entry, uninstaller, en (cruciaal) **scriptable silent install** voor Windows11-Unattended-Debloat integratie. Inno Setup is gratis, geen licentiekosten. Note: sign-cert blijft buiten scope (kosten); SmartScreen reputation bouwt zich vanzelf op naarmate downloads stijgen
 - WinUI 3 single-file publish geprobeerd, faalt met `Microsoft.UI.Xaml.dll` 0xc000027b crash door XAML/WinRT activation lookups die filesystem-paden eisen — niet oplosbaar zonder bootstrap-launcher hack ([WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Daarom installer i.p.v. single-exe
 - Geen P0 bugs

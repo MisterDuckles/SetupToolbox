@@ -206,6 +206,20 @@
                                                                    VerticalAlignment="Center" />
                                                     </StackPanel>
                                                 </Border>
+                                                <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                                        CornerRadius="4"
+                                                        Padding="6,2"
+                                                        VerticalAlignment="Center"
+                                                        Visibility="{x:Bind ManualDownloadVisibility}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <FontIcon Glyph="&#xE71B;"
+                                                                  FontSize="10"
+                                                                  VerticalAlignment="Center" />
+                                                        <TextBlock Text="Manual download"
+                                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                                   VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Border>
                                             </StackPanel>
                                             <TextBlock Text="{x:Bind Description}"
                                                        Style="{StaticResource CaptionTextBlockStyle}"

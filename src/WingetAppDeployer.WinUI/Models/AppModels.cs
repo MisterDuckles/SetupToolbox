@@ -101,6 +101,21 @@ public class App : INotifyPropertyChanged
     [JsonPropertyName("source")]
     public string Source { get; set; } = "winget";
 
+    // Optionele fallback voor apps die niet (goed) in winget staan — bv. VMware
+    // Workstation Pro, ON1 Photo RAW, Nvidia App. Wanneer DownloadUrl niet null is,
+    // skipt InstallDialog de winget-call en opent de URL in de default browser zodat
+    // user de installer handmatig kan downloaden. Card toont een "Manual download"
+    // badge i.p.v. de install-flow.
+    [JsonPropertyName("downloadUrl")]
+    public string? DownloadUrl { get; set; }
+
+    [JsonIgnore]
+    public bool IsManualDownload => !string.IsNullOrWhiteSpace(DownloadUrl);
+
+    [JsonIgnore]
+    public Visibility ManualDownloadVisibility =>
+        IsManualDownload ? Visibility.Visible : Visibility.Collapsed;
+
     private bool _isSelected;
     [JsonIgnore]
     public bool IsSelected

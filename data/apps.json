@@ -163,6 +163,12 @@
               "name": "VirtualBox",
               "wingetId": "Oracle.VirtualBox",
               "description": "Free open-source virtualization"
+            },
+            {
+              "name": "VMware Workstation Pro",
+              "wingetId": "VMware.WorkstationPro",
+              "description": "Full-feature desktop hypervisor (free for personal use)",
+              "downloadUrl": "https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion"
             }
           ]
         },
@@ -605,6 +611,13 @@
               "popular": true
             },
             {
+              "name": "Nvidia App",
+              "wingetId": "Nvidia.NvidiaApp",
+              "description": "GPU drivers, GeForce Experience replacement, game optimization",
+              "downloadUrl": "https://www.nvidia.com/en-us/software/nvidia-app/",
+              "popular": true
+            },
+            {
               "name": "Everything",
               "wingetId": "voidtools.Everything",
               "description": "Lightning-fast file search by name",
@@ -698,6 +711,12 @@
               "name": "Darktable",
               "wingetId": "darktable.darktable",
               "description": "Open-source RAW photo workflow"
+            },
+            {
+              "name": "ON1 Photo RAW",
+              "wingetId": "ON1.PhotoRAW",
+              "description": "Professional RAW photo editor + AI tools (commercial)",
+              "downloadUrl": "https://www.on1.com/products/photo-raw/"
             }
           ]
         },

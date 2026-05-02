@@ -57,6 +57,7 @@ $sources = @{
     # VMs
     'Docker.DockerDesktop'                = @{ domain = 'docker.com' }
     'Oracle.VirtualBox'                   = @{ domain = 'virtualbox.org' }
+    'VMware.WorkstationPro'               = @{ domain = 'vmware.com'; iconUrl = 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vmware-workstation.png' }
 
     # Databases
     'Oracle.MySQLWorkbench'               = @{ domain = 'mysql.com'; iconUrl = 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/mysql.png' }
@@ -158,6 +159,8 @@ $sources = @{
     'GIMP.GIMP'                           = @{ domain = 'gimp.org'; iconUrl = 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gimp.png' }
     'dotPDN.PaintDotNet'                  = @{ domain = 'getpaint.net'; iconUrl = 'https://img.icons8.com/?size=512&id=60851&format=png' }
     'darktable.darktable'                 = @{ domain = 'darktable.org'; iconUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Darktable_icon.svg/960px-Darktable_icon.svg.png' }
+    'ON1.PhotoRAW'                        = @{ domain = 'on1.com' }
+    'Nvidia.NvidiaApp'                    = @{ domain = 'nvidia.com'; iconUrl = 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/nvidia.png' }
 
     # Creative - Video
     'BlackmagicDesign.DaVinciResolve'     = @{ domain = 'blackmagicdesign.com'; iconUrl = 'https://vectorified.com/images/davinci-resolve-icon-6.jpg' }

@@ -34,17 +34,62 @@ public sealed partial class InstallDialog : ContentDialog
 
     private async void InstallDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
-        ProgressHeader.Text = $"Installing {_apps.Count} app{(_apps.Count == 1 ? "" : "s")}";
+        // Manual-download apps eerst afhandelen — geen winget call, gewoon URL
+        // openen in default browser zodat user de installer handmatig kan downloaden.
+        var manualApps = _apps.Where(a => a.IsManualDownload).ToList();
+        var wingetApps = _apps.Where(a => !a.IsManualDownload).ToList();
+
+        foreach (var app in manualApps)
+        {
+            var item = _items.FirstOrDefault(i => i.WingetId == app.WingetId);
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = app.DownloadUrl,
+                    UseShellExecute = true   // routes via shell → opent default browser
+                });
+                if (item != null)
+                {
+                    item.Message = "Opened vendor download page in browser";
+                    item.State = InstallItemState.ManualOpened;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (item != null)
+                {
+                    item.Message = $"Could not open URL: {ex.Message}";
+                    item.State = InstallItemState.Failed;
+                }
+            }
+        }
+
+        if (wingetApps.Count == 0)
+        {
+            // Alleen manual downloads geselecteerd — geen winget run nodig
+            var manualOk = manualApps.Count(a => _items.FirstOrDefault(i => i.WingetId == a.WingetId)?.State == InstallItemState.ManualOpened);
+            ProgressHeader.Text = $"Opened {manualOk} download page{(manualOk == 1 ? "" : "s")} — install manually";
+            _installFinished = true;
+            IsPrimaryButtonEnabled = true;
+            return;
+        }
+
+        ProgressHeader.Text = $"Installing {wingetApps.Count} app{(wingetApps.Count == 1 ? "" : "s")}";
 
         var progress = new Progress<InstallProgress>(OnProgress);
-        var results = await App.Winget.InstallAppsAsync(_apps, progress);
+        var results = await App.Winget.InstallAppsAsync(wingetApps, progress);
 
         var successCount = results.Count(kv => kv.Value.success);
         var failCount = results.Count - successCount;
+        var manualCount = manualApps.Count;
 
-        ProgressHeader.Text = failCount == 0
-            ? $"Installed {successCount} app{(successCount == 1 ? "" : "s")} successfully"
-            : $"{successCount} succeeded, {failCount} failed";
+        // Final summary text — combineert winget + manual results
+        var parts = new List<string>();
+        if (successCount > 0) parts.Add($"{successCount} installed");
+        if (failCount > 0)    parts.Add($"{failCount} failed");
+        if (manualCount > 0)  parts.Add($"{manualCount} manual download{(manualCount == 1 ? "" : "s")} opened");
+        ProgressHeader.Text = string.Join(", ", parts);
 
         _installFinished = true;
         IsPrimaryButtonEnabled = true;
@@ -109,7 +154,7 @@ public sealed partial class InstallDialog : ContentDialog
     }
 }
 
-public enum InstallItemState { Pending, Installing, Success, Failed }
+public enum InstallItemState { Pending, Installing, Success, Failed, ManualOpened }
 
 public sealed class InstallItem : INotifyPropertyChanged
 {
@@ -210,14 +255,14 @@ public sealed class InstallItem : INotifyPropertyChanged
         _state == InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility MessageVisibility =>
-        _state == InstallItemState.Installing && !string.IsNullOrEmpty(_message)
+        (_state == InstallItemState.Installing || _state == InstallItemState.ManualOpened) && !string.IsNullOrEmpty(_message)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
     // Text state label (right column) only shown outside the Installing phase;
     // during install the stage ring occupies that column instead.
     public Visibility StateLabelVisibility =>
-        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.Failed
+        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.Failed or InstallItemState.ManualOpened
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -225,6 +270,7 @@ public sealed class InstallItem : INotifyPropertyChanged
     {
         InstallItemState.Success => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
         InstallItemState.Failed => (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+        InstallItemState.ManualOpened => (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
         _ => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
     };
 
@@ -233,6 +279,7 @@ public sealed class InstallItem : INotifyPropertyChanged
         InstallItemState.Pending => "Waiting",
         InstallItemState.Success => "Installed",
         InstallItemState.Failed => "Failed",
+        InstallItemState.ManualOpened => "Browser opened",
         _ => string.Empty
     };
 

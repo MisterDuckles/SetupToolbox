@@ -100,3 +100,8 @@ data/icons-report.txt
 # AppIcon preview (gegenereerd door generate-app-icon.ps1, niet bron)
 data/app-icon-preview.png
 
+# Release artifacts (gepubliceerd via GitHub Releases, niet in repo)
+WingetAppDeployer-*.zip
+release-singlefile/
+release/
+
