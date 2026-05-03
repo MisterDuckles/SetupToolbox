@@ -126,6 +126,11 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.7.7 — Toast notificatie na /autoupdate
+- Nieuwe `Helpers/ToastHelper.cs` met `ShowAutoUpdateResult(bool success)`. Gebruikt `Microsoft.Windows.AppNotifications.AppNotificationManager` + `AppNotificationBuilder` uit WinAppSDK 1.4+. Voor unpackaged WinUI 3 vereist `AppNotificationManager.Default.Register()` één keer voor de eerste Show — registreert AUMID + COM activator in HKCU. Best-effort: try/catch op zowel Register als Show zodat een geweigerde notificatie de auto-update flow nooit kan crashen
+- `App.xaml.cs` `/autoupdate` handler captured nu de bool result van `UpdateAllAppsAsync()`, post een toast ("All apps have been updated." / "Update finished with errors. Open the app for details.") en wacht 1.5s voor `Environment.Exit(0)` zodat het OS tijd heeft om de toast door te geven voor het proces stopt
+- Use case: scheduled task draait stil in achtergrond, user ziet via Action Center (Win+A) dat de update gelopen heeft. Geen window, geen interruptie — pure feedback
+
 ### v0.7.6 — First-time prompt voor parallel installs
 - Nieuwe `Helpers/ParallelInstallsPrompt.cs` met static `MaybeShowAsync(XamlRoot)`. Toont 1× een ContentDialog "Install apps in parallel?" wanneer user op Install klikt en `ParallelInstallsAsked` nog false is. 2 knoppen: **Yes, install faster** (Primary, accent) → zet `ParallelInstalls = true`, **No, one at a time** (Close, neutral) → zet `ParallelInstalls = false`. Beide zetten `ParallelInstallsAsked = true` zodat de vraag nooit meer terugkomt
 - Nieuwe `SettingsService.ParallelInstallsAsked` setting (default false). Bedoeld voor users die niet zelf naar Settings navigeren — bewuste keuze tijdens hun eerste install
@@ -231,7 +236,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 - WinUI Launcher: kleine bootstrap exe (~5KB) die de full app downloadt naar `%ProgramFiles%`. Nodig voor Windows11-Unattended-Debloat integratie waarin we niet de hele 80MB app via firstlogon willen pushen
 - ~~Post-install "Schedule auto-updates?" prompt~~ — gedaan in v0.7.3
-- Toast notificatie na `/autoupdate` via `CommunityToolkit.WinUI.Notifications` — landt in Action Center
+- ~~Toast notificatie na `/autoupdate`~~ — gedaan in v0.7.7 (via `Microsoft.Windows.AppNotifications`, niet `CommunityToolkit.WinUI.Notifications` — die laatste is voor UWP)
 - ~~Parallel installaties~~ — gedaan in v0.7.5 (MSI-based installers blokkeren elkaar via Windows Installer lock — fundamentele platform-beperking, niet oplosbaar)
 - ~~Installation profiles~~ — geschrapt: user-gedefinieerde export/import (v0.7.4) dekt deze behoefte; vooraf-gedefinieerde profiles voegen weinig waarde toe
 - ~~Export/Import selectie naar JSON~~ — gedaan in v0.7.4

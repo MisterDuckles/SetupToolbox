@@ -55,14 +55,25 @@ public partial class App : Application
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         // When launched by the scheduled task with "/autoupdate", run winget
-        // upgrade --all silently and exit — no window, no UI.
+        // upgrade --all silently, post een toast naar Action Center, en exit —
+        // geen window, geen UI behalve de notificatie. Korte sleep na Show()
+        // geeft het OS tijd om de toast door te geven voor het proces stopt.
         var cmdArgs = Environment.GetCommandLineArgs();
         if (cmdArgs.Length > 1 && IsAutoUpdateArg(cmdArgs[1]))
         {
             _ = Task.Run(async () =>
             {
-                try { await Winget.UpdateAllAppsAsync(); }
-                finally { Environment.Exit(0); }
+                var success = false;
+                try
+                {
+                    success = await Winget.UpdateAllAppsAsync();
+                }
+                finally
+                {
+                    Helpers.ToastHelper.ShowAutoUpdateResult(success);
+                    await Task.Delay(1500);
+                    Environment.Exit(0);
+                }
             });
             return;
         }
