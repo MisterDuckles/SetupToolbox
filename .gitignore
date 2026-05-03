@@ -88,8 +88,9 @@ $RECYCLE.BIN/
 appsettings.Development.json
 appsettings.local.json
 
-# Claude Code personal settings
+# Claude Code personal settings + sessie-state
 .claude/settings.local.json
+.claude/*.lock
 
 # Lokale config met URL + token voor private apps.json fetch — bevat secrets
 data-source.local.txt

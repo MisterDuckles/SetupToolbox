@@ -242,13 +242,13 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ### v0.7.0 — Install flow UX polish + Launcher port
 
-- WinUI Launcher: kleine bootstrap exe (~5KB) die de full app downloadt naar `%ProgramFiles%`. Nodig voor Windows11-Unattended-Debloat integratie waarin we niet de hele 80MB app via firstlogon willen pushen
+- ~~WinUI Launcher~~ — geschrapt: Inno Setup installer met `/SILENT` (op v1.0 roadmap) dekt exact dezelfde unattended-install rol én geeft proper Start Menu / uninstaller. Launcher zou dubbele moeite zijn
 - ~~Post-install "Schedule auto-updates?" prompt~~ — gedaan in v0.7.3
-- ~~Toast notificatie na `/autoupdate`~~ — gedaan in v0.7.7 (via `Microsoft.Windows.AppNotifications`, niet `CommunityToolkit.WinUI.Notifications` — die laatste is voor UWP)
-- ~~Parallel installaties~~ — gedaan in v0.7.5 (MSI-based installers blokkeren elkaar via Windows Installer lock — fundamentele platform-beperking, niet oplosbaar)
+- ~~Toast notificatie na `/autoupdate`~~ — gedaan in v0.7.7/v0.7.8 (via `Microsoft.Toolkit.Uwp.Notifications`; WinAppSDK's eigen API faalt op unpackaged WinUI 3 met "Class not registered")
+- ~~Parallel installaties~~ — gedaan in v0.7.5 + v0.7.6 (MSI-based installers blokkeren elkaar via Windows Installer lock — fundamentele platform-beperking, niet oplosbaar)
 - ~~Installation profiles~~ — geschrapt: user-gedefinieerde export/import (v0.7.4) dekt deze behoefte; vooraf-gedefinieerde profiles voegen weinig waarde toe
 - ~~Export/Import selectie naar JSON~~ — gedaan in v0.7.4
-- Installatie geschiedenis / log — append-log in `%LOCALAPPDATA%`, "View install history" in Settings
+- ~~Installatie geschiedenis / log~~ — geschrapt: `winget list` is al de source of truth; per-install feedback zit al in InstallDialog. Persistent log is meer noise dan signal
 - ~~"Fallback to download page" toggle~~ — gedaan in v0.7.1 (downloadUrl + Manual download badge) en v0.7.2 (Settings toggle)
 
 ### v0.8.0 — Debloat tab full
@@ -287,7 +287,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 **v1.0.0 — eerste stable release**
 - Self-update via GitHub (v0.10.0) werkt
-- Launcher (v0.7.0) werkt voor unattended-debloat integratie
+- Inno Setup `/SILENT` install dekt de unattended-debloat rol (was eerder gepland als losse v0.7.0 Launcher exe — geschrapt omdat Inno Setup dezelfde rol vervult)
 - **Inno Setup installer** met silent-install support (`/SILENT` + `/VERYSILENT` flags). Reden: ZIP+folder-distributie is OK voor early access maar is ruw — installer geeft proper Start Menu entry, uninstaller, en (cruciaal) **scriptable silent install** voor Windows11-Unattended-Debloat integratie. Inno Setup is gratis, geen licentiekosten. Note: sign-cert blijft buiten scope (kosten); SmartScreen reputation bouwt zich vanzelf op naarmate downloads stijgen
 - WinUI 3 single-file publish geprobeerd, faalt met `Microsoft.UI.Xaml.dll` 0xc000027b crash door XAML/WinRT activation lookups die filesystem-paden eisen — niet oplosbaar zonder bootstrap-launcher hack ([WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Daarom installer i.p.v. single-exe
 - Geen P0 bugs
