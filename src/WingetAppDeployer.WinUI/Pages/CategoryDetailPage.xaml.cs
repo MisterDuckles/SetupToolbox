@@ -256,6 +256,8 @@ public sealed partial class CategoryDetailPage : Page
         var selected = SelectionHelper.GetSelectedApps(_db);
         if (selected.Count == 0) return;
 
+        await Helpers.ParallelInstallsPrompt.MaybeShowAsync(this.XamlRoot);
+
         var dialog = new InstallDialog(selected) { XamlRoot = this.XamlRoot };
         await dialog.ShowAsync();
 

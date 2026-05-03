@@ -78,6 +78,21 @@ public sealed class SettingsService
         }
     }
 
+    // Heeft user de "wil je parallel installs?" first-time prompt al beantwoord?
+    // Wordt true gezet zodra user een keuze maakt — daarna nooit meer vragen.
+    // Setting is bedoeld voor users die niet zelf naar Settings navigeren maar
+    // wel willen profiteren van de speed-up.
+    public bool ParallelInstallsAsked
+    {
+        get => _data.ParallelInstallsAsked;
+        set
+        {
+            if (_data.ParallelInstallsAsked == value) return;
+            _data.ParallelInstallsAsked = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -118,5 +133,8 @@ public sealed class SettingsService
 
         [JsonPropertyName("parallelInstalls")]
         public bool ParallelInstalls { get; set; } = false;
+
+        [JsonPropertyName("parallelInstallsAsked")]
+        public bool ParallelInstallsAsked { get; set; } = false;
     }
 }
