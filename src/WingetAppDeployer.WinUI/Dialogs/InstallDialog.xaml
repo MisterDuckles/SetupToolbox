@@ -11,7 +11,8 @@
     PrimaryButtonText="Close"
     IsPrimaryButtonEnabled="False"
     DefaultButton="Primary"
-    CornerRadius="8">
+    CornerRadius="8"
+    PrimaryButtonStyle="{StaticResource DialogPrimaryButtonStyle}">
 
     <ContentDialog.Resources>
         <!-- ContentDialog ignores the MinWidth/MaxWidth attributes on the element

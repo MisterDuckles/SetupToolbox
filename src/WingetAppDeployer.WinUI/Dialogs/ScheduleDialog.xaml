@@ -10,7 +10,9 @@
     PrimaryButtonText="Create schedule"
     CloseButtonText="Cancel"
     DefaultButton="Primary"
-    CornerRadius="8">
+    CornerRadius="8"
+    PrimaryButtonStyle="{StaticResource DialogPrimaryButtonStyle}"
+    CloseButtonStyle="{StaticResource DialogDefaultButtonStyle}">
 
     <ContentDialog.Resources>
         <x:Double x:Key="ContentDialogMinWidth">480</x:Double>

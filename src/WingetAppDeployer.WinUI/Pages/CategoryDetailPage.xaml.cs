@@ -263,6 +263,9 @@ public sealed partial class CategoryDetailPage : Page
         await RefreshInstalledStateAsync(forceRefresh: true);
         UpdateSelectionCount();
         UpdateSelectAllButton();
+
+        if (dialog.HadSuccessfulInstall)
+            await Helpers.ScheduleAutoUpdatePrompt.MaybeShowAsync(this.XamlRoot);
     }
 
     private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)

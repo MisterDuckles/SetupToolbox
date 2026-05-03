@@ -46,6 +46,21 @@ public sealed class SettingsService
         }
     }
 
+    // Onderdrukt de post-install "Schedule auto-updates?" prompt zodat user
+    // niet bij elke install opnieuw gevraagd wordt. Wordt gezet wanneer user
+    // op "Don't ask again" klikt. Default false zodat de prompt minstens één
+    // keer verschijnt.
+    public bool DontAskAboutScheduling
+    {
+        get => _data.DontAskAboutScheduling;
+        set
+        {
+            if (_data.DontAskAboutScheduling == value) return;
+            _data.DontAskAboutScheduling = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -80,5 +95,8 @@ public sealed class SettingsService
     {
         [JsonPropertyName("fallbackToDownloadPage")]
         public bool FallbackToDownloadPage { get; set; } = true;
+
+        [JsonPropertyName("dontAskAboutScheduling")]
+        public bool DontAskAboutScheduling { get; set; } = false;
     }
 }

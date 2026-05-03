@@ -35,12 +35,20 @@ public sealed partial class ScheduleDialog : ContentDialog
                 ? null
                 : $"{TimePickerCtrl.Time.Hours:D2}:{TimePickerCtrl.Time.Minutes:D2}";
 
-            var result = await App.TaskScheduler.CreateUpdateTaskAsync(scheduleType, timeString);
+            var outcome = await App.TaskScheduler.CreateUpdateTaskAsync(scheduleType, timeString);
 
-            switch (result)
+            switch (outcome.Result)
             {
                 case CreateTaskResult.Success:
-                    // Dialog will close normally via the primary button action.
+                    // Dialog open houden zodat user de bevestiging ziet. Primary
+                    // wordt disabled, Close-tekst wordt "Done" zodat de exit-knop
+                    // duidelijk is.
+                    args.Cancel = true;
+                    ShowInfo(InfoBarSeverity.Success,
+                        "Scheduled task created",
+                        BuildScheduleDescription(scheduleType, timeString));
+                    IsPrimaryButtonEnabled = false;
+                    CloseButtonText = "Done";
                     break;
 
                 case CreateTaskResult.UserCancelled:
@@ -55,7 +63,7 @@ public sealed partial class ScheduleDialog : ContentDialog
                     args.Cancel = true;
                     ShowInfo(InfoBarSeverity.Error,
                         "Could not create scheduled task",
-                        "schtasks.exe gaf een fout terug. Probeer de app opnieuw te starten of check of de taak al bestaat.");
+                        outcome.ErrorOutput ?? "schtasks.exe gaf een fout terug zonder output.");
                     break;
             }
         }
@@ -81,4 +89,13 @@ public sealed partial class ScheduleDialog : ContentDialog
         ResultBar.Message = message;
         ResultBar.IsOpen = true;
     }
+
+    private static string BuildScheduleDescription(UpdateScheduleType scheduleType, string? time) =>
+        scheduleType switch
+        {
+            UpdateScheduleType.Daily => $"'winget upgrade --all' draait elke dag om {time ?? "09:00"}.",
+            UpdateScheduleType.Weekly => $"'winget upgrade --all' draait elke maandag om {time ?? "09:00"}.",
+            UpdateScheduleType.OnStartup => "'winget upgrade --all' draait bij elke gebruikers-login.",
+            _ => "Scheduled task is aangemaakt."
+        };
 }

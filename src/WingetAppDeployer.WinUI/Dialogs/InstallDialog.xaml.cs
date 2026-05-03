@@ -18,6 +18,12 @@ public sealed partial class InstallDialog : ContentDialog
     private readonly IReadOnlyList<AppModel> _apps;
     private bool _installFinished;
 
+    // True wanneer minstens één winget install slaagde. Calling page gebruikt
+    // dit om de post-install "Schedule auto-updates?" prompt alleen te tonen
+    // als er ook iets te schedulen valt (geen prompt na 0 successes / alle
+    // failed of alle skipped).
+    public bool HadSuccessfulInstall { get; private set; }
+
     public InstallDialog(IReadOnlyList<AppModel> apps)
     {
         InitializeComponent();
@@ -95,6 +101,7 @@ public sealed partial class InstallDialog : ContentDialog
 
         var successCount = results.Count(kv => kv.Value.success);
         var failCount = results.Count - successCount;
+        if (successCount > 0) HadSuccessfulInstall = true;
 
         // Final summary text — combineert winget + manual results
         var summaryParts = new List<string>();

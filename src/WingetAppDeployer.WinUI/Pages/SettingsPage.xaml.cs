@@ -62,14 +62,20 @@ public sealed partial class SettingsPage : Page
 
     private async void DisableButton_Click(object sender, RoutedEventArgs e)
     {
+        var resources = Microsoft.UI.Xaml.Application.Current.Resources;
         var confirm = new ContentDialog
         {
             Title = "Disable auto-updates?",
             Content = "This removes the Windows scheduled task. You can re-create it any time.",
             PrimaryButtonText = "Disable",
             CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
+            // DefaultButton.None — anders krijgt de aangewezen button auto-accent
+            // styling die onze CloseButtonStyle overschrijft (beide knoppen blauw).
+            // Voor destructive actions sowieso veiliger: geen Enter-shortcut.
+            DefaultButton = ContentDialogButton.None,
             CornerRadius = new Microsoft.UI.Xaml.CornerRadius(8),
+            PrimaryButtonStyle = (Microsoft.UI.Xaml.Style)resources["DialogPrimaryButtonStyle"],
+            CloseButtonStyle = (Microsoft.UI.Xaml.Style)resources["DialogDefaultButtonStyle"],
             XamlRoot = this.XamlRoot
         };
 
@@ -84,6 +90,7 @@ public sealed partial class SettingsPage : Page
                 : "schtasks.exe failed to delete the task (admin prompt geweigerd of schtasks-fout).",
             CloseButtonText = "OK",
             CornerRadius = new Microsoft.UI.Xaml.CornerRadius(8),
+            CloseButtonStyle = (Microsoft.UI.Xaml.Style)resources["DialogDefaultButtonStyle"],
             XamlRoot = this.XamlRoot
         };
         await result.ShowAsync();

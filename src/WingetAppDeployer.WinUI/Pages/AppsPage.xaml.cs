@@ -105,6 +105,9 @@ public sealed partial class AppsPage : Page
 
         foreach (var app in selected) app.IsSelected = false;
         UpdateSelectionFooter();
+
+        if (dialog.HadSuccessfulInstall)
+            await Helpers.ScheduleAutoUpdatePrompt.MaybeShowAsync(this.XamlRoot);
     }
 
     private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
