@@ -71,9 +71,23 @@ public partial class App : Application
                 finally
                 {
                     Helpers.ToastHelper.ShowAutoUpdateResult(success);
-                    await Task.Delay(1500);
+                    await Task.Delay(3000);
                     Environment.Exit(0);
                 }
+            });
+            return;
+        }
+
+        // Debug switch — toast tonen zonder eerst minuten op winget upgrade --all
+        // te wachten. Handig om in dev te verifiëren dat AppNotificationManager
+        // registratie + Show effectief landen in Action Center.
+        if (cmdArgs.Length > 1 && cmdArgs[1].Equals("/toasttest", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Task.Run(async () =>
+            {
+                Helpers.ToastHelper.ShowAutoUpdateResult(true);
+                await Task.Delay(3000);
+                Environment.Exit(0);
             });
             return;
         }

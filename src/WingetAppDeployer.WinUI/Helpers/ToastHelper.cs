@@ -1,54 +1,43 @@
 using System;
-using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
+using System.IO;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace WingetAppDeployer_WinUI.Helpers;
 
-// AppNotificationManager (WinAppSDK 1.4+) werkt voor unpackaged WinUI 3 apps,
-// mits we vóór de eerste Show() registreren. Register() schrijft een HKCU-entry
-// met AUMID + COM activator zodat het OS de toast kan tonen en (theoretisch)
-// de app kan launchen op activate. We gebruiken alleen Show — onze /autoupdate
-// run exit direct na de toast.
+// Toast notificaties voor unpackaged WinUI 3 apps via Microsoft.Toolkit.Uwp.Notifications.
+// Onderwater gebruikt dit ToastNotificationManagerCompat dat bij eerste Show()
+// automatisch een Start Menu shortcut + AUMID aanmaakt — daardoor accepteert
+// het OS de toast zonder dat we zelf een COM activator class hoeven implementeren.
+// (WinAppSDK's eigen AppNotificationManager faalt op unpackaged met "Class not registered".)
 internal static class ToastHelper
 {
-    private static bool _registered;
-
-    private static void EnsureRegistered()
-    {
-        if (_registered) return;
-        try
-        {
-            AppNotificationManager.Default.Register();
-            _registered = true;
-        }
-        catch
-        {
-            // Registratie kan falen wanneer het systeem notificaties geblokt heeft
-            // (Focus Assist policy, group policy). Zwijg en skip — geen kritiek.
-        }
-    }
+    private static string LogPath => Path.Combine(Path.GetTempPath(), "WingetAppDeployer_toast.log");
 
     public static void ShowAutoUpdateResult(bool success)
     {
         try
         {
-            EnsureRegistered();
-            if (!_registered) return;
-
-            var notification = new AppNotificationBuilder()
+            new ToastContentBuilder()
                 .AddText("WingetAppDeployer")
                 .AddText(success
                     ? "All apps have been updated."
                     : "Update finished with errors. Open the app for details.")
-                .BuildNotification();
+                .Show();
 
-            AppNotificationManager.Default.Show(notification);
+            Log($"Show() OK (success={success})");
         }
-        catch
+        catch (Exception ex)
         {
-            // Toast is best-effort — onder het scheduled task in een non-interactive
-            // session kan het OS Show() weigeren. We willen sowieso NIET dat een
-            // toast-fail de auto-update flow doet crashen.
+            Log($"Show() FAILED: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private static void Log(string line)
+    {
+        try
+        {
+            File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} {line}{Environment.NewLine}");
+        }
+        catch { /* swallow — logging is best-effort */ }
     }
 }

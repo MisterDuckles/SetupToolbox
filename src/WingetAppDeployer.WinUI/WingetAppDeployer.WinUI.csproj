@@ -72,6 +72,12 @@
          of the Windows App Runtime are missing — Version 2.x"). 1.8 wordt
          systeembreed gebruikt en self-contained gepublished naar exe. -->
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <!-- ToastContentBuilder voor unpackaged Win32/WinUI apps. WinAppSDK's
+         eigen Microsoft.Windows.AppNotifications faalt met "Class not
+         registered" zonder een COM activator class. Dit toolkit-pakket
+         registreert via ToastNotificationManagerCompat automatisch een
+         Start Menu shortcut + AUMID bij eerste Show(). -->
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.*" />
   </ItemGroup>
 
   <!--
