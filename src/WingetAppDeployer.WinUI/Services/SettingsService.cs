@@ -61,6 +61,23 @@ public sealed class SettingsService
         }
     }
 
+    // Run twee winget installs tegelijk i.p.v. sequentieel. Default false omdat
+    // sommige MSI-installers single-instance locks hebben en falen wanneer een
+    // andere installer in dezelfde MSI-engine actief is. Voor power users die
+    // typisch lossere apps installeren (Firefox, VS Code, Discord) levert het
+    // ~2x snelheidswinst zonder problemen op. Hard-cap op 2 — meer dan 2
+    // tegelijk wordt riskant op typische Windows-machines.
+    public bool ParallelInstalls
+    {
+        get => _data.ParallelInstalls;
+        set
+        {
+            if (_data.ParallelInstalls == value) return;
+            _data.ParallelInstalls = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -98,5 +115,8 @@ public sealed class SettingsService
 
         [JsonPropertyName("dontAskAboutScheduling")]
         public bool DontAskAboutScheduling { get; set; } = false;
+
+        [JsonPropertyName("parallelInstalls")]
+        public bool ParallelInstalls { get; set; } = false;
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -215,16 +216,26 @@ public sealed class WingetService
         {
             progress?.Report($"Installing {wingetId}...");
 
-            // Source-bewust: msstore-only apps zoals WhatsApp en Apple Music
-            // (product-codes als 9NKSQGP7F2NH) hebben --source msstore nodig,
-            // anders kan winget ze niet vinden in de community-repo.
-            var sourceFlag = string.IsNullOrEmpty(source) || source == "winget"
-                ? string.Empty
-                : $" --source {source}";
+            // Source-bewust install. msstore apps (productID-formaat 9XXX of XPXXX)
+            // installeren TANTOE traag wanneer we --silent + --source msstore
+            // forceren — die combinatie gebruikt onder water een COM-pad dat de
+            // download-stream throttlet. `winget install <id>` zonder die flags
+            // (zoals user kan reproduceren in PowerShell) gaat direct via de
+            // native Microsoft Store backend en is meervoudig sneller.
+            //
+            // Voor reguliere winget apps blijven we wel --silent --exact gebruiken
+            // — daar werkt het wel goed en hebben we de stille install nodig.
+            string args;
+            if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase))
+            {
+                args = $"install {wingetId} --accept-source-agreements --accept-package-agreements";
+            }
+            else
+            {
+                args = $"install --id {wingetId} --exact --silent --accept-source-agreements --accept-package-agreements";
+            }
 
-            var (exitCode, output, error) = await RunWingetCommandAsync(
-                $"install --id {wingetId} --exact --silent --accept-source-agreements --accept-package-agreements{sourceFlag}",
-                line => progress?.Report(line));
+            var (exitCode, output, error) = await RunWingetCommandAsync(args, line => progress?.Report(line));
 
             if (exitCode == 0)
             {
@@ -245,16 +256,49 @@ public sealed class WingetService
 
     public async Task<Dictionary<string, (bool success, string message)>> InstallAppsAsync(
         IReadOnlyList<AppModel> apps,
-        IProgress<InstallProgress>? overall = null)
+        IProgress<InstallProgress>? overall = null,
+        int maxParallelism = 1)
     {
-        var results = new Dictionary<string, (bool, string)>();
+        var results = new ConcurrentDictionary<string, (bool, string)>();
         var total = apps.Count;
+        var degree = Math.Max(1, Math.Min(maxParallelism, 4));
+
+        // SemaphoreSlim begrenst hoeveel apps tegelijk in de winget-call mogen.
+        // Bij maxParallelism=1 blijft het effectief sequentieel (zelfde gedrag
+        // als de oude for-loop), bij 2+ draaien meerdere installs concurrent.
+        // Hard-cap op 4 — meer dan dat is sowieso nooit veilig op typische
+        // Windows-machines i.v.m. MSI-engine locks.
+        using var sem = new SemaphoreSlim(degree);
+        var tasks = new List<Task>(total);
 
         for (var i = 0; i < total; i++)
         {
             var app = apps[i];
             var index = i + 1;
+            tasks.Add(InstallOneInBatchAsync(app, index, total, sem, results, overall));
+        }
 
+        await Task.WhenAll(tasks);
+
+        // Preserve input order in returned dict zodat UI summary deterministic blijft.
+        var ordered = new Dictionary<string, (bool, string)>();
+        foreach (var app in apps)
+            if (results.TryGetValue(app.WingetId, out var v))
+                ordered[app.WingetId] = v;
+        return ordered;
+    }
+
+    private async Task InstallOneInBatchAsync(
+        AppModel app,
+        int index,
+        int total,
+        SemaphoreSlim sem,
+        ConcurrentDictionary<string, (bool, string)> results,
+        IProgress<InstallProgress>? overall)
+    {
+        await sem.WaitAsync();
+        try
+        {
             overall?.Report(new InstallProgress(index, total, app, InstallPhase.Starting, $"Starting {app.Name}"));
 
             var perApp = new Progress<string>(msg =>
@@ -267,11 +311,11 @@ public sealed class WingetService
                 index, total, app,
                 success ? InstallPhase.Success : InstallPhase.Failed,
                 message));
-
-            await Task.Delay(200);
         }
-
-        return results;
+        finally
+        {
+            sem.Release();
+        }
     }
 
     private static string FriendlyError(string error, string output, string wingetId)

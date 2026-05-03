@@ -20,6 +20,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0"
@@ -126,13 +127,50 @@
                 </Grid>
             </Border>
 
-            <TextBlock Grid.Row="5"
+            <!-- Parallel installs toggle -->
+            <Border Grid.Row="5"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16"
+                    Margin="0,8,0,0">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xE9F5;"
+                              FontSize="20"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="Run installs in parallel"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Install up to 2 apps at the same time. Roughly halves install time, but some MSI installers fail when run concurrently — disable if you see weird install errors." />
+                    </StackPanel>
+
+                    <ToggleSwitch x:Name="ParallelToggle"
+                                  Grid.Column="2"
+                                  VerticalAlignment="Center"
+                                  Toggled="ParallelToggle_Toggled" />
+                </Grid>
+            </Border>
+
+            <TextBlock Grid.Row="6"
                        Text="App selection"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <!-- Export / Import card -->
-            <Border Grid.Row="6"
+            <Border Grid.Row="7"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -184,7 +222,7 @@
             </Border>
 
             <InfoBar x:Name="SelectionResultBar"
-                     Grid.Row="7"
+                     Grid.Row="8"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"

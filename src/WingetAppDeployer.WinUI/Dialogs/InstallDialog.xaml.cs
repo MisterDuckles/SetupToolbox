@@ -17,6 +17,9 @@ public sealed partial class InstallDialog : ContentDialog
     private readonly ObservableCollection<InstallItem> _items = new();
     private readonly IReadOnlyList<AppModel> _apps;
     private bool _installFinished;
+    private int _completedCount;
+    private int _wingetTotal;
+    private string _parallelLabel = string.Empty;
 
     // True wanneer minstens één winget install slaagde. Calling page gebruikt
     // dit om de post-install "Schedule auto-updates?" prompt alleen te tonen
@@ -40,10 +43,11 @@ public sealed partial class InstallDialog : ContentDialog
 
     private async void InstallDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
-        // Manual-download apps eerst afhandelen — geen winget call. Als de
-        // FallbackToDownloadPage setting AAN staat openen we de vendor URL in
-        // de default browser; staat hij UIT dan slaan we de app over met een
-        // "Skipped" status zodat user weet waarom er niks gebeurde.
+        // Manual-download apps (downloadUrl) eerst afhandelen — geen winget call,
+        // gewoon URL openen. msstore apps gaan WEL via winget, maar met aangepaste
+        // flags (zie WingetService.InstallAppAsync) — equivalent met handmatig
+        // `winget install <productID>` runnen, wat dramatisch sneller is dan
+        // `winget install --silent --source msstore`.
         var manualApps = _apps.Where(a => a.IsManualDownload).ToList();
         var wingetApps = _apps.Where(a => !a.IsManualDownload).ToList();
         var fallbackEnabled = App.Settings.FallbackToDownloadPage;
@@ -94,10 +98,14 @@ public sealed partial class InstallDialog : ContentDialog
             return;
         }
 
-        ProgressHeader.Text = $"Installing {wingetApps.Count} app{(wingetApps.Count == 1 ? "" : "s")}";
+        var maxParallelism = App.Settings.ParallelInstalls ? 2 : 1;
+        _parallelLabel = maxParallelism > 1 ? " (2 in parallel)" : string.Empty;
+        _wingetTotal = wingetApps.Count;
+        _completedCount = 0;
+        ProgressHeader.Text = $"Installing {_wingetTotal} app{(_wingetTotal == 1 ? "" : "s")}{_parallelLabel}";
 
         var progress = new Progress<InstallProgress>(OnProgress);
-        var results = await App.Winget.InstallAppsAsync(wingetApps, progress);
+        var results = await App.Winget.InstallAppsAsync(wingetApps, progress, maxParallelism);
 
         var successCount = results.Count(kv => kv.Value.success);
         var failCount = results.Count - successCount;
@@ -158,13 +166,19 @@ public sealed partial class InstallDialog : ContentDialog
             case InstallPhase.Success:
                 item.State = InstallItemState.Success;
                 item.AdvanceStage(4); // Done — ring is hidden anyway, checkmark takes over
+                _completedCount++;
                 break;
             case InstallPhase.Failed:
                 item.State = InstallItemState.Failed;
+                _completedCount++;
                 break;
         }
 
-        ProgressHeader.Text = $"Installing {p.CurrentIndex} of {p.Total}: {p.App.Name}";
+        // Bij parallel mode is "X of Y: Name" verwarrend (meerdere apps lopen
+        // tegelijk, name flikkert tussen winners). Tonen we count-based:
+        // "Installing 3 of 8 done (2 in parallel)". Bij sequential is het
+        // gedrag effectief identiek aan de oude per-app header.
+        ProgressHeader.Text = $"Installing — {_completedCount} of {_wingetTotal} done{_parallelLabel}";
     }
 
     private void InstallDialog_Closing(ContentDialog sender, ContentDialogClosingEventArgs args)

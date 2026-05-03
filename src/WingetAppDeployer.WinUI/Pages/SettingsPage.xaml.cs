@@ -25,6 +25,7 @@ public sealed partial class SettingsPage : Page
         // page-navigatie de current value terug naar disk (no-op maar onnodig IO).
         _suppressToggleEvent = true;
         FallbackToggle.IsOn = App.Settings.FallbackToDownloadPage;
+        ParallelToggle.IsOn = App.Settings.ParallelInstalls;
         _suppressToggleEvent = false;
 
         await RefreshScheduleStatusAsync();
@@ -34,6 +35,12 @@ public sealed partial class SettingsPage : Page
     {
         if (_suppressToggleEvent) return;
         App.Settings.FallbackToDownloadPage = FallbackToggle.IsOn;
+    }
+
+    private void ParallelToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToggleEvent) return;
+        App.Settings.ParallelInstalls = ParallelToggle.IsOn;
     }
 
     private async System.Threading.Tasks.Task RefreshScheduleStatusAsync()
