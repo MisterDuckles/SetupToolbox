@@ -142,6 +142,23 @@ public class App : INotifyPropertyChanged
         }
     }
 
+    // Selection-state voor de Debloat-pagina, los van IsSelected (= install-selectie
+    // op AppsPage / CategoryDetailPage). Beide pagina's gebruiken dezelfde App-instances
+    // dankzij AppDatabaseService caching, dus zonder aparte flag zou Debloat-checkboxes
+    // de install-selection vervuilen en omgekeerd.
+    private bool _isSelectedForUninstall;
+    [JsonIgnore]
+    public bool IsSelectedForUninstall
+    {
+        get => _isSelectedForUninstall;
+        set
+        {
+            if (_isSelectedForUninstall == value) return;
+            _isSelectedForUninstall = value;
+            OnChanged();
+        }
+    }
+
     // BitmapImage i.p.v. string-pad: x:Bind doet geen automatische conversie
     // van string → ImageSource (alleen XAML-markup wel via TypeConverter).
     // Filename = WingetId met dots vervangen door hyphens — Windows PRI parser

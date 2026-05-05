@@ -181,12 +181,50 @@ public sealed class WingetService
         }
     }
 
+    /// <summary>
+    /// Uninstall een batch apps sequentieel. Mirror van InstallAppsAsync's API zodat
+    /// de UI hetzelfde Progress-pattern kan gebruiken. Sequential omdat parallel
+    /// uninstall meer kans geeft op Windows Installer locks (MSI engine = single-instance)
+    /// zonder noemenswaardig snelheidsvoordeel — uninstall zelf is snel.
+    /// </summary>
+    public async Task<Dictionary<string, (bool success, string message)>> UninstallAppsAsync(
+        IReadOnlyList<AppModel> apps,
+        IProgress<UninstallProgress>? overall = null)
+    {
+        var results = new Dictionary<string, (bool, string)>();
+        var total = apps.Count;
+
+        for (var i = 0; i < total; i++)
+        {
+            var app = apps[i];
+            var index = i + 1;
+
+            overall?.Report(new UninstallProgress(index, total, app, UninstallPhase.Running, $"Uninstalling {app.Name}"));
+
+            var (success, message) = await UninstallAppAsync(app.WingetId);
+            results[app.WingetId] = (success, message);
+
+            overall?.Report(new UninstallProgress(
+                index, total, app,
+                success ? UninstallPhase.Success : UninstallPhase.Failed,
+                message));
+        }
+
+        return results;
+    }
+
     public async Task<(bool success, string message)> UninstallAppAsync(string wingetId)
     {
         try
         {
+            // --silent: vraagt het package om silent uninstall (afhankelijk van of het
+            //   uninstaller binary die flag respecteert — niet alle installers doen dat).
+            // --disable-interactivity: zet winget's eigen interactive prompts uit. Sommige
+            //   uninstallers tonen alsnog hun eigen UI (Antigravity, Adobe Acrobat, etc.) —
+            //   dat is een per-installer-respect ding waar we niets aan kunnen doen.
+            // Restant-opruiming (--purge) wordt in v0.8.5 als expliciete user-keuze gebouwd.
             var (exitCode, output, error) = await RunWingetCommandAsync(
-                $"uninstall --id {wingetId} --exact --silent --accept-source-agreements");
+                $"uninstall --id {wingetId} --exact --silent --disable-interactivity --accept-source-agreements");
 
             if (exitCode == 0)
             {
@@ -423,4 +461,19 @@ public readonly record struct InstallProgress(
     int Total,
     AppModel App,
     InstallPhase Phase,
+    string Message);
+
+public enum UninstallPhase
+{
+    Pending,
+    Running,
+    Success,
+    Failed
+}
+
+public readonly record struct UninstallProgress(
+    int CurrentIndex,
+    int Total,
+    AppModel App,
+    UninstallPhase Phase,
     string Message);

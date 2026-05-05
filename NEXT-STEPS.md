@@ -126,6 +126,14 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.8.1 — Bulk uninstall + UninstallDialog
+
+- Nieuwe `App.IsSelectedForUninstall` (INPC) los van `IsSelected` zodat de Debloat-pagina selectie-state niet kruist met de install-selectie van AppsPage / CategoryDetailPage. Beide pagina's gebruiken dezelfde App-instances dankzij `AppDatabaseService` caching, dus zonder aparte flag zou een Debloat-checkbox de install-footer count vervuilen
+- `WingetService.UninstallAppsAsync(IReadOnlyList<App>, IProgress<UninstallProgress>)` — sequential batch met per-app progress events, mirror van `InstallAppsAsync` API. Sequential by design omdat parallel uninstall meer kans geeft op Windows Installer locks (MSI-engine = single-instance) zonder noemenswaardig snelheidsvoordeel — uninstall is sowieso snel. Nieuwe `UninstallProgress` record + `UninstallPhase` enum (Pending / Running / Success / Failed)
+- Nieuwe `Dialogs/UninstallDialog.xaml` + `.xaml.cs` als spiegel van `InstallDialog`. Geen 4-stage ring zoals bij install (geen Downloading/Verifying/Installing — uninstall is één action), wel: ProgressRing tijdens Pending, indeterminate ProgressBar tijdens Running, checkmark op Success, error glyph op Failed. Per-app live message, header met "X of Y done" tijdens batch, summary "X uninstalled, Y failed" bij voltooiing. `HadSuccessfulUninstall` property zodat de page kan reageren op een geslaagde batch
+- `DebloatPage` herontworpen: card-based lijst (mirror van CategoryDetailPage card layout — icon + naam + winget ID + checkbox), Tapped op de hele card toggelt selectie (CheckBox `IsHitTestVisible=False`), hover-effect via `CardBackgroundFillColorSecondaryBrush`. Footer met selection count + Clear all + Uninstall button, plus Select all toggle in de toolbar. Confirm ContentDialog ("Uninstall N apps?") voor de batch start. `OnNavigatedFrom` cleared `IsSelectedForUninstall` zodat een vergeten selectie niet later terug-popt
+- `WingetAppDeployer.WinUI.csproj` krijgt nu wel een `<Version>` / `<AssemblyVersion>` / `<FileVersion>` zodat exe metadata en assembly version mee-bumpen per release. Eerste set op 0.8.1
+
 ### v0.7.8 — Toast notificatie fix via Microsoft.Toolkit.Uwp.Notifications
 - v0.7.7's `Microsoft.Windows.AppNotifications.AppNotificationManager.Default.Register()` faalde silent op unpackaged WinUI 3 apps met `COMException: Class not registered` — vereist een COM activator class die WinAppSDK 1.8 niet auto-registreert
 - Switch naar `Microsoft.Toolkit.Uwp.Notifications` 7.x (NuGet `Microsoft.Toolkit.Uwp.Notifications`). `ToastNotificationManagerCompat` doet bij eerste `ToastContentBuilder().Show()` automatisch de AUMID-registratie in HKCU op basis van het exe-pad — geen COM activator class of Start Menu shortcut nodig. Werkt out-of-the-box voor unpackaged Win32/WinUI apps
@@ -251,14 +259,19 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - ~~Installatie geschiedenis / log~~ — geschrapt: `winget list` is al de source of truth; per-install feedback zit al in InstallDialog. Persistent log is meer noise dan signal
 - ~~"Fallback to download page" toggle~~ — gedaan in v0.7.1 (downloadUrl + Manual download badge) en v0.7.2 (Settings toggle)
 
-### v0.8.0 — Debloat tab full
+### v0.8.0 — Debloat tab full (lopend)
 
-- Windows bloatware removal — Microsoft "standaard" bloat (Xbox, Teams consumer, Solitaire, etc.) met checkboxes + batch-actie via `Get-AppxPackage | Remove-AppxPackage` of `winget uninstall`. Vereist admin
-- User-installed apps uninstaller — vervanger voor v0.4.3 lijst, card-based met multi-select + batch + per-app progress
-- Categorieën in Debloat: Microsoft apps / OEM bloat / User installed met counts
-- Integratie met Windows11-Unattended-Debloat logica (scripts hergebruiken of porten)
-- "ALLES op de PC" search — combineert registry uninstall keys + `Get-AppxPackage` + `winget list` met source-tag per resultaat
-- Restant-opruiming bij uninstall — scan registry / Program Files / AppData / Temp / scheduled tasks / services voor leftover sporen, ContentDialog met checkboxes per item, altijd preview, nooit auto-delete
+Per sub-feature één patch versie. Milestone v0.8.0 = release zodra alle v0.8.x af zijn.
+
+- ~~**v0.8.1** — User-installed apps uninstaller upgraden~~ — gedaan (card-based, multi-select, batch via UninstallDialog)
+- **v0.8.2** — Microsoft bloatware removal: curated lijst (Xbox, Teams consumer, Solitaire, etc.) met checkboxes + batch via `Get-AppxPackage | Remove-AppxPackage` of `winget uninstall`. Vereist admin (UAC re-launch flow)
+- **v0.8.3** — Categorieën-sectie + counts: Microsoft apps / OEM bloat / User installed als tabs of secties op DebloatPage. Integratie met Windows11-Unattended-Debloat regels (scripts porten of hergebruiken)
+- **v0.8.4** — "ALLES op de PC" search: combineert registry uninstall keys + `Get-AppxPackage` + `winget list` met source-tag per resultaat
+- **v0.8.5** — Restant-opruiming **direct na uninstall**: scan registry / `Program Files` / `Program Files (x86)` / `%LOCALAPPDATA%` / `%APPDATA%` / `%PROGRAMDATA%` / Temp / scheduled tasks / services voor leftover sporen van de zojuist verwijderde app(s). ContentDialog met checkboxes per item, altijd preview, nooit auto-delete. Triggert automatisch ná een succesvolle UninstallDialog batch, optioneel via een setting uit te zetten
+- **v0.8.6** — Deep clean (los van uninstall): aparte sectie/dialog op DebloatPage voor system-wide cleanup, los van een specifieke uninstall. Twee categorieën:
+  - **Orphaned app folders** — scan dezelfde paden als v0.8.5 (`Program Files`, `%LOCALAPPDATA%`, etc.) en match tegen `winget list` + registry uninstall keys + `Get-AppxPackage`. Folders zónder bijbehorende geïnstalleerde app = kandidaat. Per item: pad + grootte + datum laatste wijziging, checkbox per folder
+  - **Windows caches** — Temp folders (system + user), Windows Update cache (`SoftwareDistribution\Download`), Recycle Bin, oude `Windows.old`, Prefetch, optioneel browser caches (Edge / Chrome / Firefox / Brave)
+  - Geschatte vrij te maken ruimte per categorie vooraf, preview voor confirm, scheiding tussen altijd-veilige (Temp / Recycle Bin) en potentieel-impactvolle items (Windows.old, browser caches)
 
 ### v0.9.0 — Tweaks tab
 

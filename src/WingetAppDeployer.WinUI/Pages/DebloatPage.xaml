@@ -15,6 +15,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
@@ -25,25 +26,33 @@
         <InfoBar Grid.Row="1"
                  Severity="Informational"
                  Title="Work in progress"
-                 Message="Volledige Windows debloat integratie volgt in v0.6.0. Voor nu kan je hier apps die je via deze tool geïnstalleerd hebt snel verwijderen."
+                 Message="Volledige Windows debloat (Microsoft bloatware, OEM apps, deep clean) volgt in v0.8.2 t/m v0.8.6. Voor nu: bulk-uninstall apps uit deze catalogus die je geïnstalleerd hebt."
                  IsOpen="True"
                  IsClosable="False"
                  MaxWidth="720"
                  HorizontalAlignment="Left"
                  Margin="0,0,0,20" />
 
-        <Grid Grid.Row="2" Margin="0,0,0,12">
+        <Grid Grid.Row="2" Margin="0,0,0,12" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Column="0"
-                       Text="Installed apps"
+                       Text="Installed apps from this catalog"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        VerticalAlignment="Center" />
 
             <Button Grid.Column="1"
+                    x:Name="SelectAllButton"
+                    Click="SelectAllButton_Click"
+                    IsEnabled="False"
+                    VerticalAlignment="Center"
+                    Content="Select all" />
+
+            <Button Grid.Column="2"
                     x:Name="RefreshButton"
                     Click="RefreshButton_Click"
                     VerticalAlignment="Center">
@@ -76,7 +85,7 @@
                           FontSize="32"
                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                           HorizontalAlignment="Center" />
-                <TextBlock Text="Geen apps uit deze tool gevonden"
+                <TextBlock Text="Geen apps uit deze catalogus gevonden"
                            Style="{StaticResource BodyStrongTextBlockStyle}"
                            HorizontalAlignment="Center" />
                 <TextBlock Text="Alleen apps uit de WingetAppDeployer catalogus die ook daadwerkelijk op dit systeem geïnstalleerd staan worden hier getoond."
@@ -92,49 +101,90 @@
             <ScrollView x:Name="AppsScroller"
                         Visibility="Collapsed"
                         VerticalScrollBarVisibility="Auto"
+                        Padding="0,0,14,12"
                         ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
                 <ItemsRepeater x:Name="InstalledAppsList">
                     <ItemsRepeater.Layout>
-                        <StackLayout Spacing="8" />
+                        <StackLayout Spacing="4" />
                     </ItemsRepeater.Layout>
 
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="models:App">
-                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="16,12">
-                                <Grid ColumnSpacing="16">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                            <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                  BorderThickness="1"
+                                  CornerRadius="4"
+                                  Padding="16,12"
+                                  Tag="{x:Bind}"
+                                  Tapped="AppCard_Tapped"
+                                  PointerEntered="AppCard_PointerEntered"
+                                  PointerExited="AppCard_PointerExited">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
-                                        <TextBlock Text="{x:Bind Name}"
-                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
-                                                   FontSize="15" />
-                                        <TextBlock Text="{x:Bind WingetId}"
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    </StackPanel>
+                                <Image Grid.Column="0"
+                                       Source="{x:Bind IconImage}"
+                                       Width="40" Height="40"
+                                       Margin="0,0,14,0"
+                                       Stretch="Uniform"
+                                       VerticalAlignment="Center"
+                                       ImageFailed="AppIcon_ImageFailed" />
 
-                                    <Button Grid.Column="1"
-                                            Click="UninstallButton_Click"
-                                            Tag="{x:Bind WingetId}"
-                                            VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                                            <TextBlock Text="Uninstall" />
-                                        </StackPanel>
-                                    </Button>
-                                </Grid>
-                            </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Name}"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               FontSize="15" />
+                                    <TextBlock Text="{x:Bind WingetId}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="2"
+                                          IsChecked="{x:Bind IsSelectedForUninstall, Mode=TwoWay}"
+                                          VerticalAlignment="Center"
+                                          MinWidth="0"
+                                          IsHitTestVisible="False" />
+                            </Grid>
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
             </ScrollView>
+        </Grid>
+
+        <!-- Footer met selection count + Clear / Uninstall -->
+        <Grid Grid.Row="4"
+              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="0,12,0,0"
+              Margin="0,16,0,0"
+              ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       x:Name="SelectionCountText"
+                       Text="0 apps selected"
+                       Style="{StaticResource BodyTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    x:Name="ClearSelectionButton"
+                    Content="Clear all"
+                    IsEnabled="False"
+                    Click="ClearSelectionButton_Click"
+                    VerticalAlignment="Center" />
+            <Button Grid.Column="2"
+                    x:Name="UninstallButton"
+                    Content="Uninstall selected"
+                    Style="{StaticResource AccentButtonStyle}"
+                    IsEnabled="False"
+                    Click="UninstallButton_Click"
+                    VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Page>
