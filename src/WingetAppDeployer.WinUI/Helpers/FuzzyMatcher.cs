@@ -26,6 +26,10 @@ internal static class FuzzyMatcher
 
         var q = query.Trim();
         var qLow = q.ToLowerInvariant();
+        // Tokenize op whitespace zodat een multi-word query als "google chrome" of
+        // "anti gravity" als losse termen behandeld kan worden. Single-token queries
+        // behouden de originele behavior (substring → prefix → PartialRatio).
+        var qTokens = qLow.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
         var best = 0;
 
         foreach (var raw in fields)
@@ -34,18 +38,30 @@ internal static class FuzzyMatcher
             var f = raw.Trim();
             var fLow = f.ToLowerInvariant();
 
-            if (fLow.Contains(qLow))
+            // Single-token: originele substring-ladder.
+            if (qTokens.Length <= 1)
             {
-                best = 100;
+                if (fLow.Contains(qLow)) { best = 100; continue; }
+                if (fLow.StartsWith(qLow)) { if (90 > best) best = 90; continue; }
+                var s = Fuzz.PartialRatio(qLow, fLow);
+                if (s > best) best = s;
                 continue;
             }
 
-            if (fLow.StartsWith(qLow))
+            // Multi-token: alle tokens moeten als substring in het veld voorkomen
+            // (order-independent). Daarmee matcht "anti gravity" → "Antigravity"
+            // en "chrome google" → "Google Chrome" zonder dat we afhangen van
+            // PartialRatio's quirks rondom spaties.
+            var allMatch = true;
+            foreach (var token in qTokens)
             {
-                if (90 > best) best = 90;
-                continue;
+                if (token.Length == 0) continue;
+                if (!fLow.Contains(token)) { allMatch = false; break; }
             }
+            if (allMatch) { best = 100; continue; }
 
+            // Niet alle tokens matchen → val terug op PartialRatio over de hele
+            // query. Vangt typo's op die over spaties heen lopen.
             var score = Fuzz.PartialRatio(qLow, fLow);
             if (score > best) best = score;
         }
