@@ -19,11 +19,12 @@ public sealed partial class DebloatPage : Page
     private List<AppModel> _allCatalogApps = new();
     private List<AppModel> _installedApps = new();
 
-    // Curated bloatware items — geinitialiseerd vanuit de static lijst zodat alle
-    // page-instances dezelfde IsSelected-state delen niet wenselijk; we kopiëren
-    // de items naar nieuwe instances per page-load. Dat geeft elke navigatie
-    // een schone selectie.
-    private List<BloatwareItem> _bloatwareItems = new();
+    // Bloatware-items per vendor. Vers gekopiëerd uit BloatwareItem.CuratedList per
+    // page-load zodat IsSelected-state niet over navigaties heen lekt. Microsoft + OEM
+    // gebruiken hetzelfde model, alleen Vendor verschilt → twee lijsten gefilterd uit
+    // dezelfde curated bron.
+    private List<BloatwareItem> _microsoftItems = new();
+    private List<BloatwareItem> _oemItems = new();
 
     public DebloatPage()
     {
@@ -34,10 +35,11 @@ public sealed partial class DebloatPage : Page
     {
         base.OnNavigatedTo(e);
 
-        // Bouw bloatware items vers per page-load. Get-AppxPackage detect duurt 1-2s
-        // dus async; UI toont spinner ondertussen.
-        _bloatwareItems = BloatwareItem.CuratedList
-            .Select(b => new BloatwareItem(b.DisplayName, b.Description, b.Category, b.PackageNames.ToArray()))
+        _microsoftItems = BloatwareItem.CuratedFor(BloatwareVendor.Microsoft)
+            .Select(b => new BloatwareItem(b.DisplayName, b.Description, b.Category, b.Vendor, b.PackageNames.ToArray()))
+            .ToList();
+        _oemItems = BloatwareItem.CuratedFor(BloatwareVendor.Oem)
+            .Select(b => new BloatwareItem(b.DisplayName, b.Description, b.Category, b.Vendor, b.PackageNames.ToArray()))
             .ToList();
 
         await LoadAsync();
@@ -51,9 +53,12 @@ public sealed partial class DebloatPage : Page
 
     private async Task LoadAsync(bool forceRefresh = false)
     {
-        // Beide secties parallel laden — Get-AppxPackage en winget list zijn beide
-        // ~1-2s elk, en ze zijn onafhankelijk dus simultaan veiliger gebruikersgevoel
-        // dan sequentieel.
+        // Drie sources parallel: catalog (winget list), Microsoft AppX en OEM AppX.
+        // Get-AppxPackage draait per call ~1-2s; sequentieel zou de pagina 4-5s
+        // unresponsive zijn. Microsoft + OEM detect kunnen gecombineerd in één
+        // call (één Get-AppxPackage matcht beide lijsten) — DetectInstalledAsync
+        // accepteert een lijst dus we voegen ze samen voor de detect en splitsen
+        // daarna terug per vendor.
         var catalogTask = LoadCatalogAsync(forceRefresh);
         var bloatwareTask = LoadBloatwareAsync();
         await Task.WhenAll(catalogTask, bloatwareTask);
@@ -99,31 +104,49 @@ public sealed partial class DebloatPage : Page
 
         UpdateCatalogSelection();
         UpdateCatalogSelectAllButton();
+        UpdateCatalogCount();
     }
 
     private async Task LoadBloatwareAsync()
     {
         ShowBloatwareLoading();
 
-        await App.Bloatware.DetectInstalledAsync(_bloatwareItems);
+        // Combineer Microsoft + OEM voor één Get-AppxPackage call. DetectInstalledAsync
+        // matcht elke item tegen de PowerShell output; Microsoft- en OEM-items zijn
+        // qua package-prefixes disjunct (Microsoft.* vs HPInc.* / DellInc.* / etc.)
+        // dus er kan geen kruisverontreiniging zijn tussen vendoren.
+        var allItems = _microsoftItems.Concat(_oemItems).ToList();
+        await App.Bloatware.DetectInstalledAsync(allItems);
 
-        // Alleen items die ook daadwerkelijk geïnstalleerd zijn tonen — anders
-        // staat de lijst vol met items waar je toch niets mee kan ("Cortana not
-        // installed" zou alleen ruis zijn).
-        var visible = _bloatwareItems.Where(b => b.IsInstalled).ToList();
-
-        if (visible.Count == 0)
-        {
+        // Microsoft sectie
+        var msVisible = _microsoftItems.Where(b => b.IsInstalled).ToList();
+        if (msVisible.Count == 0)
             ShowBloatwareEmpty();
+        else
+        {
+            BloatwareList.ItemsSource = msVisible;
+            ShowBloatwareList();
+        }
+
+        // OEM sectie — verberg helemaal als geen items gedetecteerd. Lege OEM-sectie
+        // tonen zou alleen ruis zijn voor de vele users zonder OEM-AppX-bloat.
+        var oemVisible = _oemItems.Where(b => b.IsInstalled).ToList();
+        if (oemVisible.Count == 0)
+        {
+            OemSection.Visibility = Visibility.Collapsed;
         }
         else
         {
-            BloatwareList.ItemsSource = visible;
-            ShowBloatwareList();
+            OemList.ItemsSource = oemVisible;
+            OemSection.Visibility = Visibility.Visible;
         }
 
         UpdateBloatwareSelection();
         UpdateBloatwareSelectAllButton();
+        UpdateOemSelection();
+        UpdateOemSelectAllButton();
+        UpdateBloatwareCount();
+        UpdateOemCount();
     }
 
     // ── Catalog visibility helpers ────────────────────────────────
@@ -148,7 +171,7 @@ public sealed partial class DebloatPage : Page
         InstalledAppsList.Visibility = Visibility.Visible;
     }
 
-    // ── Bloatware visibility helpers ──────────────────────────────
+    // ── Microsoft bloatware visibility helpers ────────────────────
     private void ShowBloatwareLoading()
     {
         BloatwareLoadingRing.Visibility = Visibility.Visible;
@@ -174,7 +197,8 @@ public sealed partial class DebloatPage : Page
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         foreach (var app in _allCatalogApps) app.IsSelectedForUninstall = false;
-        foreach (var b in _bloatwareItems) b.IsSelected = false;
+        foreach (var b in _microsoftItems) b.IsSelected = false;
+        foreach (var b in _oemItems) b.IsSelected = false;
         await LoadAsync(forceRefresh: true);
     }
 
@@ -244,21 +268,38 @@ public sealed partial class DebloatPage : Page
         SelectAllButton.IsEnabled = _installedApps.Count > 0;
     }
 
-    // ── Bloatware handlers ────────────────────────────────────────
+    private void UpdateCatalogCount()
+    {
+        var count = _installedApps.Count;
+        CatalogCountText.Text = count == 0 ? string.Empty : $"({count})";
+    }
+
+    // ── Microsoft bloatware handlers ──────────────────────────────
     private void BloatwareCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
+        // Shared handler tussen Microsoft + OEM card-templates. We weten niet
+        // direct uit welke lijst de getapte item komt — Vendor op het item zelf
+        // bepaalt welke selection-update we moeten triggeren.
         if (sender is not FrameworkElement fe) return;
         var item = fe.DataContext as BloatwareItem ?? fe.Tag as BloatwareItem;
         if (item == null) return;
 
         item.IsSelected = !item.IsSelected;
-        UpdateBloatwareSelection();
-        UpdateBloatwareSelectAllButton();
+        if (item.Vendor == BloatwareVendor.Microsoft)
+        {
+            UpdateBloatwareSelection();
+            UpdateBloatwareSelectAllButton();
+        }
+        else
+        {
+            UpdateOemSelection();
+            UpdateOemSelectAllButton();
+        }
     }
 
     private void BloatwareSelectAllButton_Click(object sender, RoutedEventArgs e)
     {
-        var visible = _bloatwareItems.Where(b => b.IsInstalled).ToList();
+        var visible = _microsoftItems.Where(b => b.IsInstalled).ToList();
         if (visible.Count == 0) return;
         var allSelected = visible.All(b => b.IsSelected);
         foreach (var item in visible)
@@ -270,15 +311,80 @@ public sealed partial class DebloatPage : Page
 
     private async void BloatwareRemoveButton_Click(object sender, RoutedEventArgs e)
     {
-        var selected = _bloatwareItems.Where(b => b.IsInstalled && b.IsSelected).ToList();
+        var selected = _microsoftItems.Where(b => b.IsInstalled && b.IsSelected).ToList();
+        await ConfirmAndRemoveBloatwareAsync(selected, "Microsoft");
+    }
+
+    private void UpdateBloatwareSelection()
+    {
+        var count = _microsoftItems.Count(b => b.IsInstalled && b.IsSelected);
+        BloatwareRemoveButton.IsEnabled = count > 0;
+    }
+
+    private void UpdateBloatwareSelectAllButton()
+    {
+        var visible = _microsoftItems.Where(b => b.IsInstalled).ToList();
+        var allSelected = visible.Count > 0 && visible.All(b => b.IsSelected);
+        BloatwareSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        BloatwareSelectAllButton.IsEnabled = visible.Count > 0;
+    }
+
+    private void UpdateBloatwareCount()
+    {
+        var count = _microsoftItems.Count(b => b.IsInstalled);
+        BloatwareCountText.Text = count == 0 ? string.Empty : $"({count})";
+    }
+
+    // ── OEM bloatware handlers ────────────────────────────────────
+    private void OemSelectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        var visible = _oemItems.Where(b => b.IsInstalled).ToList();
+        if (visible.Count == 0) return;
+        var allSelected = visible.All(b => b.IsSelected);
+        foreach (var item in visible)
+            item.IsSelected = !allSelected;
+
+        UpdateOemSelection();
+        UpdateOemSelectAllButton();
+    }
+
+    private async void OemRemoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = _oemItems.Where(b => b.IsInstalled && b.IsSelected).ToList();
+        await ConfirmAndRemoveBloatwareAsync(selected, "OEM");
+    }
+
+    private void UpdateOemSelection()
+    {
+        var count = _oemItems.Count(b => b.IsInstalled && b.IsSelected);
+        OemRemoveButton.IsEnabled = count > 0;
+    }
+
+    private void UpdateOemSelectAllButton()
+    {
+        var visible = _oemItems.Where(b => b.IsInstalled).ToList();
+        var allSelected = visible.Count > 0 && visible.All(b => b.IsSelected);
+        OemSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        OemSelectAllButton.IsEnabled = visible.Count > 0;
+    }
+
+    private void UpdateOemCount()
+    {
+        var count = _oemItems.Count(b => b.IsInstalled);
+        OemCountText.Text = count == 0 ? string.Empty : $"({count})";
+    }
+
+    // ── Shared bloatware confirm + remove flow ────────────────────
+    private async Task ConfirmAndRemoveBloatwareAsync(List<BloatwareItem> selected, string vendorLabel)
+    {
         if (selected.Count == 0) return;
 
         var confirm = new ContentDialog
         {
             Title = selected.Count == 1
                 ? $"Remove {selected[0].DisplayName}?"
-                : $"Remove {selected.Count} Microsoft apps?",
-            Content = "This permanently removes the selected Microsoft apps via Remove-AppxPackage. A UAC prompt will appear because this requires administrator rights. Some apps cannot be reinstalled easily — only continue if you're sure.",
+                : $"Remove {selected.Count} {vendorLabel} apps?",
+            Content = "This permanently removes the selected apps via Remove-AppxPackage. A UAC prompt will appear because this requires administrator rights. Some apps cannot be reinstalled easily — only continue if you're sure.",
             PrimaryButtonText = "Remove",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.None,
@@ -295,20 +401,6 @@ public sealed partial class DebloatPage : Page
 
         foreach (var item in selected) item.IsSelected = false;
         await LoadBloatwareAsync();
-    }
-
-    private void UpdateBloatwareSelection()
-    {
-        var count = _bloatwareItems.Count(b => b.IsInstalled && b.IsSelected);
-        BloatwareRemoveButton.IsEnabled = count > 0;
-    }
-
-    private void UpdateBloatwareSelectAllButton()
-    {
-        var visible = _bloatwareItems.Where(b => b.IsInstalled).ToList();
-        var allSelected = visible.Count > 0 && visible.All(b => b.IsSelected);
-        BloatwareSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
-        BloatwareSelectAllButton.IsEnabled = visible.Count > 0;
     }
 
     // ── Shared ────────────────────────────────────────────────────

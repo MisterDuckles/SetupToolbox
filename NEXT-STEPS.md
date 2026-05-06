@@ -126,6 +126,14 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 - Installed-filter refresht automatisch wanneer `winget list` async binnenkomt
 - `_uiReady` guard voorkomt dat `SelectionChanged` (vuurt al tijdens XAML-parse via `IsSelected="True"`) een redundante render-cycle triggert vóór `OnNavigatedTo` de UI heeft opgezet
 
+### v0.8.3 — OEM bloatware sectie + counts in section-headers
+
+- Nieuwe `BloatwareVendor` enum (`Microsoft` / `Oem`) op `BloatwareItem`. Bestaande Microsoft-items behouden hun gedrag, nieuwe OEM curated lijst (~17 items) toegevoegd voor HP / Dell / Lenovo / ASUS / Acer / MSI bundleware. Multi-package items per vendor (varianten van dezelfde app onder verschillende publisher-prefixes — bv. HP Smart als `AD2F1837.HPSmart` of `HPInc.HPSmart` afhankelijk van Win11-versie) onder één checkbox. Helper `BloatwareItem.CuratedFor(vendor)` filtert de unified curated bron per sectie
+- Nieuwe **OEM bloatware** sectie op DebloatPage tussen Microsoft en Catalog. Volledig collapsed wanneer geen OEM-items gedetecteerd — meeste users hebben geen HP/Dell/Lenovo AppX-bloat en zouden anders alleen een lege sectie zien. Detectie loopt in dezelfde `Get-AppxPackage` call als Microsoft (niet 2× duren) — Microsoft-prefixes (`Microsoft.*`) en OEM-prefixes (`HPInc.*` / `DellInc.*` / `LenovoCorporation.*` / `AsusTekComputerInc.*` / `AcerInc.*` / `MSI.*`) zijn disjunct dus geen kruisverontreiniging
+- **Counts in section-headers**: alle drie de secties (Microsoft / OEM / Catalog) tonen nu een grijze count naast de titel — `"Microsoft bloatware (5)"` / `"OEM bloatware (2)"` / `"Installed apps from this catalog (12)"`. Lege count = geen tekst zodat het niet als "(0)" een lege sectie suggereert
+- Refactor van DebloatPage card-template: Microsoft + OEM secties delen nu dezelfde `BloatwareCardTemplate` resource zodat we 'm niet hoeven te dupliceren. `BloatwareCard_Tapped` is shared en routeert naar de juiste selection-update via `BloatwareItem.Vendor`. `ConfirmAndRemoveBloatwareAsync(items, vendorLabel)` is gedeeld tussen Microsoft + OEM Remove buttons — zelfde confirm dialog + UninstallDialog flow, alleen de title-tekst varieert
+- Windows11-Unattended-Debloat integratie (registry-tweaks / scripts) **niet** in v0.8.3 — past logischer bij v0.9.x Tweaks tab en zou hier alleen scope-creep zijn
+
 ### v0.8.2 — Microsoft bloatware section op DebloatPage
 
 - Nieuwe `Models/BloatwareItem.cs` met INPC + curated lijst van ~22 Microsoft AppX bloatware items (Solitaire, Xbox suite, Skype, Teams consumer, Mail/Calendar, Bing News/Weather, Cortana, Mixed Reality, 3D Viewer, Paint 3D, Get Help, Tips, Feedback Hub, Office Hub, Maps, OneNote, Groove Music, Movies & TV, Sticky Notes, Phone Link, People). Per item: DisplayName, Description (waarom is dit bloat / wanneer is het misschien wel handig), Category, en lijst PackageNames om tegen `Get-AppxPackage` te matchen. Multi-package items (Xbox = 7 packages) onder één checkbox zodat de hele suite in één klik weg kan
@@ -274,7 +282,7 @@ Per sub-feature één patch versie. Milestone v0.8.0 = release zodra alle v0.8.x
 
 - ~~**v0.8.1** — User-installed apps uninstaller upgraden~~ — gedaan (card-based, multi-select, batch via UninstallDialog)
 - ~~**v0.8.2** — Microsoft bloatware removal~~ — gedaan (curated lijst van ~22 Microsoft AppX items, sectie boven catalog-lijst op DebloatPage, batch via één UAC-elevated PowerShell call met live log-tail progress)
-- **v0.8.3** — Categorieën-sectie + counts: Microsoft apps / OEM bloat / User installed als tabs of secties op DebloatPage. Integratie met Windows11-Unattended-Debloat regels (scripts porten of hergebruiken)
+- ~~**v0.8.3** — Categorieën-sectie + counts~~ — gedaan (BloatwareVendor enum, OEM curated lijst voor HP/Dell/Lenovo/ASUS/Acer/MSI, counts in alle section-headers, Windows11-Unattended-Debloat integratie geparkeerd voor v0.9.x Tweaks)
 - **v0.8.4** — Unified "alle geïnstalleerde apps" lijst — **niet vergeten, kern-feature**: in plaats van alleen apps uit onze catalogus toont DebloatPage álles wat op de PC staat, ongeacht hoe het geïnstalleerd is (winget, Microsoft Store, vendor-installer van internet, MSI, oudere setups). Drie bronnen samengevoegd in één lijst:
   - **Catalog** — apps uit `apps.json` die in `winget list` staan (bestaande v0.8.1 lijst)
   - **Store** — `Get-AppxPackage` resultaten (UWP / Microsoft Store / AppX)

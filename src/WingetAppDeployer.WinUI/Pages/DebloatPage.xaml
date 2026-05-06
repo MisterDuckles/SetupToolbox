@@ -10,6 +10,74 @@
     mc:Ignorable="d"
     Background="Transparent">
 
+    <Page.Resources>
+        <!-- Card-template gedeeld tussen Microsoft + OEM secties zodat we 'm
+             niet hoeven te dupliceren. Beide secties tonen dezelfde BloatwareItem
+             structuur (DisplayName + Category badge + Description + Installed badge
+             + Checkbox). Tapped/Pointer-handlers blijven naam-identiek. -->
+        <DataTemplate x:Key="BloatwareCardTemplate" x:DataType="models:BloatwareItem">
+            <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                  BorderThickness="1"
+                  CornerRadius="4"
+                  Padding="16,12"
+                  Tag="{x:Bind}"
+                  Tapped="BloatwareCard_Tapped"
+                  PointerEntered="AppCard_PointerEntered"
+                  PointerExited="AppCard_PointerExited">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{x:Bind DisplayName}"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                        <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
+                                CornerRadius="4"
+                                Padding="6,2"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{x:Bind Category}"
+                                       Style="{StaticResource CaptionTextBlockStyle}" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind Description}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,2,0,0" />
+                </StackPanel>
+
+                <Border Grid.Column="1"
+                        Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                        CornerRadius="4"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        Margin="8,0,0,0"
+                        Visibility="{x:Bind InstalledVisibility}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE73E;"
+                                  FontSize="10"
+                                  VerticalAlignment="Center" />
+                        <TextBlock Text="Installed"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <CheckBox Grid.Column="2"
+                          IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                          VerticalAlignment="Center"
+                          MinWidth="0"
+                          Margin="12,0,0,0"
+                          IsHitTestVisible="False" />
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
     <Grid Padding="36,24,36,12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -65,8 +133,15 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="Microsoft bloatware"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                                <TextBlock Text="Microsoft bloatware"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock x:Name="BloatwareCountText"
+                                           Text=""
+                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Bottom" />
+                            </StackPanel>
                             <TextBlock x:Name="BloatwareSubtext"
                                        Text="Pre-installed Microsoft apps en system bloat. Vereist administrator rechten (UAC prompt verschijnt)."
                                        Style="{StaticResource CaptionTextBlockStyle}"
@@ -104,80 +179,72 @@
                                    Visibility="Collapsed"
                                    Margin="0,12,0,0" />
 
-                        <ItemsRepeater x:Name="BloatwareList">
+                        <ItemsRepeater x:Name="BloatwareList"
+                                       ItemTemplate="{StaticResource BloatwareCardTemplate}">
                             <ItemsRepeater.Layout>
                                 <StackLayout Spacing="4" />
                             </ItemsRepeater.Layout>
-
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="models:BloatwareItem">
-                                    <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                          BorderThickness="1"
-                                          CornerRadius="4"
-                                          Padding="16,12"
-                                          Tag="{x:Bind}"
-                                          Tapped="BloatwareCard_Tapped"
-                                          PointerEntered="AppCard_PointerEntered"
-                                          PointerExited="AppCard_PointerExited">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <TextBlock Text="{x:Bind DisplayName}"
-                                                           Style="{StaticResource BodyStrongTextBlockStyle}"
-                                                           VerticalAlignment="Center" />
-                                                <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
-                                                        CornerRadius="4"
-                                                        Padding="6,2"
-                                                        VerticalAlignment="Center">
-                                                    <TextBlock Text="{x:Bind Category}"
-                                                               Style="{StaticResource CaptionTextBlockStyle}" />
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Text="{x:Bind Description}"
-                                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                       TextWrapping="Wrap"
-                                                       Margin="0,2,0,0" />
-                                        </StackPanel>
-
-                                        <Border Grid.Column="1"
-                                                Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                                                CornerRadius="4"
-                                                Padding="6,2"
-                                                VerticalAlignment="Center"
-                                                Margin="8,0,0,0"
-                                                Visibility="{x:Bind InstalledVisibility}">
-                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                                <FontIcon Glyph="&#xE73E;"
-                                                          FontSize="10"
-                                                          VerticalAlignment="Center" />
-                                                <TextBlock Text="Installed"
-                                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </Border>
-
-                                        <CheckBox Grid.Column="2"
-                                                  IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
-                                                  VerticalAlignment="Center"
-                                                  MinWidth="0"
-                                                  Margin="12,0,0,0"
-                                                  IsHitTestVisible="False" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
                     </Grid>
                 </StackPanel>
 
                 <!-- ================================================
-                     SECTIE 2: Apps uit deze catalogus
+                     SECTIE 2: OEM bloatware (HP / Dell / Lenovo / etc.)
+                     De hele sectie is collapsed wanneer er geen OEM-bloat
+                     gedetecteerd is — meeste users hebben geen OEM-AppX
+                     packages en zouden dan alleen een lege sectie zien.
+                     ================================================ -->
+                <StackPanel x:Name="OemSection"
+                            Spacing="12"
+                            Visibility="Collapsed">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                                <TextBlock Text="OEM bloatware"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock x:Name="OemCountText"
+                                           Text=""
+                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Bottom" />
+                            </StackPanel>
+                            <TextBlock Text="Bundleware van je hardware-fabrikant (HP / Dell / Lenovo / ASUS / Acer / MSI). Vereist administrator rechten (UAC prompt verschijnt)."
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Margin="0,4,0,0"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                x:Name="OemSelectAllButton"
+                                Click="OemSelectAllButton_Click"
+                                IsEnabled="False"
+                                VerticalAlignment="Center"
+                                Content="Select all" />
+                        <Button Grid.Column="2"
+                                x:Name="OemRemoveButton"
+                                Click="OemRemoveButton_Click"
+                                IsEnabled="False"
+                                Style="{StaticResource AccentButtonStyle}"
+                                VerticalAlignment="Center"
+                                Content="Remove selected" />
+                    </Grid>
+
+                    <ItemsRepeater x:Name="OemList"
+                                   ItemTemplate="{StaticResource BloatwareCardTemplate}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="4" />
+                        </ItemsRepeater.Layout>
+                    </ItemsRepeater>
+                </StackPanel>
+
+                <!-- ================================================
+                     SECTIE 3: Apps uit deze catalogus (= "User installed"
+                     stand-in tot v0.8.4 de unified all-sources lijst brengt)
                      ================================================ -->
                 <StackPanel Spacing="12">
                     <Grid ColumnSpacing="8">
@@ -187,8 +254,15 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="Installed apps from this catalog"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                                <TextBlock Text="Installed apps from this catalog"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock x:Name="CatalogCountText"
+                                           Text=""
+                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Bottom" />
+                            </StackPanel>
                             <TextBlock Text="Apps die je via deze tool (of handmatig via winget) hebt geïnstalleerd."
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
