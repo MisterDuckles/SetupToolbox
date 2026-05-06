@@ -39,6 +39,8 @@ public partial class App : Application
     public static SettingsService Settings { get; } = new();
     public static SelectionImportExportService SelectionIO { get; } = new();
     public static BloatwareService Bloatware { get; } = new();
+    public static InstalledAppsService InstalledApps { get; } = new();
+    public static MixedSourceUninstaller MixedUninstaller { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code

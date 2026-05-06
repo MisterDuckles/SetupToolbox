@@ -10,21 +10,31 @@ using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
 using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
-using AppModel = WingetAppDeployer_WinUI.Models.App;
+using WingetAppDeployer_WinUI.Services;
 
 namespace WingetAppDeployer_WinUI.Pages;
 
 public sealed partial class DebloatPage : Page
 {
-    private List<AppModel> _allCatalogApps = new();
-    private List<AppModel> _installedApps = new();
+    private enum InstalledFilter { All, Winget, Store, Web, System }
 
-    // Bloatware-items per vendor. Vers gekopiëerd uit BloatwareItem.CuratedList per
-    // page-load zodat IsSelected-state niet over navigaties heen lekt. Microsoft + OEM
-    // gebruiken hetzelfde model, alleen Vendor verschilt → twee lijsten gefilterd uit
-    // dezelfde curated bron.
+    // Bloatware-items per vendor — gevuld via BloatwareService.DetectAllAsync,
+    // detectie-driven dus geen hardcoded lijst meer. Page-load triggert een verse
+    // detect zodat IsSelected niet over navigaties heen lekt.
     private List<BloatwareItem> _microsoftItems = new();
     private List<BloatwareItem> _oemItems = new();
+
+    // Unified all-installed lijst. _allEntries = volledige set, _visibleEntries =
+    // na search/filter. ItemsRepeater bindt aan _visibleEntries.
+    private List<InstalledAppEntry> _allEntries = new();
+    private List<InstalledAppEntry> _visibleEntries = new();
+    private InstalledFilter _filter = InstalledFilter.All;
+    private string _searchText = string.Empty;
+    // Default false — Windows system AppX components (AAD.BrokerPlugin, etc.) zijn
+    // niet veilig om te uninstallen en zouden anders onnodig veel ruis geven in
+    // de unified lijst. User kan ze tonen via de checkbox in de toolbar.
+    private bool _showSystemComponents = false;
+    private bool _uiReady;
 
     public DebloatPage()
     {
@@ -35,109 +45,120 @@ public sealed partial class DebloatPage : Page
     {
         base.OnNavigatedTo(e);
 
-        _microsoftItems = BloatwareItem.CuratedFor(BloatwareVendor.Microsoft)
-            .Select(b => new BloatwareItem(b.DisplayName, b.Description, b.Category, b.Vendor, b.PackageNames.ToArray()))
-            .ToList();
-        _oemItems = BloatwareItem.CuratedFor(BloatwareVendor.Oem)
-            .Select(b => new BloatwareItem(b.DisplayName, b.Description, b.Category, b.Vendor, b.PackageNames.ToArray()))
-            .ToList();
+        // Bloatware-items worden detection-driven gevuld in LoadBloatwareAsync.
+        // Lijsten initialiseren we leeg — verse detect per page-load.
+        _microsoftItems = new List<BloatwareItem>();
+        _oemItems = new List<BloatwareItem>();
 
+        _uiReady = true;
         await LoadAsync();
-    }
-
-    protected override void OnNavigatedFrom(NavigationEventArgs e)
-    {
-        base.OnNavigatedFrom(e);
-        foreach (var app in _allCatalogApps) app.IsSelectedForUninstall = false;
     }
 
     private async Task LoadAsync(bool forceRefresh = false)
     {
-        // Drie sources parallel: catalog (winget list), Microsoft AppX en OEM AppX.
-        // Get-AppxPackage draait per call ~1-2s; sequentieel zou de pagina 4-5s
-        // unresponsive zijn. Microsoft + OEM detect kunnen gecombineerd in één
-        // call (één Get-AppxPackage matcht beide lijsten) — DetectInstalledAsync
-        // accepteert een lijst dus we voegen ze samen voor de detect en splitsen
-        // daarna terug per vendor.
-        var catalogTask = LoadCatalogAsync(forceRefresh);
+        // Drie bronnen parallel: bloatware (Microsoft + OEM in 1 call) en de unified
+        // all-installed lijst (catalog winget list + AppX + registry). Sequentieel
+        // zou ~5-7s pagina-init zijn; parallel kapt dat naar de duur van de langste.
         var bloatwareTask = LoadBloatwareAsync();
-        await Task.WhenAll(catalogTask, bloatwareTask);
+        var installedTask = LoadInstalledAsync(forceRefresh);
+        await Task.WhenAll(bloatwareTask, installedTask);
+
+        // Dedupe: bloatware items zijn ook AppX packages dus zouden zonder filter ook
+        // in "All installed apps" verschijnen met Store badge. Skip ze daar — de
+        // bloatware-secties zijn de specialized view, unified is "alles wat niet al
+        // hierboven categorisch behandeld wordt".
+        DedupeBloatwareFromInstalled();
     }
 
-    private async Task LoadCatalogAsync(bool forceRefresh)
+    private void DedupeBloatwareFromInstalled()
     {
-        ShowCatalogLoading();
+        // Drie sets om tegen te checken zodat we matches missen via geen enkel veld:
+        //   1. PackageFullName — exact (versie-specifiek)
+        //   2. AppX Name — uit PackageFullName geëxtracteerd, format "Name_Version_..."
+        //      Vangt het geval waar bloatware en all-apps detect verschillende
+        //      versies van hetzelfde package vinden.
+        //   3. DisplayName — de friendly naam, case-insensitive. Werkt cross-source
+        //      (Store + Web zelfde DisplayName = duplicate).
+        var bloatwareFullNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var bloatwareAppxNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var bloatwareDisplayNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (_allCatalogApps.Count == 0)
+        foreach (var item in _microsoftItems.Concat(_oemItems))
         {
-            var db = await App.Database.GetAppDatabaseAsync();
-            if (db != null)
+            bloatwareAppxNames.Add(item.PackageName);
+            bloatwareDisplayNames.Add(item.DisplayName);
+            foreach (var fn in item.InstalledPackageFullNames)
             {
-                foreach (var cat in db.Categories)
-                {
-                    if (cat.Apps != null) _allCatalogApps.AddRange(cat.Apps);
-                    if (cat.Subcategories != null)
-                        foreach (var sub in cat.Subcategories)
-                            _allCatalogApps.AddRange(sub.Apps);
-                }
+                bloatwareFullNames.Add(fn);
+                // FullName format = Name_Version_Architecture_ResourceId_Publisher
+                var appxName = fn.Split('_')[0];
+                if (!string.IsNullOrEmpty(appxName)) bloatwareAppxNames.Add(appxName);
             }
         }
 
-        var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh);
-        _installedApps = _allCatalogApps
-            .Where(a => installedIds.Contains(a.WingetId))
-            .OrderBy(a => a.Name)
+        if (bloatwareAppxNames.Count == 0 && bloatwareDisplayNames.Count == 0) return;
+
+        var before = _allEntries.Count;
+        _allEntries = _allEntries
+            .Where(e => !IsBloatwareDuplicate(e, bloatwareFullNames, bloatwareAppxNames, bloatwareDisplayNames))
             .ToList();
 
-        foreach (var app in _allCatalogApps)
-            app.IsInstalled = installedIds.Contains(app.WingetId);
-
-        if (_installedApps.Count == 0)
+        if (_allEntries.Count != before)
         {
-            ShowCatalogEmpty();
+            ApplyFilterAndSearch();
+            UpdateInstalledSelection();
+            UpdateInstalledSelectAllButton();
+            UpdateInstalledCount();
         }
-        else
-        {
-            InstalledAppsList.ItemsSource = _installedApps;
-            ShowCatalogList();
-        }
-
-        UpdateCatalogSelection();
-        UpdateCatalogSelectAllButton();
-        UpdateCatalogCount();
     }
 
+    private static bool IsBloatwareDuplicate(
+        InstalledAppEntry entry,
+        HashSet<string> fullNames,
+        HashSet<string> appxNames,
+        HashSet<string> displayNames)
+    {
+        // Store entries: probeer alle drie de match-strategies (FullName, Name uit
+        // FullName, DisplayName).
+        if (entry.Source == InstalledSource.Store)
+        {
+            if (fullNames.Contains(entry.Identifier)) return true;
+            var appxName = entry.Identifier.Split('_')[0];
+            if (!string.IsNullOrEmpty(appxName) && appxNames.Contains(appxName)) return true;
+        }
+        // Voor alle sources: DisplayName comparison vangt cross-source duplicaten op
+        // (bv. een Web-entry voor "Notepad" terwijl Microsoft-sectie ook Notepad heeft).
+        return displayNames.Contains(entry.DisplayName);
+    }
+
+    // ── Microsoft + OEM bloatware sectie ──────────────────────────
     private async Task LoadBloatwareAsync()
     {
         ShowBloatwareLoading();
 
-        // Combineer Microsoft + OEM voor één Get-AppxPackage call. DetectInstalledAsync
-        // matcht elke item tegen de PowerShell output; Microsoft- en OEM-items zijn
-        // qua package-prefixes disjunct (Microsoft.* vs HPInc.* / DellInc.* / etc.)
-        // dus er kan geen kruisverontreiniging zijn tussen vendoren.
-        var allItems = _microsoftItems.Concat(_oemItems).ToList();
-        await App.Bloatware.DetectInstalledAsync(allItems);
+        // Detection-driven: één Get-AppxPackage call vindt álle Microsoft + OEM
+        // AppX die op het systeem staan. Items worden runtime geconstrueerd; de
+        // BloatwareItem.CuratedMetadata dict verrijkt bekende packages met een
+        // friendly display + description, onbekende krijgen de raw package-name.
+        var detected = await App.Bloatware.DetectAllAsync();
+        _microsoftItems = detected.Where(b => b.Vendor == BloatwareVendor.Microsoft).ToList();
+        _oemItems = detected.Where(b => b.Vendor == BloatwareVendor.Oem).ToList();
 
-        // Microsoft sectie
-        var msVisible = _microsoftItems.Where(b => b.IsInstalled).ToList();
-        if (msVisible.Count == 0)
+        if (_microsoftItems.Count == 0)
             ShowBloatwareEmpty();
         else
         {
-            BloatwareList.ItemsSource = msVisible;
+            BloatwareList.ItemsSource = _microsoftItems;
             ShowBloatwareList();
         }
 
-        // OEM sectie — verberg helemaal als geen items gedetecteerd. Lege OEM-sectie
-        // tonen zou alleen ruis zijn voor de vele users zonder OEM-AppX-bloat.
-        var oemVisible = _oemItems.Where(b => b.IsInstalled).ToList();
-        if (oemVisible.Count == 0)
+        if (_oemItems.Count == 0)
         {
             OemSection.Visibility = Visibility.Collapsed;
         }
         else
         {
-            OemList.ItemsSource = oemVisible;
+            OemList.ItemsSource = _oemItems;
             OemSection.Visibility = Visibility.Visible;
         }
 
@@ -149,29 +170,122 @@ public sealed partial class DebloatPage : Page
         UpdateOemCount();
     }
 
-    // ── Catalog visibility helpers ────────────────────────────────
-    private void ShowCatalogLoading()
+    // ── Unified "All installed apps" sectie ───────────────────────
+    private async Task LoadInstalledAsync(bool forceRefresh)
     {
-        CatalogLoadingRing.Visibility = Visibility.Visible;
-        CatalogEmptyText.Visibility = Visibility.Collapsed;
-        InstalledAppsList.Visibility = Visibility.Collapsed;
+        ShowInstalledLoading();
+
+        // Safety net: wanneer detectie throwt (bv. een corrupte winget output, of een
+        // service die 'n exception gooit op iets dat we niet voorzien) moet de loading
+        // ring NIET eeuwig blijven spinnen. Try/catch + finally zorgt dat we altijd
+        // door naar de empty/list state, ook al is de detectie mislukt.
+        try
+        {
+            if (forceRefresh)
+                await App.Winget.GetInstalledAppIdsAsync(forceRefresh: true);
+
+            _allEntries = await App.InstalledApps.DetectAllAsync();
+        }
+        catch
+        {
+            _allEntries = new List<InstalledAppEntry>();
+        }
+        finally
+        {
+            // Loading ring uitzetten voor we de lijst tonen — anders overlapt 'ie items
+            // (Grid z-order: ring + list zitten in dezelfde container) en bij korte
+            // lijsten zie je 'm onder de items doorlopen alsof er nog wat geladen wordt.
+            InstalledLoadingRing.Visibility = Visibility.Collapsed;
+        }
+
+        ApplyFilterAndSearch();
+
+        UpdateInstalledSelection();
+        UpdateInstalledSelectAllButton();
+        UpdateInstalledCount();
     }
 
-    private void ShowCatalogEmpty()
+    private void ApplyFilterAndSearch()
     {
-        CatalogLoadingRing.Visibility = Visibility.Collapsed;
-        CatalogEmptyText.Visibility = Visibility.Visible;
-        InstalledAppsList.Visibility = Visibility.Collapsed;
+        IEnumerable<InstalledAppEntry> filtered = _allEntries;
+
+        // "System"-filter is een aparte view: laat álleen system components zien,
+        // negeer de show-system checkbox (anders zou je 'm óók nog moeten aanvinken).
+        // Voor de andere filters geldt de checkbox als gewone hide-filter.
+        if (_filter == InstalledFilter.System)
+        {
+            filtered = filtered.Where(e => e.IsSystemComponent);
+        }
+        else
+        {
+            if (!_showSystemComponents)
+                filtered = filtered.Where(e => !e.IsSystemComponent);
+
+            filtered = _filter switch
+            {
+                InstalledFilter.Winget => filtered.Where(e => e.Source == InstalledSource.Winget),
+                InstalledFilter.Store => filtered.Where(e => e.Source == InstalledSource.Store),
+                InstalledFilter.Web => filtered.Where(e => e.Source == InstalledSource.Web),
+                _ => filtered
+            };
+        }
+
+        // Fuzzy search op DisplayName + Publisher (Identifier voor Winget = winget ID
+        // wat informatief is, voor anderen is het minder leesbaar dus alleen voor winget).
+        var q = _searchText.Trim();
+        if (q.Length > 0)
+        {
+            filtered = filtered
+                .Select(e => (Entry: e, Score: FuzzyMatcher.Score(q, e.DisplayName, e.Publisher,
+                    e.Source == InstalledSource.Winget ? e.Identifier : null)))
+                .Where(p => p.Score >= FuzzyMatcher.MinScore)
+                .OrderByDescending(p => p.Score)
+                .ThenBy(p => p.Entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .Select(p => p.Entry);
+        }
+        else
+        {
+            // Geen search-query → sort by source (Winget → Store → Web), dan alfabetisch.
+            // "Echte" winget-installs (Source=winget) komen daarmee bovenaan zodat de
+            // user de 'managed' apps snel ziet vóór de Store/Web bagger. Voor de System-
+            // filter is groeperen op source niet zinvol (alles is Store), dus daar
+            // alleen alfabetisch.
+            filtered = _filter == InstalledFilter.System
+                ? filtered.OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase)
+                : filtered
+                    .OrderBy(e => SourceSortKey(e.Source))
+                    .ThenBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase);
+        }
+
+        _visibleEntries = filtered.ToList();
+
+        if (_visibleEntries.Count == 0 && _allEntries.Count > 0)
+        {
+            InstalledList.ItemsSource = null;
+            InstalledList.Visibility = Visibility.Collapsed;
+            InstalledEmptyText.Text = q.Length > 0
+                ? $"No installed apps matching \"{q}\""
+                : _filter == InstalledFilter.System
+                    ? "Geen Windows system components gedetecteerd."
+                    : $"No apps in source filter \"{_filter}\"";
+            InstalledEmptyText.Visibility = Visibility.Visible;
+        }
+        else if (_allEntries.Count == 0)
+        {
+            InstalledList.ItemsSource = null;
+            InstalledList.Visibility = Visibility.Collapsed;
+            InstalledEmptyText.Text = "Geen geïnstalleerde apps gedetecteerd.";
+            InstalledEmptyText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            InstalledEmptyText.Visibility = Visibility.Collapsed;
+            InstalledList.ItemsSource = _visibleEntries;
+            InstalledList.Visibility = Visibility.Visible;
+        }
     }
 
-    private void ShowCatalogList()
-    {
-        CatalogLoadingRing.Visibility = Visibility.Collapsed;
-        CatalogEmptyText.Visibility = Visibility.Collapsed;
-        InstalledAppsList.Visibility = Visibility.Visible;
-    }
-
-    // ── Microsoft bloatware visibility helpers ────────────────────
+    // ── Visibility helpers per sectie ─────────────────────────────
     private void ShowBloatwareLoading()
     {
         BloatwareLoadingRing.Visibility = Visibility.Visible;
@@ -193,93 +307,27 @@ public sealed partial class DebloatPage : Page
         BloatwareList.Visibility = Visibility.Visible;
     }
 
+    private void ShowInstalledLoading()
+    {
+        InstalledLoadingRing.Visibility = Visibility.Visible;
+        InstalledEmptyText.Visibility = Visibility.Collapsed;
+        InstalledList.Visibility = Visibility.Collapsed;
+    }
+
     // ── Refresh ───────────────────────────────────────────────────
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var app in _allCatalogApps) app.IsSelectedForUninstall = false;
         foreach (var b in _microsoftItems) b.IsSelected = false;
         foreach (var b in _oemItems) b.IsSelected = false;
+        foreach (var entry in _allEntries) entry.IsSelected = false;
         await LoadAsync(forceRefresh: true);
-    }
-
-    // ── Catalog handlers ──────────────────────────────────────────
-    private void AppCard_Tapped(object sender, TappedRoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement fe) return;
-        var app = fe.DataContext as AppModel ?? fe.Tag as AppModel;
-        if (app == null) return;
-
-        app.IsSelectedForUninstall = !app.IsSelectedForUninstall;
-        UpdateCatalogSelection();
-        UpdateCatalogSelectAllButton();
-    }
-
-    private void SelectAllButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_installedApps.Count == 0) return;
-        var allSelected = _installedApps.All(a => a.IsSelectedForUninstall);
-        foreach (var app in _installedApps)
-            app.IsSelectedForUninstall = !allSelected;
-
-        UpdateCatalogSelection();
-        UpdateCatalogSelectAllButton();
-    }
-
-    private async void UninstallButton_Click(object sender, RoutedEventArgs e)
-    {
-        var selected = _installedApps.Where(a => a.IsSelectedForUninstall).ToList();
-        if (selected.Count == 0) return;
-
-        var confirm = new ContentDialog
-        {
-            Title = selected.Count == 1
-                ? $"Uninstall {selected[0].Name}?"
-                : $"Uninstall {selected.Count} apps?",
-            Content = "This removes the selected apps via winget. The operation runs sequentially and can take a few minutes for large batches.",
-            PrimaryButtonText = "Uninstall",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.None,
-            PrimaryButtonStyle = (Style)Application.Current.Resources["DialogPrimaryButtonStyle"],
-            CloseButtonStyle = (Style)Application.Current.Resources["DialogDefaultButtonStyle"],
-            XamlRoot = this.XamlRoot
-        };
-
-        var result = await confirm.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
-
-        var dialog = new UninstallDialog(selected) { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
-
-        foreach (var app in selected) app.IsSelectedForUninstall = false;
-        await LoadCatalogAsync(forceRefresh: true);
-    }
-
-    private void UpdateCatalogSelection()
-    {
-        var count = _installedApps.Count(a => a.IsSelectedForUninstall);
-        CatalogSelectionCountText.Text = count == 0 ? string.Empty : $"{count} selected";
-        UninstallButton.IsEnabled = count > 0;
-    }
-
-    private void UpdateCatalogSelectAllButton()
-    {
-        var allSelected = _installedApps.Count > 0 && _installedApps.All(a => a.IsSelectedForUninstall);
-        SelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
-        SelectAllButton.IsEnabled = _installedApps.Count > 0;
-    }
-
-    private void UpdateCatalogCount()
-    {
-        var count = _installedApps.Count;
-        CatalogCountText.Text = count == 0 ? string.Empty : $"({count})";
     }
 
     // ── Microsoft bloatware handlers ──────────────────────────────
     private void BloatwareCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        // Shared handler tussen Microsoft + OEM card-templates. We weten niet
-        // direct uit welke lijst de getapte item komt — Vendor op het item zelf
-        // bepaalt welke selection-update we moeten triggeren.
+        // Shared tussen Microsoft + OEM card-templates. Vendor op het item bepaalt
+        // welke selection-update we triggeren.
         if (sender is not FrameworkElement fe) return;
         var item = fe.DataContext as BloatwareItem ?? fe.Tag as BloatwareItem;
         if (item == null) return;
@@ -297,84 +345,78 @@ public sealed partial class DebloatPage : Page
         }
     }
 
+    // BloatwareService.DetectAllAsync returnt alleen installed items, dus de
+    // _microsoftItems en _oemItems lijsten zijn intrinsiek "wat zichtbaar is".
+    // Geen extra IsInstalled filter nodig.
     private void BloatwareSelectAllButton_Click(object sender, RoutedEventArgs e)
     {
-        var visible = _microsoftItems.Where(b => b.IsInstalled).ToList();
-        if (visible.Count == 0) return;
-        var allSelected = visible.All(b => b.IsSelected);
-        foreach (var item in visible)
-            item.IsSelected = !allSelected;
-
+        if (_microsoftItems.Count == 0) return;
+        var allSelected = _microsoftItems.All(b => b.IsSelected);
+        foreach (var item in _microsoftItems) item.IsSelected = !allSelected;
         UpdateBloatwareSelection();
         UpdateBloatwareSelectAllButton();
     }
 
     private async void BloatwareRemoveButton_Click(object sender, RoutedEventArgs e)
     {
-        var selected = _microsoftItems.Where(b => b.IsInstalled && b.IsSelected).ToList();
+        var selected = _microsoftItems.Where(b => b.IsSelected).ToList();
         await ConfirmAndRemoveBloatwareAsync(selected, "Microsoft");
     }
 
     private void UpdateBloatwareSelection()
     {
-        var count = _microsoftItems.Count(b => b.IsInstalled && b.IsSelected);
+        var count = _microsoftItems.Count(b => b.IsSelected);
         BloatwareRemoveButton.IsEnabled = count > 0;
     }
 
     private void UpdateBloatwareSelectAllButton()
     {
-        var visible = _microsoftItems.Where(b => b.IsInstalled).ToList();
-        var allSelected = visible.Count > 0 && visible.All(b => b.IsSelected);
+        var allSelected = _microsoftItems.Count > 0 && _microsoftItems.All(b => b.IsSelected);
         BloatwareSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
-        BloatwareSelectAllButton.IsEnabled = visible.Count > 0;
+        BloatwareSelectAllButton.IsEnabled = _microsoftItems.Count > 0;
     }
 
     private void UpdateBloatwareCount()
     {
-        var count = _microsoftItems.Count(b => b.IsInstalled);
+        var count = _microsoftItems.Count;
         BloatwareCountText.Text = count == 0 ? string.Empty : $"({count})";
     }
 
     // ── OEM bloatware handlers ────────────────────────────────────
     private void OemSelectAllButton_Click(object sender, RoutedEventArgs e)
     {
-        var visible = _oemItems.Where(b => b.IsInstalled).ToList();
-        if (visible.Count == 0) return;
-        var allSelected = visible.All(b => b.IsSelected);
-        foreach (var item in visible)
-            item.IsSelected = !allSelected;
-
+        if (_oemItems.Count == 0) return;
+        var allSelected = _oemItems.All(b => b.IsSelected);
+        foreach (var item in _oemItems) item.IsSelected = !allSelected;
         UpdateOemSelection();
         UpdateOemSelectAllButton();
     }
 
     private async void OemRemoveButton_Click(object sender, RoutedEventArgs e)
     {
-        var selected = _oemItems.Where(b => b.IsInstalled && b.IsSelected).ToList();
+        var selected = _oemItems.Where(b => b.IsSelected).ToList();
         await ConfirmAndRemoveBloatwareAsync(selected, "OEM");
     }
 
     private void UpdateOemSelection()
     {
-        var count = _oemItems.Count(b => b.IsInstalled && b.IsSelected);
+        var count = _oemItems.Count(b => b.IsSelected);
         OemRemoveButton.IsEnabled = count > 0;
     }
 
     private void UpdateOemSelectAllButton()
     {
-        var visible = _oemItems.Where(b => b.IsInstalled).ToList();
-        var allSelected = visible.Count > 0 && visible.All(b => b.IsSelected);
+        var allSelected = _oemItems.Count > 0 && _oemItems.All(b => b.IsSelected);
         OemSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
-        OemSelectAllButton.IsEnabled = visible.Count > 0;
+        OemSelectAllButton.IsEnabled = _oemItems.Count > 0;
     }
 
     private void UpdateOemCount()
     {
-        var count = _oemItems.Count(b => b.IsInstalled);
+        var count = _oemItems.Count;
         OemCountText.Text = count == 0 ? string.Empty : $"({count})";
     }
 
-    // ── Shared bloatware confirm + remove flow ────────────────────
     private async Task ConfirmAndRemoveBloatwareAsync(List<BloatwareItem> selected, string vendorLabel)
     {
         if (selected.Count == 0) return;
@@ -401,7 +443,139 @@ public sealed partial class DebloatPage : Page
 
         foreach (var item in selected) item.IsSelected = false;
         await LoadBloatwareAsync();
+        await LoadInstalledAsync(forceRefresh: true);  // bloatware-uninstall raakt ook unified lijst
     }
+
+    // ── Unified all-installed handlers ────────────────────────────
+    private void InstalledAppCard_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        var entry = fe.DataContext as InstalledAppEntry ?? fe.Tag as InstalledAppEntry;
+        if (entry == null) return;
+
+        entry.IsSelected = !entry.IsSelected;
+        UpdateInstalledSelection();
+        UpdateInstalledSelectAllButton();
+    }
+
+    private void InstalledSelectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_visibleEntries.Count == 0) return;
+        var allSelected = _visibleEntries.All(en => en.IsSelected);
+        foreach (var entry in _visibleEntries) entry.IsSelected = !allSelected;
+        UpdateInstalledSelection();
+        UpdateInstalledSelectAllButton();
+    }
+
+    private void InstalledSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (!_uiReady) return;
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        _searchText = sender.Text ?? string.Empty;
+        ApplyFilterAndSearch();
+        UpdateInstalledSelectAllButton();
+    }
+
+    private void InstalledFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_uiReady) return;
+        if (InstalledFilterBox.SelectedIndex < 0) return;
+        _filter = (InstalledFilter)InstalledFilterBox.SelectedIndex;
+        ApplyFilterAndSearch();
+        UpdateInstalledSelectAllButton();
+        // System-filter heeft afwijkende count (alleen system items vs alleen
+        // niet-system items in andere filters) — moet hier ook refreshen.
+        UpdateInstalledCount();
+    }
+
+    private void ShowSystemCheckbox_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_uiReady) return;
+        _showSystemComponents = ShowSystemCheckbox.IsChecked == true;
+        ApplyFilterAndSearch();
+        UpdateInstalledSelectAllButton();
+        UpdateInstalledCount();
+    }
+
+    private async void InstalledUninstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Werkt op _allEntries i.p.v. _visibleEntries: een filter-wissel mag niet
+        // de selectie wegvegen, en user verwacht dat "uninstall selected" doet wat
+        // ze hebben aangevinkt ongeacht huidige zichtbaarheid.
+        var selected = _allEntries.Where(en => en.IsSelected).ToList();
+        if (selected.Count == 0) return;
+
+        var hasElevated = selected.Any(en => en.Source != InstalledSource.Winget);
+        var content = hasElevated
+            ? "This removes the selected apps. A UAC prompt will appear because some items require administrator rights (Store / registry installs). Continue?"
+            : "This removes the selected catalog apps via winget. Continue?";
+
+        var confirm = new ContentDialog
+        {
+            Title = selected.Count == 1
+                ? $"Uninstall {selected[0].DisplayName}?"
+                : $"Uninstall {selected.Count} apps?",
+            Content = content,
+            PrimaryButtonText = "Uninstall",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.None,
+            PrimaryButtonStyle = (Style)Application.Current.Resources["DialogPrimaryButtonStyle"],
+            CloseButtonStyle = (Style)Application.Current.Resources["DialogDefaultButtonStyle"],
+            XamlRoot = this.XamlRoot
+        };
+
+        var result = await confirm.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        var dialog = new AllAppsUninstallDialog(selected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
+        await dialog.ShowAsync();
+
+        // Selectie weggooien is impliciet — de items komen uit _allEntries dat we
+        // zo herladen. De nieuwe entries zijn fresh objects zonder IsSelected.
+        await LoadInstalledAsync(forceRefresh: true);
+        // Bloatware-counts ook refreshen — een Store-app uninstall raakt zowel de
+        // unified lijst als de bloatware-secties als de app daar curated in stond.
+        await LoadBloatwareAsync();
+    }
+
+    private void UpdateInstalledSelection()
+    {
+        var count = _allEntries.Count(en => en.IsSelected);
+        InstalledSelectionCountText.Text = count == 0 ? string.Empty : $"{count} selected";
+        InstalledUninstallButton.IsEnabled = count > 0;
+    }
+
+    private void UpdateInstalledSelectAllButton()
+    {
+        var allSelected = _visibleEntries.Count > 0 && _visibleEntries.All(en => en.IsSelected);
+        InstalledSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        InstalledSelectAllButton.IsEnabled = _visibleEntries.Count > 0;
+    }
+
+    private void UpdateInstalledCount()
+    {
+        // Count reflecteert wat de user kan inspecteren met huidige show-system-toggle
+        // — totaal-verborgen system components meetellen zou misleidend zijn ("(380)"
+        // boven een lijst met 200 zichtbare items). System-filter toont alleen system,
+        // dus dan is die count = aantal system components.
+        int count = _filter == InstalledFilter.System
+            ? _allEntries.Count(e => e.IsSystemComponent)
+            : _showSystemComponents
+                ? _allEntries.Count
+                : _allEntries.Count(e => !e.IsSystemComponent);
+        InstalledCountText.Text = count == 0 ? string.Empty : $"({count})";
+    }
+
+    // Sort-key voor source-groeperen: Winget eerst (echte managed apps), dan Store
+    // (Microsoft Store / AppX), dan Web (vendor MSI/EXE). Volgorde matcht de visuele
+    // hierarchie: hoe meer "officieel managed", hoe hoger.
+    private static int SourceSortKey(InstalledSource s) => s switch
+    {
+        InstalledSource.Winget => 0,
+        InstalledSource.Store => 1,
+        InstalledSource.Web => 2,
+        _ => 3
+    };
 
     // ── Shared ────────────────────────────────────────────────────
     private void AppCard_PointerEntered(object sender, PointerRoutedEventArgs e)

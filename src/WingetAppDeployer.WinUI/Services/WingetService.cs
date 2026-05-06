@@ -15,8 +15,12 @@ namespace WingetAppDeployer_WinUI.Services;
 // winget.exe CLI, streams stdout as progress, no shared code with the WPF app.
 public sealed class WingetService
 {
+    // Gedeelde cache voor zowel rich entries als ID-set. Vroeger waren dit twee
+    // aparte caches met twee aparte `winget list` calls — debloat-pagina deed
+    // 2× ~7s = ~15s wachten. Nu één call die beide caches vult.
+    private List<WingetListEntry>? _appsListCache;
     private HashSet<string>? _installedIdsCache;
-    private readonly SemaphoreSlim _installedLock = new(1, 1);
+    private readonly SemaphoreSlim _appsListLock = new(1, 1);
 
     public async Task<bool> IsWingetAvailableAsync()
     {
@@ -32,55 +36,183 @@ public sealed class WingetService
     }
 
     /// <summary>
-    /// Parses `winget list` output and returns the set of installed winget IDs.
-    /// Cached — pass forceRefresh=true after an install batch to re-detect.
+    /// HashSet van geïnstalleerde winget-IDs. Hergebruikt de cache van
+    /// GetInstalledAppsListAsync zodat we geen tweede winget-call doen.
     /// </summary>
     public async Task<HashSet<string>> GetInstalledAppIdsAsync(bool forceRefresh = false)
     {
-        await _installedLock.WaitAsync();
+        await GetInstalledAppsListAsync(forceRefresh);
+        return _installedIdsCache ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returnt rich `winget list` entries — name + id + version per geïnstalleerde
+    /// app. Cached — pass forceRefresh=true na install/uninstall om opnieuw te scannen.
+    /// Locale-fallback ingebouwd: als de rich parser faalt (bv. Nederlandse Windows
+    /// met "Naam Id Versie" header) valt 'ie terug op een whitespace-tokenizer die
+    /// alleen IDs extraheert. In dat fallback-geval is Name = Id.
+    /// </summary>
+    public async Task<List<WingetListEntry>> GetInstalledAppsListAsync(bool forceRefresh = false)
+    {
+        await _appsListLock.WaitAsync();
         try
         {
-            if (_installedIdsCache != null && !forceRefresh)
-                return _installedIdsCache;
+            if (_appsListCache != null && !forceRefresh) return _appsListCache;
 
-            var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var list = new List<WingetListEntry>();
             try
             {
+                // --disable-interactivity slaat winget's progress-bars over die anders
+                // tussen de output-regels gemixed kunnen raken en de parser confusen.
+                // Geeft ook iets snellere output op trage systemen.
                 var (exitCode, output, _) = await RunWingetCommandAsync(
-                    "list --accept-source-agreements");
-                if (exitCode == 0)
+                    "list --accept-source-agreements --disable-interactivity");
+                if (exitCode == 0 || !string.IsNullOrWhiteSpace(output))
                 {
-                    // winget list output: header line + separator + rows. The ID is the
-                    // second column. We split on whitespace; some rows have names with
-                    // spaces so we can't rely on position — instead match any token that
-                    // looks like a dotted winget ID (Publisher.AppName) per row.
-                    var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var line in lines.Skip(2))
-                    {
-                        var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var part in parts)
-                        {
-                            if (part.Contains('.') && !part.Contains('/') && part.Length > 3)
-                            {
-                                installed.Add(part);
-                                break;
-                            }
-                        }
-                    }
+                    // Rich parser eerst (volledige Name + Id + Version op Engelse Windows).
+                    // Als die 0 entries returnt fallen we terug op de simple ID-tokenizer
+                    // — die is locale-agnostic en werkt zelfs op Nederlandse winget output.
+                    var rich = ParseListOutput(output);
+                    list = rich.Count > 0 ? rich : ParseSimpleIds(output);
                 }
             }
             catch
             {
-                // swallow — return empty set
+                // swallow — return lege lijst, andere bronnen vullen aan
             }
 
-            _installedIdsCache = installed;
-            return installed;
+            _appsListCache = list;
+            _installedIdsCache = new HashSet<string>(
+                list.Select(e => e.Id), StringComparer.OrdinalIgnoreCase);
+            return _appsListCache;
         }
         finally
         {
-            _installedLock.Release();
+            _appsListLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Locale-onafhankelijke fallback wanneer ParseListOutput 0 entries returnt
+    /// (header-detectie faalde door non-Engelse Windows). Pakt elke regel met een
+    /// dotted token = winget ID. Geen Name of Version.
+    /// </summary>
+    private static List<WingetListEntry> ParseSimpleIds(string output)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var results = new List<WingetListEntry>();
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                // Skip:
+                //   - geen dot (geen winget id)
+                //   - tokens met '/' of '\\' (paths, ARP\ / MSIX\ prefixes)
+                //   - korte fragments / version-numbers (bv. "147.0.2" zou anders matchen)
+                //   - tokens zonder letter (alleen digits + dots = version, niet ID)
+                if (!part.Contains('.')) continue;
+                if (part.Contains('/') || part.Contains('\\')) continue;
+                if (part.Length <= 3) continue;
+                if (!part.Any(char.IsLetter)) continue;
+
+                if (seen.Add(part))
+                    // Fallback parser kent geen Source kolom — leeg laten betekent
+                    // dat InstalledAppsService deze entries minder strict zal taggen.
+                    results.Add(new WingetListEntry(part, part, "", ""));
+                break;
+            }
+        }
+        return results;
+    }
+
+    private static List<WingetListEntry> ParseListOutput(string output)
+    {
+        var results = new List<WingetListEntry>();
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                          .Select(l => l.TrimEnd('\r'))
+                          .ToList();
+
+        // Header line bevat altijd "Name" en "Id". Daaronder een separator met
+        // dashes. Column-position parsing — app-namen mogen spaties bevatten dus
+        // whitespace-split werkt niet. Same patroon als ParseSearchOutput.
+        var headerIdx = lines.FindIndex(l => l.StartsWith("Name", StringComparison.Ordinal)
+                                          && l.Contains("Id", StringComparison.Ordinal));
+        if (headerIdx < 0 || headerIdx + 2 >= lines.Count) return results;
+
+        var header = lines[headerIdx];
+        var idPos = header.IndexOf("Id", StringComparison.Ordinal);
+        var versionPos = header.IndexOf("Version", StringComparison.Ordinal);
+        var availablePos = header.IndexOf("Available", StringComparison.Ordinal);
+        var sourcePos = header.IndexOf("Source", StringComparison.Ordinal);
+        if (idPos < 0 || versionPos < 0 || versionPos <= idPos) return results;
+
+        // Eindkolom voor Version: Available komt voor Source, en Available is
+        // optioneel (alleen apps met een upgrade pending). Pak Available als 'ie
+        // er staat, anders Source, anders einde regel.
+        var versionEnd = availablePos > versionPos ? availablePos
+                       : sourcePos > versionPos ? sourcePos
+                       : -1;
+
+        for (int i = headerIdx + 2; i < lines.Count; i++)
+        {
+            // Per-regel try/catch zodat één rare regel (bv. een progress-update
+            // tussen entries die door de char-by-char reader als dataregel binnenkomt)
+            // niet de hele parse afbreekt. Zonder deze safety net gaf de hele lijst
+            // 0 entries terug zodra ÉÉN regel out-of-range Substring veroorzaakte.
+            try
+            {
+                var line = lines[i];
+                if (line.Length < versionPos) continue;
+
+                var name = line.Substring(0, idPos).Trim();
+                var idEnd = versionPos;
+                var id = line.Substring(idPos, idEnd - idPos).Trim();
+
+                string version;
+                if (versionEnd > versionPos && line.Length >= versionEnd)
+                    version = line.Substring(versionPos, versionEnd - versionPos).Trim();
+                else if (line.Length > versionPos)
+                    version = line.Substring(versionPos).Trim();
+                else
+                    version = string.Empty;
+
+                // Source column: "winget" = echt in winget repo, "msstore" = MS Store,
+                // leeg = pure registry / unmatched. Cruciaal onderscheid: alleen
+                // Source=winget rechtvaardigt de Winget badge in onze UI; msstore en
+                // leeg moeten doorvallen naar Store / Web detectie zodat user de
+                // juiste tag ziet.
+                var source = (sourcePos > 0 && line.Length > sourcePos)
+                    ? line.Substring(sourcePos).Trim()
+                    : string.Empty;
+
+                // Filter rows zonder echte ID (separators, totals, header-noise).
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(id)) continue;
+                // Skip backslash-prefix IDs:
+                //   ARP\Machine\X64\... = pure registry uninstall entry, geen winget package
+                //   MSIX\Name_Version_... = Microsoft Store/AppX in disguise (Get-AppxPackage
+                //     vindt 'm gewoon, dus laat die detection het pakken, anders krijgen we
+                //     dubbel met andere DisplayName en faalt dedup).
+                if (id.Contains('\\')) continue;
+                // ID bevat een dot voor reguliere winget IDs (Publisher.AppName) of is
+                // een Microsoft Store productID (formaat 9XXXX of XPXXX). Beide accepteren.
+                var isWingetId = id.Contains('.') && !id.Contains(' ') && id.Length >= 3;
+                var isStoreId = (id.StartsWith("9", StringComparison.Ordinal) || id.StartsWith("XP", StringComparison.OrdinalIgnoreCase))
+                                && id.Length >= 10 && !id.Contains(' ');
+                if (!isWingetId && !isStoreId) continue;
+
+                results.Add(new WingetListEntry(name, id, version, source));
+            }
+            catch
+            {
+                // Skip deze regel — defensief, mag in praktijk nooit gebeuren met de
+                // length-check hierboven, maar als winget z'n output-format wijzigt
+                // willen we niet dat de hele lijst sneuvelt.
+                continue;
+            }
+        }
+        return results;
     }
 
     /// <summary>
@@ -228,10 +360,15 @@ public sealed class WingetService
 
             if (exitCode == 0)
             {
-                // Invalidate cache so the next GetInstalledAppIdsAsync call re-queries.
-                await _installedLock.WaitAsync();
-                try { _installedIdsCache = null; }
-                finally { _installedLock.Release(); }
+                // Invalidate beide caches zodat de volgende GetInstalledAppsListAsync /
+                // GetInstalledAppIdsAsync call een verse winget list scan triggert.
+                await _appsListLock.WaitAsync();
+                try
+                {
+                    _appsListCache = null;
+                    _installedIdsCache = null;
+                }
+                finally { _appsListLock.Release(); }
                 return (true, "Uninstalled");
             }
 
@@ -477,3 +614,10 @@ public readonly record struct UninstallProgress(
     AppModel App,
     UninstallPhase Phase,
     string Message);
+
+// Source = "winget" (echt in winget repo), "msstore" (Microsoft Store), of leeg/onbekend.
+// Belangrijk onderscheid: `winget list` toont álle installed apps maar markeert per
+// row of winget de package kent. Apps met Source=winget zijn die `winget search`
+// terugvindt; apps met Source=msstore staan alleen in de Store; lege Source = pure
+// registry entry waarvoor winget geen match vond.
+public sealed record WingetListEntry(string Name, string Id, string Version, string Source);

@@ -11,10 +11,7 @@
     Background="Transparent">
 
     <Page.Resources>
-        <!-- Card-template gedeeld tussen Microsoft + OEM secties zodat we 'm
-             niet hoeven te dupliceren. Beide secties tonen dezelfde BloatwareItem
-             structuur (DisplayName + Category badge + Description + Installed badge
-             + Checkbox). Tapped/Pointer-handlers blijven naam-identiek. -->
+        <!-- Card-template gedeeld tussen Microsoft + OEM bloatware secties. -->
         <DataTemplate x:Key="BloatwareCardTemplate" x:DataType="models:BloatwareItem">
             <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -76,6 +73,88 @@
                           IsHitTestVisible="False" />
             </Grid>
         </DataTemplate>
+
+        <!-- Card-template voor de unified "All installed apps" sectie. Toont
+             source-badge per card; voor catalog-source gebruikt de bestaande
+             icon-bundle, voor Store/Other geen icon (out-of-scope voor nu). -->
+        <DataTemplate x:Key="InstalledAppCardTemplate" x:DataType="models:InstalledAppEntry">
+            <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                  BorderThickness="1"
+                  CornerRadius="4"
+                  Padding="16,12"
+                  Tag="{x:Bind}"
+                  Tapped="InstalledAppCard_Tapped"
+                  PointerEntered="AppCard_PointerEntered"
+                  PointerExited="AppCard_PointerExited">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Image Grid.Column="0"
+                       Source="{x:Bind IconImage}"
+                       Width="40" Height="40"
+                       Margin="0,0,14,0"
+                       Stretch="Uniform"
+                       VerticalAlignment="Center"
+                       Visibility="{x:Bind IconVisibility}"
+                       ImageFailed="AppIcon_ImageFailed" />
+
+                <FontIcon Grid.Column="0"
+                          Glyph="&#xE7C3;"
+                          FontSize="22"
+                          Width="40" Height="40"
+                          Margin="0,0,14,0"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Center"
+                          Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                          Visibility="{x:Bind GenericIconVisibility}" />
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{x:Bind DisplayName}"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   FontSize="15"
+                                   VerticalAlignment="Center" />
+                        <Border Background="{x:Bind SourceBadgeBrush}"
+                                CornerRadius="4"
+                                Padding="6,2"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="{x:Bind SourceTooltip}">
+                            <TextBlock Text="{x:Bind SourceBadgeText}"
+                                       Style="{StaticResource CaptionTextBlockStyle}" />
+                        </Border>
+                        <Border Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                                CornerRadius="4"
+                                Padding="6,2"
+                                VerticalAlignment="Center"
+                                Visibility="{x:Bind SystemBadgeVisibility}"
+                                ToolTipService.ToolTip="Windows system component — uninstalling can break OS functionality">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon Glyph="&#xE7BA;"
+                                          FontSize="10"
+                                          VerticalAlignment="Center" />
+                                <TextBlock Text="System"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind Subtitle}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <CheckBox Grid.Column="2"
+                          IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                          VerticalAlignment="Center"
+                          MinWidth="0"
+                          IsHitTestVisible="False" />
+            </Grid>
+        </DataTemplate>
     </Page.Resources>
 
     <Grid Padding="36,24,36,12">
@@ -109,7 +188,7 @@
         <InfoBar Grid.Row="1"
                  Severity="Informational"
                  Title="Work in progress"
-                 Message="Unified 'alle geïnstalleerde apps van álle bronnen' lijst (registry installs, MSI/EXE) volgt in v0.8.4. Deep clean / restant-opruiming in v0.8.5 + v0.8.6."
+                 Message="Restant-opruiming na uninstall (v0.8.5) en deep clean (v0.8.6) volgen nog. De curated Microsoft / OEM secties geven snelle quick-actions; de unified lijst onderaan toont álles dat op de PC staat."
                  IsOpen="True"
                  IsClosable="False"
                  MaxWidth="720"
@@ -123,7 +202,7 @@
             <StackPanel Spacing="28">
 
                 <!-- ================================================
-                     SECTIE 1: Microsoft bloatware
+                     SECTIE 1: Microsoft bloatware (curated quick-actions)
                      ================================================ -->
                 <StackPanel Spacing="12">
                     <Grid ColumnSpacing="8">
@@ -190,9 +269,6 @@
 
                 <!-- ================================================
                      SECTIE 2: OEM bloatware (HP / Dell / Lenovo / etc.)
-                     De hele sectie is collapsed wanneer er geen OEM-bloat
-                     gedetecteerd is — meeste users hebben geen OEM-AppX
-                     packages en zouden dan alleen een lege sectie zien.
                      ================================================ -->
                 <StackPanel x:Name="OemSection"
                             Spacing="12"
@@ -243,8 +319,13 @@
                 </StackPanel>
 
                 <!-- ================================================
-                     SECTIE 3: Apps uit deze catalogus (= "User installed"
-                     stand-in tot v0.8.4 de unified all-sources lijst brengt)
+                     SECTIE 3: All installed apps (unified)
+                     Vervangt de v0.8.1 catalog-only sectie. Toont apps uit
+                     álle bronnen (catalog / Store / registry installs) met
+                     filter ComboBox en search. Catalog-uninstalls gaan direct
+                     via winget zonder UAC; Store/Other in een gecombineerde
+                     elevated PS-batch (één UAC voor de hele admin-required
+                     subset).
                      ================================================ -->
                 <StackPanel Spacing="12">
                     <Grid ColumnSpacing="8">
@@ -255,100 +336,89 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-                                <TextBlock Text="Installed apps from this catalog"
+                                <TextBlock Text="All installed apps"
                                            Style="{StaticResource SubtitleTextBlockStyle}" />
-                                <TextBlock x:Name="CatalogCountText"
+                                <TextBlock x:Name="InstalledCountText"
                                            Text=""
                                            Style="{StaticResource SubtitleTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            VerticalAlignment="Bottom" />
                             </StackPanel>
-                            <TextBlock Text="Apps die je via deze tool (of handmatig via winget) hebt geïnstalleerd."
+                            <TextBlock Text="Alles op de PC: apps uit deze catalogus, Microsoft Store / AppX packages, en alles uit de Windows registry uninstall keys (MSI/EXE installs)."
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Margin="0,4,0,0" />
+                                       Margin="0,4,0,0"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
                         <Button Grid.Column="1"
-                                x:Name="SelectAllButton"
-                                Click="SelectAllButton_Click"
+                                x:Name="InstalledSelectAllButton"
+                                Click="InstalledSelectAllButton_Click"
                                 IsEnabled="False"
                                 VerticalAlignment="Center"
                                 Content="Select all" />
                         <Button Grid.Column="2"
-                                x:Name="UninstallButton"
-                                Content="Uninstall selected"
-                                Style="{StaticResource AccentButtonStyle}"
+                                x:Name="InstalledUninstallButton"
+                                Click="InstalledUninstallButton_Click"
                                 IsEnabled="False"
-                                Click="UninstallButton_Click"
-                                VerticalAlignment="Center" />
+                                Style="{StaticResource AccentButtonStyle}"
+                                VerticalAlignment="Center"
+                                Content="Uninstall selected" />
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <AutoSuggestBox Grid.Column="0"
+                                        x:Name="InstalledSearchBox"
+                                        PlaceholderText="Search installed apps"
+                                        QueryIcon="Find"
+                                        TextChanged="InstalledSearchBox_TextChanged" />
+                        <ComboBox Grid.Column="1"
+                                  x:Name="InstalledFilterBox"
+                                  SelectionChanged="InstalledFilterBox_SelectionChanged"
+                                  MinWidth="140">
+                            <ComboBoxItem Content="All sources" IsSelected="True" />
+                            <ComboBoxItem Content="Winget" />
+                            <ComboBoxItem Content="Store" />
+                            <ComboBoxItem Content="Web" />
+                            <ComboBoxItem Content="System" />
+                        </ComboBox>
+                        <CheckBox Grid.Column="2"
+                                  x:Name="ShowSystemCheckbox"
+                                  Content="Show system components"
+                                  ToolTipService.ToolTip="Include Windows system AppX packages (AAD.BrokerPlugin, BioEnrollment, etc.) — niet veilig om te uninstallen"
+                                  Checked="ShowSystemCheckbox_Toggled"
+                                  Unchecked="ShowSystemCheckbox_Toggled"
+                                  VerticalAlignment="Center" />
                     </Grid>
 
                     <Grid>
-                        <ProgressRing x:Name="CatalogLoadingRing"
+                        <ProgressRing x:Name="InstalledLoadingRing"
                                       Width="32" Height="32"
                                       IsIndeterminate="True"
                                       HorizontalAlignment="Center"
                                       Visibility="Collapsed" />
 
-                        <TextBlock x:Name="CatalogEmptyText"
-                                   Text="Geen apps uit deze catalogus gevonden op dit systeem."
+                        <TextBlock x:Name="InstalledEmptyText"
+                                   Text=""
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    HorizontalAlignment="Center"
                                    Visibility="Collapsed"
                                    Margin="0,12,0,0" />
 
-                        <ItemsRepeater x:Name="InstalledAppsList">
+                        <ItemsRepeater x:Name="InstalledList"
+                                       ItemTemplate="{StaticResource InstalledAppCardTemplate}">
                             <ItemsRepeater.Layout>
                                 <StackLayout Spacing="4" />
                             </ItemsRepeater.Layout>
-
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="models:App">
-                                    <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                          BorderThickness="1"
-                                          CornerRadius="4"
-                                          Padding="16,12"
-                                          Tag="{x:Bind}"
-                                          Tapped="AppCard_Tapped"
-                                          PointerEntered="AppCard_PointerEntered"
-                                          PointerExited="AppCard_PointerExited">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <Image Grid.Column="0"
-                                               Source="{x:Bind IconImage}"
-                                               Width="40" Height="40"
-                                               Margin="0,0,14,0"
-                                               Stretch="Uniform"
-                                               VerticalAlignment="Center"
-                                               ImageFailed="AppIcon_ImageFailed" />
-
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind Name}"
-                                                       Style="{StaticResource BodyStrongTextBlockStyle}"
-                                                       FontSize="15" />
-                                            <TextBlock Text="{x:Bind WingetId}"
-                                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-
-                                        <CheckBox Grid.Column="2"
-                                                  IsChecked="{x:Bind IsSelectedForUninstall, Mode=TwoWay}"
-                                                  VerticalAlignment="Center"
-                                                  MinWidth="0"
-                                                  IsHitTestVisible="False" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
                     </Grid>
 
-                    <TextBlock x:Name="CatalogSelectionCountText"
+                    <TextBlock x:Name="InstalledSelectionCountText"
                                Text=""
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"

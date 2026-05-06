@@ -22,69 +22,150 @@ namespace WingetAppDeployer_WinUI.Services;
 public sealed class BloatwareService
 {
     /// <summary>
-    /// Run Get-AppxPackage en match installed packages tegen onze curated list.
-    /// Vult IsInstalled + InstalledPackageFullNames per item zodat de UI weet
-    /// welke items tonen en de uninstall-call de FullName kan doorgeven aan
-    /// Remove-AppxPackage (die heeft FullName nodig, niet Name).
+    /// Run Get-AppxPackage en construct een BloatwareItem per gedetecteerd package
+    /// dat onder Microsoft- of OEM-vendor valt. Detection-driven — geen hardcoded
+    /// lijst van wat-is-bloat. Curated metadata uit BloatwareItem.LookupMetadata
+    /// wordt opgevraagd voor friendly display + description; onbekende packages
+    /// krijgen de raw package-name als display met lege description.
+    ///
+    /// Filters:
+    ///   - IsFramework / IsResourcePackage: geen UI-apps, skippen.
+    ///   - SignatureKind = System: Windows-eigen system components (AAD.BrokerPlugin,
+    ///     BioEnrollment, etc.) — niet veilig om te uninstallen, skippen.
+    ///   - Microsoft.* prefix EN niet-system → Microsoft bloat (Solitaire, Xbox, etc.)
+    ///   - Publisher contains HP/Dell/Lenovo/AsusTek/Acer/Micro-Star (MSI) → OEM bloat
     /// </summary>
-    public async Task DetectInstalledAsync(IReadOnlyList<BloatwareItem> items)
+    public async Task<List<BloatwareItem>> DetectAllAsync()
     {
+        var items = new List<BloatwareItem>();
         try
         {
-            // -AllUsers vereist admin; zonder die flag zien we alleen current-user
-            // installs. Voor de meeste bloatware is current-user genoeg en als user
-            // het later wil verwijderen klagen we daar pas bij Remove-AppxPackage
-            // over de admin-noodzaak.
-            //
-            // Format: Name + PackageFullName pipe-separated zodat we makkelijk kunnen
-            // parsen. ConvertTo-Csv zou robuuster zijn maar deze format is voldoende
-            // voor de set tekens die in package names voorkomt.
-            var script = "Get-AppxPackage | ForEach-Object { \"$($_.Name)|$($_.PackageFullName)\" }";
+            // Format: Name|PackageFullName|Publisher pipe-separated. Eén PS-call.
+            var script = @"Get-AppxPackage |
+                Where-Object { -not $_.IsFramework -and -not $_.IsResourcePackage -and $_.SignatureKind -ne 'System' } |
+                ForEach-Object { ""$($_.Name)|$($_.PackageFullName)|$($_.Publisher)"" }";
+
             var output = await RunPowerShellAsync(script);
 
-            var installedMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            // Eén regel per package. Group by Name zodat multi-version installs
+            // (twee Solitaire entries voor x86+x64 etc.) onder één item komen
+            // met meerdere FullNames.
+            var byName = new Dictionary<string, (string publisher, List<string> fullNames)>(StringComparer.OrdinalIgnoreCase);
             foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
-                var trimmed = line.Trim();
-                var parts = trimmed.Split('|');
-                if (parts.Length != 2) continue;
+                var parts = line.TrimEnd('\r').Split('|');
+                if (parts.Length < 3) continue;
                 var name = parts[0].Trim();
                 var fullName = parts[1].Trim();
+                var publisher = parts[2].Trim();
                 if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(fullName)) continue;
 
-                if (!installedMap.TryGetValue(name, out var list))
+                if (!byName.TryGetValue(name, out var entry))
                 {
-                    list = new List<string>();
-                    installedMap[name] = list;
+                    entry = (publisher, new List<string>());
+                    byName[name] = entry;
                 }
-                list.Add(fullName);
+                entry.fullNames.Add(fullName);
             }
 
-            // Match curated items tegen detected packages. Een item wordt als installed
-            // gemarkeerd zodra ÉÉN van zijn PackageNames matcht — voor multi-package
-            // items (Xbox suite) hoeft dus niet de hele suite aanwezig te zijn.
-            foreach (var item in items)
+            foreach (var (name, entry) in byName)
             {
-                item.InstalledPackageFullNames.Clear();
-                foreach (var packageName in item.PackageNames)
-                {
-                    if (installedMap.TryGetValue(packageName, out var fullNames))
-                        item.InstalledPackageFullNames.AddRange(fullNames);
-                }
-                item.IsInstalled = item.InstalledPackageFullNames.Count > 0;
+                var vendor = ClassifyVendor(name, entry.publisher);
+                if (vendor == null) continue;  // niet Microsoft, niet OEM → niet voor deze sectie
+
+                var metadata = BloatwareItem.LookupMetadata(name);
+                var displayName = metadata?.DisplayName ?? StripCommonPrefix(name);
+                var description = metadata?.Description ?? string.Empty;
+                var category = metadata?.Category ?? CategoryFromVendor(vendor.Value);
+
+                var item = new BloatwareItem(displayName, description, category, vendor.Value, name);
+                item.InstalledPackageFullNames.AddRange(entry.fullNames);
+                item.IsInstalled = true;
+                items.Add(item);
             }
         }
         catch
         {
-            // Bij PowerShell-failure niets markeren als installed → user ziet
-            // lege bloatware-lijst i.p.v. een crash. Edge case.
-            foreach (var item in items)
-            {
-                item.IsInstalled = false;
-                item.InstalledPackageFullNames.Clear();
-            }
+            // PS-failure → lege lijst, andere bronnen blijven werken.
         }
+
+        // Sort: bekende items met description eerst (alfabetisch op DisplayName),
+        // daarna onbekende — zo zien power-users de zooi waarvan we weten "ja dit
+        // is bloat" eerst.
+        return items
+            .OrderByDescending(i => !string.IsNullOrEmpty(i.Description))
+            .ThenBy(i => i.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
+
+    private static BloatwareVendor? ClassifyVendor(string packageName, string publisher)
+    {
+        // Microsoft: name starts with "Microsoft." OR publisher contains Microsoft.
+        // Sluit ook MicrosoftCorporationII (used by Quick Assist etc.) in.
+        if (packageName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("MicrosoftCorporation", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("MicrosoftTeams", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("MSTeams", StringComparison.OrdinalIgnoreCase) ||
+            packageName.Equals("microsoft.windowscommunicationsapps", StringComparison.OrdinalIgnoreCase) ||
+            publisher.Contains("CN=Microsoft", StringComparison.OrdinalIgnoreCase))
+            return BloatwareVendor.Microsoft;
+
+        // OEM: zowel Name-prefix als Publisher CN= patterns zodat we whitelabeled
+        // OEM-builds catchen (sommige OEM-AppX gebruiken een anonieme app-id zoals
+        // "AD2F1837.HPSmart" — naam-prefix vangt die niet, publisher wel).
+        var p = publisher;
+        if (p.Contains("CN=HP Inc", StringComparison.OrdinalIgnoreCase) ||
+            p.Contains("CN=Hewlett-Packard", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("HP.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("HPInc.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("AD2F1837.", StringComparison.Ordinal))   // Microsoft's HP container PFN
+            return BloatwareVendor.Oem;
+
+        if (p.Contains("CN=Dell Inc", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("DellInc.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("Dell.", StringComparison.OrdinalIgnoreCase))
+            return BloatwareVendor.Oem;
+
+        if (p.Contains("CN=Lenovo", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("Lenovo", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("E0469640.", StringComparison.Ordinal))   // Lenovo's MS PFN
+            return BloatwareVendor.Oem;
+
+        if (p.Contains("CN=AsusTek", StringComparison.OrdinalIgnoreCase) ||
+            p.Contains("CN=ASUSTek Computer", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("AsusTek", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("Asus.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("B9ECED6F.", StringComparison.Ordinal))   // ASUS MS PFN
+            return BloatwareVendor.Oem;
+
+        if (p.Contains("CN=Acer", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("AcerInc.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("Acer.", StringComparison.OrdinalIgnoreCase))
+            return BloatwareVendor.Oem;
+
+        if (p.Contains("CN=Micro-Star", StringComparison.OrdinalIgnoreCase) ||
+            p.Contains("CN=MSI", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("MSI.", StringComparison.OrdinalIgnoreCase) ||
+            packageName.StartsWith("9099B36F.", StringComparison.Ordinal))   // MSI MS PFN
+            return BloatwareVendor.Oem;
+
+        return null;
+    }
+
+    private static string StripCommonPrefix(string packageName)
+    {
+        // Friendlier display voor unknown packages: "Microsoft.SomeNewApp" → "SomeNewApp"
+        var prefixes = new[] { "Microsoft.", "MicrosoftCorporationII.", "HPInc.", "HP.", "DellInc.", "LenovoCorporation.", "AsusTekComputerInc.", "AsusTek.", "AcerInc.", "MSI." };
+        foreach (var prefix in prefixes)
+        {
+            if (packageName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return packageName.Substring(prefix.Length);
+        }
+        return packageName;
+    }
+
+    private static string CategoryFromVendor(BloatwareVendor vendor) =>
+        vendor == BloatwareVendor.Microsoft ? "Microsoft" : "OEM";
 
     /// <summary>
     /// Uninstall een batch bloatware items via één elevated PowerShell-call. UAC

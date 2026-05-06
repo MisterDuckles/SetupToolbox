@@ -1,24 +1,28 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 
 namespace WingetAppDeployer_WinUI.Models;
 
 // Onderscheid tussen Microsoft-bloatware (komt mee met Windows zelf) en OEM-bloatware
-// (komt mee met de hardware-fabrikant: HP/Dell/Lenovo/etc.). Bepaalt in welke sectie
-// op DebloatPage het item terecht komt — verder identiek qua model en uninstall flow.
+// (komt mee met de hardware-fabrikant: HP/Dell/Lenovo/etc.). Detectie-driven via
+// publisher en name patterns — geen hardcoded lijst.
 public enum BloatwareVendor
 {
     Microsoft,
     Oem
 }
 
-// Curated lijst van standaard Microsoft bloatware op Windows 10/11. PackageFamilyName
-// is wat Get-AppxPackage als unieke key gebruikt; een lijst (i.p.v. één string) zodat
-// we varianten van hetzelfde "concept" als één item kunnen tonen (bv. ZuneMusic +
-// Microsoft.WindowsCommunicationsApps suite). DisplayName + Description zijn user-facing.
+// Optionele metadata voor bekende bloatware items. Als een gedetecteerd AppX-package
+// in deze dict staat krijgen we een nette display-naam, beschrijving en categorie;
+// anders vallen we terug op de raw package name.
+public sealed record BloatwareMetadata(string DisplayName, string Description, string Category);
+
+// Runtime-construct: één instance per gedetecteerd Microsoft/OEM AppX package.
+// Vroeger was dit een gecureerde lijst die we matchten tegen Get-AppxPackage —
+// nu draaien we het om: detect alles, optioneel verrijken met curated metadata.
 public sealed class BloatwareItem : INotifyPropertyChanged
 {
     public string DisplayName { get; }
@@ -26,21 +30,21 @@ public sealed class BloatwareItem : INotifyPropertyChanged
     public string Category { get; }
     public BloatwareVendor Vendor { get; }
 
-    // Lijst van AppX-package "families" om tegen Get-AppxPackage's `Name` property
-    // te matchen (case-insensitive contains). Eén bloatware-item kan meerdere
-    // packages omvatten zodat we een suite (bv. Xbox) onder één checkbox tonen.
-    public IReadOnlyList<string> PackageNames { get; }
+    // Het AppX `Name`-veld (bv. "Microsoft.MicrosoftSolitaireCollection"). Bewaard
+    // voor display-fallback en lookup van curated metadata.
+    public string PackageName { get; }
 
-    public BloatwareItem(string displayName, string description, string category, BloatwareVendor vendor, params string[] packageNames)
+    public BloatwareItem(string displayName, string description, string category,
+                         BloatwareVendor vendor, string packageName)
     {
         DisplayName = displayName;
         Description = description;
         Category = category;
         Vendor = vendor;
-        PackageNames = packageNames;
+        PackageName = packageName;
     }
 
-    private bool _isInstalled;
+    private bool _isInstalled = true;
     public bool IsInstalled
     {
         get => _isInstalled;
@@ -68,7 +72,7 @@ public sealed class BloatwareItem : INotifyPropertyChanged
         }
     }
 
-    // Daadwerkelijke PackageFullName(s) ingevuld door BloatwareService na detect.
+    // Daadwerkelijke PackageFullName(s) ingevuld door BloatwareService bij detect.
     // Remove-AppxPackage heeft de FullName nodig (DisplayName + Version + Architecture
     // + ResourceId + Publisher), niet alleen de Name.
     public List<string> InstalledPackageFullNames { get; } = new();
@@ -77,167 +81,114 @@ public sealed class BloatwareItem : INotifyPropertyChanged
     private void OnChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-    // Curated lijst — bewust beperkt tot apps die voor de meeste users bloat zijn.
-    // Per item een korte uitleg zodat user begrijpt WAT er weggaat. Wanneer een
-    // app in een grijs gebied valt (bv. Sticky Notes — sommige users gebruiken het)
-    // staat dat in de Description zodat ze weten waar ze nee tegen zeggen.
+    // ────────────────────────────────────────────────────────────
+    // Curated metadata lookup
+    // ────────────────────────────────────────────────────────────
+
+    // Curated descriptions voor bekende packages. Niet meer leidend voor detectie —
+    // BloatwareService detecteert alles via Get-AppxPackage en filtert op vendor.
+    // Wanneer een gedetecteerde Name in deze dictionary staat krijgen we een
+    // friendly display + description; anders raw package-name + lege description.
     //
-    // Microsoft-items en OEM-items in dezelfde lijst — DebloatPage filtert op Vendor
-    // om de juiste sectie te vullen. OEM-items pakken meestal een vendor-prefix
-    // (HPInc, DellInc, LenovoCorporation, AsusTekComputerInc, AcerInc, MSI) zodat
-    // ze niet per ongeluk Microsoft-packages matchen.
-    public static IReadOnlyList<BloatwareItem> CuratedList { get; } = new List<BloatwareItem>
+    // Toevoegingen hier zijn dus PURE polish — een nieuwe Microsoft AppX die we
+    // niet kennen verschijnt sowieso in de UI, alleen zonder uitleg.
+    public static IReadOnlyDictionary<string, BloatwareMetadata> CuratedMetadata { get; } =
+        new Dictionary<string, BloatwareMetadata>(StringComparer.OrdinalIgnoreCase)
     {
-        // ============================================================
-        // Microsoft bloatware
-        // ============================================================
+        // Microsoft — Games / Gaming
+        ["Microsoft.MicrosoftSolitaireCollection"] = new("Solitaire Collection", "Microsoft Solitaire — bevat advertenties.", "Games"),
+        ["Microsoft.XboxApp"] = new("Xbox", "Xbox companion app.", "Gaming"),
+        ["Microsoft.GamingApp"] = new("Xbox (Gaming app)", "Vervanger van XboxApp op Win11.", "Gaming"),
+        ["Microsoft.XboxGameOverlay"] = new("Xbox Game Overlay", "In-game overlay (FPS, screenshots).", "Gaming"),
+        ["Microsoft.XboxGamingOverlay"] = new("Xbox Gaming Overlay", "Win+G game bar overlay.", "Gaming"),
+        ["Microsoft.XboxIdentityProvider"] = new("Xbox Identity", "Xbox Live login broker.", "Gaming"),
+        ["Microsoft.XboxSpeechToTextOverlay"] = new("Xbox Speech-to-Text", "Live captions in Xbox party chat.", "Gaming"),
+        ["Microsoft.Xbox.TCUI"] = new("Xbox TCUI", "Trusted-clean UI shell voor Xbox.", "Gaming"),
 
-        // Games
-        new("Solitaire Collection", "Microsoft Solitaire — bevat advertenties.", "Games", BloatwareVendor.Microsoft,
-            "Microsoft.MicrosoftSolitaireCollection"),
+        // Microsoft — Communication
+        ["Microsoft.SkypeApp"] = new("Skype", "Microsoft Skype consumer-versie.", "Communication"),
+        ["MicrosoftTeams"] = new("Teams (consumer)", "De gratis consumer-versie van Teams die met Win11 meekomt.", "Communication"),
+        ["MSTeams"] = new("Teams (consumer)", "De gratis consumer-versie van Teams die met Win11 meekomt.", "Communication"),
+        ["microsoft.windowscommunicationsapps"] = new("Mail and Calendar", "Microsoft's Mail & Calendar apps.", "Communication"),
+        ["Microsoft.YourPhone"] = new("Phone Link", "Synchroniseert je Android/iPhone met Windows.", "Communication"),
+        ["Microsoft.People"] = new("People", "Stand-alone contacts manager.", "Communication"),
 
-        // Xbox suite — alle Xbox-gerelateerde packages onder één item
-        new("Xbox apps", "Volledige Xbox suite (app, game bar, identity, speech-to-text). Verwijder als je geen Xbox/PC games speelt.", "Gaming", BloatwareVendor.Microsoft,
-            "Microsoft.XboxApp",
-            "Microsoft.GamingApp",
-            "Microsoft.XboxGameOverlay",
-            "Microsoft.XboxGamingOverlay",
-            "Microsoft.XboxIdentityProvider",
-            "Microsoft.XboxSpeechToTextOverlay",
-            "Microsoft.Xbox.TCUI"),
+        // Microsoft — Bing
+        ["Microsoft.BingNews"] = new("Bing News", "Microsoft News (Bing-feed).", "Information"),
+        ["Microsoft.BingWeather"] = new("Bing Weather", "Microsoft Weather (Bing-feed).", "Information"),
 
-        // Communication
-        new("Skype", "Microsoft Skype consumer-versie.", "Communication", BloatwareVendor.Microsoft,
-            "Microsoft.SkypeApp"),
-        new("Teams (consumer)", "De gratis consumer-versie van Teams die standaard met Win11 meekomt — niet de zakelijke versie.", "Communication", BloatwareVendor.Microsoft,
-            "MicrosoftTeams",
-            "MSTeams"),
-        new("Mail and Calendar", "Microsoft's Mail & Calendar apps. Verwijder als je een andere email-client gebruikt.", "Communication", BloatwareVendor.Microsoft,
-            "microsoft.windowscommunicationsapps"),
+        // Microsoft — Personalization / extras
+        ["Microsoft.549981C3F5F10"] = new("Cortana", "Microsoft's voice assistant.", "Personalization"),
+        ["Microsoft.MixedReality.Portal"] = new("Mixed Reality Portal", "Voor Windows Mixed Reality headsets.", "Hardware"),
+        ["Microsoft.Microsoft3DViewer"] = new("3D Viewer", "Bekijk 3D modellen.", "Tools"),
+        ["Microsoft.MSPaint"] = new("Paint 3D", "Paint 3D — door Microsoft gedeprecateerd.", "Tools"),
+        ["Microsoft.GetHelp"] = new("Get Help", "Help-app — links naar Microsoft support docs.", "Tools"),
+        ["Microsoft.Getstarted"] = new("Tips", "Windows getting-started tips.", "Tools"),
+        ["Microsoft.WindowsFeedbackHub"] = new("Feedback Hub", "Stuur feedback naar Microsoft.", "Tools"),
+        ["Microsoft.MicrosoftOfficeHub"] = new("Office Hub", "Office app launcher.", "Productivity"),
+        ["Microsoft.WindowsMaps"] = new("Maps", "Bing Maps app.", "Tools"),
+        ["Microsoft.Office.OneNote"] = new("OneNote", "Microsoft OneNote (niet de Office-versie).", "Productivity"),
+        ["Microsoft.ZuneMusic"] = new("Groove Music", "Microsoft's music player.", "Media"),
+        ["Microsoft.ZuneVideo"] = new("Movies & TV", "Microsoft's video player.", "Media"),
+        ["Microsoft.MicrosoftStickyNotes"] = new("Sticky Notes", "Sommige users vinden dit handig — let op voor je verwijdert.", "Productivity"),
+        ["Microsoft.WindowsNotepad"] = new("Notepad", "Sinds Win11 een Store-app. Verwijder als je een andere editor gebruikt.", "Tools"),
+        ["Microsoft.Windows.Photos"] = new("Photos", "Microsoft's foto-viewer — relatief zwaar.", "Media"),
+        ["Microsoft.WindowsCamera"] = new("Camera", "Microsoft Camera — overbodig zonder webcam.", "Hardware"),
+        ["Microsoft.WindowsSoundRecorder"] = new("Sound Recorder", "Microsoft Sound Recorder.", "Tools"),
+        ["MicrosoftCorporationII.QuickAssist"] = new("Quick Assist", "Microsoft's remote-support tool.", "Tools"),
+        ["Microsoft.PowerAutomateDesktop"] = new("Power Automate", "Robotic-process-automation tool. Voor enterprise.", "Productivity"),
+        ["Clipchamp.Clipchamp"] = new("Clipchamp", "Microsoft's video editor (overgenomen 2021).", "Media"),
 
-        // Bing-suite
-        new("Bing News", "Microsoft News (Bing-feed).", "Information", BloatwareVendor.Microsoft,
-            "Microsoft.BingNews"),
-        new("Bing Weather", "Microsoft Weather (Bing-feed).", "Information", BloatwareVendor.Microsoft,
-            "Microsoft.BingWeather"),
+        // OEM — HP
+        ["HP.JumpStart"] = new("HP JumpStart", "Een HP setup-tour app.", "HP"),
+        ["HPInc.HPJumpStart"] = new("HP JumpStart", "Een HP setup-tour app.", "HP"),
+        ["HP.SupportAssistant"] = new("HP Support Assistant", "HP's support tool — opdringerig met meldingen.", "HP"),
+        ["HPInc.SupportAssistant"] = new("HP Support Assistant", "HP's support tool — opdringerig met meldingen.", "HP"),
+        ["AD2F1837.HPSmart"] = new("HP Smart", "HP's printer-app. Nuttig met HP printer.", "HP"),
+        ["HPInc.HPSmart"] = new("HP Smart", "HP's printer-app. Nuttig met HP printer.", "HP"),
+        ["AD2F1837.HPPrinterControl"] = new("HP Printer Control", "HP printer settings app.", "HP"),
+        ["HPInc.myHP"] = new("MyHP", "HP's eigen welcome-app + ad-spam.", "HP"),
+        ["HP.MyHP"] = new("MyHP", "HP's eigen welcome-app + ad-spam.", "HP"),
+        ["HP.QuickDrop"] = new("HP QuickDrop", "HP's bestand-naar-telefoon transfer-tool.", "HP"),
+        ["AD2F1837.HPQuickDrop"] = new("HP QuickDrop", "HP's bestand-naar-telefoon transfer-tool.", "HP"),
 
-        // Personalization / extras
-        new("Cortana", "Microsoft's voice assistant. Verwijder als je 'm niet gebruikt — search blijft werken.", "Personalization", BloatwareVendor.Microsoft,
-            "Microsoft.549981C3F5F10"),
-        new("Mixed Reality Portal", "Voor Windows Mixed Reality headsets — overbodig zonder VR hardware.", "Hardware", BloatwareVendor.Microsoft,
-            "Microsoft.MixedReality.Portal"),
-        new("3D Viewer", "Bekijk 3D modellen. Vrijwel nooit gebruikt door gemiddelde user.", "Tools", BloatwareVendor.Microsoft,
-            "Microsoft.Microsoft3DViewer"),
-        new("Paint 3D", "Vervangen door reguliere Paint app. Microsoft heeft Paint 3D zelf gedeprecateerd.", "Tools", BloatwareVendor.Microsoft,
-            "Microsoft.MSPaint"),
-        new("Get Help", "Help-app — links naar Microsoft support documentatie.", "Tools", BloatwareVendor.Microsoft,
-            "Microsoft.GetHelp"),
-        new("Tips", "Windows getting-started tips.", "Tools", BloatwareVendor.Microsoft,
-            "Microsoft.Getstarted"),
-        new("Feedback Hub", "Stuur feedback naar Microsoft.", "Tools", BloatwareVendor.Microsoft,
-            "Microsoft.WindowsFeedbackHub"),
-        new("Office Hub", "Office app launcher.", "Productivity", BloatwareVendor.Microsoft,
-            "Microsoft.MicrosoftOfficeHub"),
+        // OEM — Dell
+        ["DellInc.DellSupportAssist"] = new("Dell SupportAssist", "Dell's support tool.", "Dell"),
+        ["DellInc.DellSupportAssistforPCs"] = new("Dell SupportAssist", "Dell's support tool.", "Dell"),
+        ["DellInc.DellOptimizer"] = new("Dell Optimizer", "Dell's 'AI-powered performance' tool.", "Dell"),
+        ["DellInc.PartnerPromo"] = new("Dell PartnerPromo", "Trial-software van Dell partners — pure bloat.", "Dell"),
 
-        // Maps & Misc
-        new("Maps", "Bing Maps app. Verwijder als je Google Maps / web gebruikt.", "Tools", BloatwareVendor.Microsoft,
-            "Microsoft.WindowsMaps"),
-        new("OneNote", "Microsoft OneNote. Verwijder als je 'm niet gebruikt — niet de OneNote uit Office.", "Productivity", BloatwareVendor.Microsoft,
-            "Microsoft.Office.OneNote"),
+        // OEM — Lenovo
+        ["E0469640.LenovoCompanion"] = new("Lenovo Vantage", "Lenovo's all-in-one settings/update app.", "Lenovo"),
+        ["LenovoCorporation.LenovoVantage"] = new("Lenovo Vantage", "Lenovo's all-in-one settings/update app.", "Lenovo"),
+        ["E0469640.LenovoUtility"] = new("Lenovo Utility", "Lenovo's hotkey/system-utility app.", "Lenovo"),
+        ["LenovoCorporation.LenovoUtility"] = new("Lenovo Utility", "Lenovo's hotkey/system-utility app.", "Lenovo"),
+        ["E0469640.LenovoSettings"] = new("Lenovo Settings", "Lenovo's settings-launcher.", "Lenovo"),
+        ["LenovoCorporation.LenovoSettings"] = new("Lenovo Settings", "Lenovo's settings-launcher.", "Lenovo"),
+        ["LenovoCorporation.LenovoSmartConnect"] = new("Lenovo Smart Connect", "Lenovo's phone-to-laptop sync app.", "Lenovo"),
 
-        // Media (Groove Music / Movies & TV — vaak vervangen door Spotify / Netflix)
-        new("Groove Music", "Microsoft's music player. Vrijwel altijd vervangen door Spotify/YouTube Music.", "Media", BloatwareVendor.Microsoft,
-            "Microsoft.ZuneMusic"),
-        new("Movies & TV", "Microsoft's video player. Vrijwel altijd vervangen door Netflix/Disney+/web.", "Media", BloatwareVendor.Microsoft,
-            "Microsoft.ZuneVideo"),
+        // OEM — ASUS
+        ["B9ECED6F.ASUSPCAssistant"] = new("MyASUS", "ASUS's support/update/welcome app.", "ASUS"),
+        ["AsusTekComputerInc.MyASUS"] = new("MyASUS", "ASUS's support/update/welcome app.", "ASUS"),
+        ["AsusTekComputerInc.ASUSGiftBox"] = new("ASUS GiftBox", "ASUS partner-software promotie (trials).", "ASUS"),
+        ["AsusTek.AsusGlideX"] = new("ASUS GlideX", "ASUS's screen-sharing tool.", "ASUS"),
+        ["AsusTekComputerInc.AsusGlideX"] = new("ASUS GlideX", "ASUS's screen-sharing tool.", "ASUS"),
 
-        // Sticky Notes — controversial, kan handig zijn
-        new("Sticky Notes", "Microsoft Sticky Notes. Sommige users vinden dit handig — let op voor je verwijdert.", "Productivity", BloatwareVendor.Microsoft,
-            "Microsoft.MicrosoftStickyNotes"),
+        // OEM — Acer
+        ["AcerInc.AcerCareCenter"] = new("Acer Care Center", "Acer's support/update center.", "Acer"),
+        ["AcerInc.AcerQuickAccess"] = new("Acer Quick Access", "Acer's hotkey/system-utility app.", "Acer"),
+        ["AcerInc.AcerJumpStart"] = new("Acer JumpStart", "Acer's welcome/setup app.", "Acer"),
 
-        // Your Phone / Phone Link
-        new("Phone Link", "Synchroniseert je Android/iPhone met Windows. Verwijder als je geen Microsoft Phone Link setup hebt.", "Communication", BloatwareVendor.Microsoft,
-            "Microsoft.YourPhone"),
-
-        // People
-        new("People", "Microsoft People app. Stand-alone contacts manager — niet hetzelfde als Outlook contacten.", "Communication", BloatwareVendor.Microsoft,
-            "Microsoft.People"),
-
-        // ============================================================
-        // OEM bloatware — komt mee met de hardware. Lijst is bewust
-        // conservatief; alleen apps waarvan we zeker weten dat ze ware
-        // OEM-bloat zijn (geen drivers / system services). Vendor-specifieke
-        // utilities zoals "HP Smart" of "MyASUS" zijn vaak wel nuttig voor
-        // sommige users (firmware updates etc.) — daarom expliciet in de
-        // Description vermelden zodat user weet wat ze opgeven.
-        // ============================================================
-
-        // HP
-        new("HP JumpStart", "Een HP setup-tour app. Eenmalig nuttig voor de welkomtour, daarna nooit meer.", "HP", BloatwareVendor.Oem,
-            "HP.JumpStart",
-            "HPInc.HPJumpStart"),
-        new("HP Support Assistant", "HP's support tool. Werkt parallel aan Windows Update — nuttig voor HP-firmware/driver updates, maar opdringerig met meldingen. Verwijder als je liever zelf updates checkt.", "HP", BloatwareVendor.Oem,
-            "HP.SupportAssistant",
-            "HPInc.SupportAssistant"),
-        new("HP Smart", "HP's printer-app. Nuttig als je een HP printer hebt, anders weg.", "HP", BloatwareVendor.Oem,
-            "AD2F1837.HPSmart",
-            "HPInc.HPSmart"),
-        new("MyHP", "HP's eigen welcome-app + ad-spam.", "HP", BloatwareVendor.Oem,
-            "AD2F1837.HPPrinterControl",
-            "HPInc.myHP",
-            "HP.MyHP"),
-        new("HP QuickDrop", "HP's bestand-naar-telefoon transfer-tool. Vrijwel niemand gebruikt dit.", "HP", BloatwareVendor.Oem,
-            "HP.QuickDrop",
-            "AD2F1837.HPQuickDrop"),
-
-        // Dell
-        new("Dell SupportAssist", "Dell's support tool. Werkt parallel aan Windows Update — kan je drivers/firmware updaten, maar opdringerig met meldingen. Veel users vervangen dit door handmatige Dell-driver-downloads.", "Dell", BloatwareVendor.Oem,
-            "DellInc.DellSupportAssist",
-            "DellInc.DellSupportAssistforPCs"),
-        new("Dell Optimizer", "Dell's 'AI-powered performance' tool. Marginale impact op real-world performance.", "Dell", BloatwareVendor.Oem,
-            "DellInc.DellOptimizer"),
-        new("Dell PartnerPromo", "Trial-software van Dell partners (vaak McAfee, Dropbox, etc.). Pure bloat.", "Dell", BloatwareVendor.Oem,
-            "DellInc.PartnerPromo"),
-
-        // Lenovo
-        new("Lenovo Vantage", "Lenovo's all-in-one settings/update app. Werkt parallel aan Windows Update — nuttig voor Lenovo-firmware, maar opdringerig.", "Lenovo", BloatwareVendor.Oem,
-            "E0469640.LenovoCompanion",
-            "LenovoCorporation.LenovoVantage"),
-        new("Lenovo Utility", "Lenovo's hotkey/system-utility app.", "Lenovo", BloatwareVendor.Oem,
-            "E0469640.LenovoUtility",
-            "LenovoCorporation.LenovoUtility"),
-        new("Lenovo Settings", "Lenovo's settings-launcher.", "Lenovo", BloatwareVendor.Oem,
-            "E0469640.LenovoSettings",
-            "LenovoCorporation.LenovoSettings"),
-        new("Lenovo Smart Connect", "Lenovo's phone-to-laptop sync app — vergelijkbaar met Phone Link.", "Lenovo", BloatwareVendor.Oem,
-            "LenovoCorporation.LenovoSmartConnect"),
-
-        // ASUS
-        new("MyASUS", "ASUS's support/update/welcome app. Vergelijkbaar met Lenovo Vantage.", "ASUS", BloatwareVendor.Oem,
-            "B9ECED6F.ASUSPCAssistant",
-            "AsusTekComputerInc.MyASUS"),
-        new("ASUS GiftBox", "ASUS partner-software promotie (trials).", "ASUS", BloatwareVendor.Oem,
-            "AsusTekComputerInc.ASUSGiftBox"),
-        new("ASUS GlideX", "ASUS's screen-sharing tool. Niche use-case.", "ASUS", BloatwareVendor.Oem,
-            "AsusTek.AsusGlideX",
-            "AsusTekComputerInc.AsusGlideX"),
-
-        // Acer
-        new("Acer Care Center", "Acer's support/update center. Vergelijkbaar met andere OEM-tools.", "Acer", BloatwareVendor.Oem,
-            "AcerInc.AcerCareCenter"),
-        new("Acer Quick Access", "Acer's hotkey/system-utility app.", "Acer", BloatwareVendor.Oem,
-            "AcerInc.AcerQuickAccess"),
-        new("Acer JumpStart", "Acer's welcome/setup app. Eenmalig nuttig, daarna nooit meer.", "Acer", BloatwareVendor.Oem,
-            "AcerInc.AcerJumpStart"),
-
-        // MSI
-        new("MSI Center", "MSI's all-in-one support/utility app.", "MSI", BloatwareVendor.Oem,
-            "MSI.MSICenter",
-            "9099B36F.MSICenter"),
+        // OEM — MSI
+        ["MSI.MSICenter"] = new("MSI Center", "MSI's all-in-one support/utility app.", "MSI"),
+        ["9099B36F.MSICenter"] = new("MSI Center", "MSI's all-in-one support/utility app.", "MSI"),
     };
 
-    // Convenience filter — DebloatPage gebruikt dit om de twee secties uit één
-    // unified lijst te trekken.
-    public static IEnumerable<BloatwareItem> CuratedFor(BloatwareVendor vendor) =>
-        CuratedList.Where(b => b.Vendor == vendor);
+    /// <summary>
+    /// Lookup curated metadata voor een AppX package name. Returnt null als het
+    /// package niet in onze metadata-dict staat — caller valt dan terug op de raw
+    /// package name als display.
+    /// </summary>
+    public static BloatwareMetadata? LookupMetadata(string packageName) =>
+        CuratedMetadata.TryGetValue(packageName, out var m) ? m : null;
 }
