@@ -20,6 +20,9 @@ public sealed partial class AllAppsUninstallDialog : ContentDialog
 
     public bool HadSuccessfulUninstall { get; private set; }
 
+    // Items die echt verwijderd zijn — voedt de v0.8.5 leftover-scan in DebloatPage.
+    public IReadOnlyList<InstalledAppEntry> SuccessfulItems { get; private set; } = new List<InstalledAppEntry>();
+
     public AllAppsUninstallDialog(IReadOnlyList<InstalledAppEntry> items, MixedSourceUninstaller service)
     {
         InitializeComponent();
@@ -49,6 +52,10 @@ public sealed partial class AllAppsUninstallDialog : ContentDialog
         var result = await _service.UninstallBatchAsync(_items, progress);
 
         if (result.SuccessCount > 0) HadSuccessfulUninstall = true;
+
+        SuccessfulItems = _items
+            .Where(i => result.ResultsByIdentifier.TryGetValue(i.Identifier, out var r) && r.success)
+            .ToList();
 
         // Final flush — items zonder progress-event (PS gecrashd halverwege) krijgen
         // hun terminal state hier. UAC-cancelled = neutrale Cancelled state, regular

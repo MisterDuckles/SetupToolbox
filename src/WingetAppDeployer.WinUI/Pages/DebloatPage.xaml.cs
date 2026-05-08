@@ -23,6 +23,11 @@ public sealed partial class DebloatPage : Page
     // detect zodat IsSelected niet over navigaties heen lekt.
     private List<BloatwareItem> _microsoftItems = new();
     private List<BloatwareItem> _oemItems = new();
+    // Microsoft-bloatware filter — search-text. _visibleMicrosoftItems wordt
+    // afgeleid van _microsoftItems + filter en is wat de UI bind. OEM heeft (nog)
+    // geen search omdat de lijst typisch kort is.
+    private List<BloatwareItem> _visibleMicrosoftItems = new();
+    private string _msSearchText = string.Empty;
 
     // Unified all-installed lijst. _allEntries = volledige set, _visibleEntries =
     // na search/filter. ItemsRepeater bindt aan _visibleEntries.
@@ -145,10 +150,13 @@ public sealed partial class DebloatPage : Page
         _oemItems = detected.Where(b => b.Vendor == BloatwareVendor.Oem).ToList();
 
         if (_microsoftItems.Count == 0)
+        {
+            _visibleMicrosoftItems = new List<BloatwareItem>();
             ShowBloatwareEmpty();
+        }
         else
         {
-            BloatwareList.ItemsSource = _microsoftItems;
+            ApplyMicrosoftFilter();
             ShowBloatwareList();
         }
 
@@ -162,12 +170,11 @@ public sealed partial class DebloatPage : Page
             OemSection.Visibility = Visibility.Visible;
         }
 
-        UpdateBloatwareSelection();
         UpdateBloatwareSelectAllButton();
-        UpdateOemSelection();
         UpdateOemSelectAllButton();
         UpdateBloatwareCount();
         UpdateOemCount();
+        UpdateInstalledSelection();  // sticky footer count includes MS + OEM nu
     }
 
     // ── Unified "All installed apps" sectie ───────────────────────
@@ -334,46 +341,59 @@ public sealed partial class DebloatPage : Page
 
         item.IsSelected = !item.IsSelected;
         if (item.Vendor == BloatwareVendor.Microsoft)
-        {
-            UpdateBloatwareSelection();
             UpdateBloatwareSelectAllButton();
-        }
         else
-        {
-            UpdateOemSelection();
             UpdateOemSelectAllButton();
-        }
+        UpdateInstalledSelection();  // sticky footer reflects total selection
     }
 
     // BloatwareService.DetectAllAsync returnt alleen installed items, dus de
     // _microsoftItems en _oemItems lijsten zijn intrinsiek "wat zichtbaar is".
-    // Geen extra IsInstalled filter nodig.
+    // Geen extra IsInstalled filter nodig. Select all werkt op de zichtbare
+    // (na search-filter) subset zodat een filter-search zichtbaar effect heeft.
     private void BloatwareSelectAllButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_microsoftItems.Count == 0) return;
-        var allSelected = _microsoftItems.All(b => b.IsSelected);
-        foreach (var item in _microsoftItems) item.IsSelected = !allSelected;
-        UpdateBloatwareSelection();
+        if (_visibleMicrosoftItems.Count == 0) return;
+        var allSelected = _visibleMicrosoftItems.All(b => b.IsSelected);
+        foreach (var item in _visibleMicrosoftItems) item.IsSelected = !allSelected;
+        UpdateBloatwareSelectAllButton();
+        UpdateInstalledSelection();
+    }
+
+    private void BloatwareSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (!_uiReady) return;
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        _msSearchText = sender.Text ?? string.Empty;
+        ApplyMicrosoftFilter();
         UpdateBloatwareSelectAllButton();
     }
 
-    private async void BloatwareRemoveButton_Click(object sender, RoutedEventArgs e)
+    private void ApplyMicrosoftFilter()
     {
-        var selected = _microsoftItems.Where(b => b.IsSelected).ToList();
-        await ConfirmAndRemoveBloatwareAsync(selected, "Microsoft");
-    }
-
-    private void UpdateBloatwareSelection()
-    {
-        var count = _microsoftItems.Count(b => b.IsSelected);
-        BloatwareRemoveButton.IsEnabled = count > 0;
+        var q = _msSearchText.Trim();
+        if (q.Length == 0)
+        {
+            _visibleMicrosoftItems = _microsoftItems.ToList();
+        }
+        else
+        {
+            _visibleMicrosoftItems = _microsoftItems
+                .Select(b => (Item: b, Score: FuzzyMatcher.Score(q, b.DisplayName, b.Description, b.PackageName)))
+                .Where(p => p.Score >= FuzzyMatcher.MinScore)
+                .OrderByDescending(p => p.Score)
+                .ThenBy(p => p.Item.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .Select(p => p.Item)
+                .ToList();
+        }
+        BloatwareList.ItemsSource = _visibleMicrosoftItems;
     }
 
     private void UpdateBloatwareSelectAllButton()
     {
-        var allSelected = _microsoftItems.Count > 0 && _microsoftItems.All(b => b.IsSelected);
+        var allSelected = _visibleMicrosoftItems.Count > 0 && _visibleMicrosoftItems.All(b => b.IsSelected);
         BloatwareSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
-        BloatwareSelectAllButton.IsEnabled = _microsoftItems.Count > 0;
+        BloatwareSelectAllButton.IsEnabled = _visibleMicrosoftItems.Count > 0;
     }
 
     private void UpdateBloatwareCount()
@@ -388,20 +408,8 @@ public sealed partial class DebloatPage : Page
         if (_oemItems.Count == 0) return;
         var allSelected = _oemItems.All(b => b.IsSelected);
         foreach (var item in _oemItems) item.IsSelected = !allSelected;
-        UpdateOemSelection();
         UpdateOemSelectAllButton();
-    }
-
-    private async void OemRemoveButton_Click(object sender, RoutedEventArgs e)
-    {
-        var selected = _oemItems.Where(b => b.IsSelected).ToList();
-        await ConfirmAndRemoveBloatwareAsync(selected, "OEM");
-    }
-
-    private void UpdateOemSelection()
-    {
-        var count = _oemItems.Count(b => b.IsSelected);
-        OemRemoveButton.IsEnabled = count > 0;
+        UpdateInstalledSelection();
     }
 
     private void UpdateOemSelectAllButton()
@@ -415,35 +423,6 @@ public sealed partial class DebloatPage : Page
     {
         var count = _oemItems.Count;
         OemCountText.Text = count == 0 ? string.Empty : $"({count})";
-    }
-
-    private async Task ConfirmAndRemoveBloatwareAsync(List<BloatwareItem> selected, string vendorLabel)
-    {
-        if (selected.Count == 0) return;
-
-        var confirm = new ContentDialog
-        {
-            Title = selected.Count == 1
-                ? $"Remove {selected[0].DisplayName}?"
-                : $"Remove {selected.Count} {vendorLabel} apps?",
-            Content = "This permanently removes the selected apps via Remove-AppxPackage. A UAC prompt will appear because this requires administrator rights. Some apps cannot be reinstalled easily — only continue if you're sure.",
-            PrimaryButtonText = "Remove",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.None,
-            PrimaryButtonStyle = (Style)Application.Current.Resources["DialogPrimaryButtonStyle"],
-            CloseButtonStyle = (Style)Application.Current.Resources["DialogDefaultButtonStyle"],
-            XamlRoot = this.XamlRoot
-        };
-
-        var result = await confirm.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
-
-        var dialog = new BloatwareUninstallDialog(selected, App.Bloatware) { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
-
-        foreach (var item in selected) item.IsSelected = false;
-        await LoadBloatwareAsync();
-        await LoadInstalledAsync(forceRefresh: true);  // bloatware-uninstall raakt ook unified lijst
     }
 
     // ── Unified all-installed handlers ────────────────────────────
@@ -499,22 +478,27 @@ public sealed partial class DebloatPage : Page
 
     private async void InstalledUninstallButton_Click(object sender, RoutedEventArgs e)
     {
-        // Werkt op _allEntries i.p.v. _visibleEntries: een filter-wissel mag niet
-        // de selectie wegvegen, en user verwacht dat "uninstall selected" doet wat
-        // ze hebben aangevinkt ongeacht huidige zichtbaarheid.
-        var selected = _allEntries.Where(en => en.IsSelected).ToList();
-        if (selected.Count == 0) return;
+        // Unified uninstall over alle drie de secties (Microsoft + OEM bloatware +
+        // All apps). Selecties komen uit de volledige lists, niet de visible-subset
+        // — een filter/search wissel mag de selectie niet wegvegen.
+        var bloatwareSelected = _microsoftItems.Concat(_oemItems).Where(b => b.IsSelected).ToList();
+        var appsSelected = _allEntries.Where(en => en.IsSelected).ToList();
+        var totalCount = bloatwareSelected.Count + appsSelected.Count;
+        if (totalCount == 0) return;
 
-        var hasElevated = selected.Any(en => en.Source != InstalledSource.Winget);
+        // Eén confirm-dialog die de hele batch dekt. Tekst is bewust generiek —
+        // de details (welke source, hoeveel UAC prompts) komen in de batch-dialogen
+        // zelf naar voren via headers en source-badges.
+        var hasElevated = bloatwareSelected.Count > 0 || appsSelected.Any(en => en.Source != InstalledSource.Winget);
         var content = hasElevated
-            ? "This removes the selected apps. A UAC prompt will appear because some items require administrator rights (Store / registry installs). Continue?"
-            : "This removes the selected catalog apps via winget. Continue?";
+            ? "This removes the selected apps. A UAC prompt will appear because some items require administrator rights. Continue?"
+            : "This removes the selected apps via winget. Continue?";
 
         var confirm = new ContentDialog
         {
-            Title = selected.Count == 1
-                ? $"Uninstall {selected[0].DisplayName}?"
-                : $"Uninstall {selected.Count} apps?",
+            Title = totalCount == 1
+                ? $"Uninstall {(bloatwareSelected.Count == 1 ? bloatwareSelected[0].DisplayName : appsSelected[0].DisplayName)}?"
+                : $"Uninstall {totalCount} apps?",
             Content = content,
             PrimaryButtonText = "Uninstall",
             CloseButtonText = "Cancel",
@@ -524,25 +508,153 @@ public sealed partial class DebloatPage : Page
             XamlRoot = this.XamlRoot
         };
 
-        var result = await confirm.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var dialog = new AllAppsUninstallDialog(selected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
+        // Refs verzamelen voor de gecombineerde leftover-scan na afloop. Per
+        // succesvol verwijderd item één UninstalledAppRef.
+        var leftoverRefs = new List<UninstalledAppRef>();
 
-        // Selectie weggooien is impliciet — de items komen uit _allEntries dat we
-        // zo herladen. De nieuwe entries zijn fresh objects zonder IsSelected.
-        await LoadInstalledAsync(forceRefresh: true);
-        // Bloatware-counts ook refreshen — een Store-app uninstall raakt zowel de
-        // unified lijst als de bloatware-secties als de app daar curated in stond.
+        // Stap 1: Microsoft + OEM bloatware in één Remove-AppxPackage batch
+        // (zelfde mechanisme — verschil is alleen vendor-classificatie). Eén UAC
+        // prompt voor de hele AppX-batch.
+        if (bloatwareSelected.Count > 0)
+        {
+            var bloatDialog = new BloatwareUninstallDialog(bloatwareSelected, App.Bloatware) { XamlRoot = this.XamlRoot };
+            await bloatDialog.ShowAsync();
+            foreach (var b in bloatDialog.SuccessfulItems)
+                leftoverRefs.Add(new UninstalledAppRef(
+                    DisplayName: b.DisplayName,
+                    Publisher: null,
+                    PackageName: b.PackageName,
+                    WingetId: null));
+        }
+
+        // Stap 2: All apps via MixedSourceUninstaller. Winget sequential zonder UAC,
+        // Store + Web in een aparte elevated batch (tweede UAC prompt — pijnpunt
+        // voor mixed selecties, maar acceptabel: bloatware en mixed zijn
+        // verschillende elevation contexts en moeilijk te combineren zonder de
+        // BloatwareService API te herschrijven).
+        if (appsSelected.Count > 0)
+        {
+            var appsDialog = new AllAppsUninstallDialog(appsSelected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
+            await appsDialog.ShowAsync();
+            leftoverRefs.AddRange(appsDialog.SuccessfulItems.Select(BuildAppRef));
+        }
+
+        // Reload beide secties — een Store-app uninstall kan zowel de bloatware-
+        // lijst als de unified lijst raken. Forceer winget cache refresh.
         await LoadBloatwareAsync();
+        await LoadInstalledAsync(forceRefresh: true);
+
+        // Stap 3: gecombineerde leftover-scan over álle succesvol verwijderde
+        // items. Eén InfoBar-feedback + eventueel één cleanup-dialog voor het
+        // hele zooitje, niet per sectie apart.
+        if (App.Settings.ScanLeftoversAfterUninstall && leftoverRefs.Count > 0)
+        {
+            await RunLeftoverScanAsync(leftoverRefs);
+        }
+    }
+
+    // Map een succesvol-uninstalled InstalledAppEntry naar een UninstalledAppRef
+    // voor de scanner. PackageName is bij Store-source de eerste segment van de
+    // PackageFullName ("Microsoft.MicrosoftSolitaireCollection" uit "Microsoft.MicrosoftSolitaireCollection_4.16.._x64..").
+    // Voor Winget en Web hebben we geen PackageName — scanner valt terug op
+    // DisplayName + Publisher matching.
+    private static UninstalledAppRef BuildAppRef(InstalledAppEntry entry)
+    {
+        string? packageName = null;
+        if (entry.Source == InstalledSource.Store && !string.IsNullOrEmpty(entry.Identifier))
+            packageName = entry.Identifier.Split('_')[0];
+
+        string? wingetId = entry.Source == InstalledSource.Winget ? entry.Identifier : null;
+
+        return new UninstalledAppRef(
+            DisplayName: entry.DisplayName,
+            Publisher: string.IsNullOrWhiteSpace(entry.Publisher) ? null : entry.Publisher,
+            PackageName: packageName,
+            WingetId: wingetId);
+    }
+
+    private async Task RunLeftoverScanAsync(IReadOnlyList<UninstalledAppRef> refs)
+    {
+        if (refs.Count == 0) return;
+        var leftovers = await App.LeftoverScanner.ScanAsync(refs);
+
+        // Altijd feedback geven aan user dat de scan gelopen heeft — anders denkt
+        // ie "het werkt niet" wanneer de scan niets vindt (= meestal het geval bij
+        // winget-uninstalls die zichzelf netjes opruimen). InfoBar blijft staan
+        // tot user 'm zelf sluit.
+        var appsLabel = refs.Count == 1 ? refs[0].DisplayName : $"{refs.Count} apps";
+        if (leftovers.Count == 0)
+        {
+            CleanupResultBar.Severity = InfoBarSeverity.Success;
+            CleanupResultBar.Title = "Cleanup scan: no leftovers found";
+            CleanupResultBar.Message = $"Scanned registry / Program Files / AppData for traces of {appsLabel}. Niets gevonden — opruiming compleet.";
+            CleanupResultBar.IsOpen = true;
+            return;
+        }
+
+        CleanupResultBar.Severity = InfoBarSeverity.Informational;
+        CleanupResultBar.Title = $"Cleanup scan: {leftovers.Count} leftover item(s) found";
+        CleanupResultBar.Message = $"Found possible traces of {appsLabel} — review and pick what to delete.";
+        CleanupResultBar.IsOpen = true;
+
+        var cleanup = new LeftoverCleanupDialog(leftovers, App.LeftoverScanner) { XamlRoot = this.XamlRoot };
+        await cleanup.ShowAsync();
+
+        // Folder-deletes raken Program Files / AppData — als user iets weggooide
+        // verandert dat niet de installed-status, maar refresh maakt eventuele
+        // size-displays consistent voor toekomstige scans.
+        if (cleanup.DeleteResult is { SuccessCount: > 0 })
+        {
+            CleanupResultBar.Severity = InfoBarSeverity.Success;
+            CleanupResultBar.Title = $"Cleanup done: {cleanup.DeleteResult.SuccessCount} item(s) deleted";
+            CleanupResultBar.Message = cleanup.DeleteResult.FailedCount > 0
+                ? $"{cleanup.DeleteResult.FailedCount} item(s) couldn't be deleted — see details in the dialog log."
+                : "All selected leftovers were removed.";
+            await LoadInstalledAsync(forceRefresh: false);
+        }
+        else if (cleanup.DeleteResult is { Cancelled: true })
+        {
+            CleanupResultBar.Severity = InfoBarSeverity.Warning;
+            CleanupResultBar.Title = "Cleanup cancelled";
+            CleanupResultBar.Message = "UAC prompt was declined — no leftovers were deleted.";
+        }
     }
 
     private void UpdateInstalledSelection()
     {
-        var count = _allEntries.Count(en => en.IsSelected);
-        InstalledSelectionCountText.Text = count == 0 ? string.Empty : $"{count} selected";
-        InstalledUninstallButton.IsEnabled = count > 0;
+        // Sticky footer telt over álle drie de secties (MS bloat + OEM bloat +
+        // All apps) zodat user een totale "X selected" ziet ongeacht of de
+        // selectie verspreid is. Bottom Uninstall-button dekt dezelfde batch
+        // — één klik = één confirm + sequential bloatware-batch + apps-batch.
+        var msCount = _microsoftItems.Count(b => b.IsSelected);
+        var oemCount = _oemItems.Count(b => b.IsSelected);
+        var appCount = _allEntries.Count(en => en.IsSelected);
+        var total = msCount + oemCount + appCount;
+
+        InstalledSelectionCountText.Text = total == 0
+            ? "Nothing selected"
+            : $"{total} app{(total == 1 ? "" : "s")} selected" +
+              BuildSelectionBreakdown(msCount, oemCount, appCount);
+        InstalledUninstallButton.IsEnabled = total > 0;
+    }
+
+    private static string BuildSelectionBreakdown(int ms, int oem, int app)
+    {
+        // Geef hint per sectie alleen wanneer er meer dan één sectie iets heeft —
+        // anders is het overbodig (3 selected · 3 in MS = redundant).
+        var sources = 0;
+        if (ms > 0) sources++;
+        if (oem > 0) sources++;
+        if (app > 0) sources++;
+        if (sources < 2) return string.Empty;
+
+        var parts = new List<string>();
+        if (ms > 0) parts.Add($"{ms} MS");
+        if (oem > 0) parts.Add($"{oem} OEM");
+        if (app > 0) parts.Add($"{app} apps");
+        return $" ({string.Join(" + ", parts)})";
     }
 
     private void UpdateInstalledSelectAllButton()

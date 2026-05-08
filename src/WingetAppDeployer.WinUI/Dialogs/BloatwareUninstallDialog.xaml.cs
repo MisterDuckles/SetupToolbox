@@ -20,6 +20,12 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
 
     public bool HadSuccessfulRemoval { get; private set; }
 
+    // Lijst van items die daadwerkelijk verwijderd zijn (successful RESULT-line in
+    // de batch-log). Gebruikt door DebloatPage om de v0.8.5 leftover-scan ná
+    // uninstall te voeden — alleen items die echt weg zijn willen we naar de
+    // scanner sturen.
+    public IReadOnlyList<BloatwareItem> SuccessfulItems { get; private set; } = new List<BloatwareItem>();
+
     public BloatwareUninstallDialog(IReadOnlyList<BloatwareItem> items, BloatwareService service)
     {
         InitializeComponent();
@@ -44,6 +50,10 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
         var result = await _service.UninstallBatchAsync(_items, progress);
 
         if (result.SuccessCount > 0) HadSuccessfulRemoval = true;
+
+        SuccessfulItems = _items
+            .Where(i => result.ResultsByDisplayName.TryGetValue(i.DisplayName, out var r) && r.success)
+            .ToList();
 
         // Final flush — items die geen RESULT-line in de log kregen krijgen hier
         // hun terminal state. UAC-cancelled = neutrale Cancelled state (geen rode

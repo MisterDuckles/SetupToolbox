@@ -21,6 +21,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0"
@@ -165,12 +167,53 @@
             </Border>
 
             <TextBlock Grid.Row="6"
+                       Text="Uninstall"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,28,0,12" />
+
+            <!-- Leftover scan after uninstall toggle -->
+            <Border Grid.Row="7"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xE74D;"
+                              FontSize="20"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="Scan for leftovers after uninstall"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="After a successful uninstall, scan registry uninstall keys, Program Files folders and AppData folders for leftover traces. Always preview — niets wordt verwijderd zonder bevestiging." />
+                    </StackPanel>
+
+                    <ToggleSwitch x:Name="LeftoverToggle"
+                                  Grid.Column="2"
+                                  VerticalAlignment="Center"
+                                  Toggled="LeftoverToggle_Toggled" />
+                </Grid>
+            </Border>
+
+            <TextBlock Grid.Row="8"
                        Text="App selection"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <!-- Export / Import card -->
-            <Border Grid.Row="7"
+            <Border Grid.Row="9"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -222,7 +265,7 @@
             </Border>
 
             <InfoBar x:Name="SelectionResultBar"
-                     Grid.Row="8"
+                     Grid.Row="10"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"

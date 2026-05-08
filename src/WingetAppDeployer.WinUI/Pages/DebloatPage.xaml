@@ -163,6 +163,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,8" ColumnSpacing="8">
@@ -188,12 +189,24 @@
         <InfoBar Grid.Row="1"
                  Severity="Informational"
                  Title="Work in progress"
-                 Message="Restant-opruiming na uninstall (v0.8.5) en deep clean (v0.8.6) volgen nog. De curated Microsoft / OEM secties geven snelle quick-actions; de unified lijst onderaan toont álles dat op de PC staat."
+                 Message="Deep clean (v0.8.6 — orphaned folders + caches) volgt nog. De curated Microsoft / OEM secties geven snelle quick-actions; de unified lijst onderaan toont álles dat op de PC staat. Na een uninstall scant de app automatisch naar leftovers."
                  IsOpen="True"
                  IsClosable="False"
                  MaxWidth="720"
                  HorizontalAlignment="Left"
-                 Margin="0,0,0,16" />
+                 Margin="0,0,0,8" />
+
+        <!-- Scan-feedback bar — toont de uitkomst van de v0.8.5 leftover-scan
+             ná een uninstall. Default verborgen; vult zich met "X items found"
+             of "no leftovers found" zodat user weet dat de scan gelopen heeft. -->
+        <InfoBar x:Name="CleanupResultBar"
+                 Grid.Row="2"
+                 Severity="Success"
+                 IsOpen="False"
+                 IsClosable="True"
+                 MaxWidth="720"
+                 HorizontalAlignment="Left"
+                 Margin="0,0,0,12" />
 
         <ScrollView Grid.Row="3"
                     VerticalScrollBarVisibility="Auto"
@@ -203,120 +216,123 @@
 
                 <!-- ================================================
                      SECTIE 1: Microsoft bloatware (curated quick-actions)
+                     Inklapbaar via Expander zodat user snel naar de All apps
+                     sectie kan zonder eerst door alle Microsoft items te scrollen.
                      ================================================ -->
-                <StackPanel Spacing="12">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-                                <TextBlock Text="Microsoft bloatware"
-                                           Style="{StaticResource SubtitleTextBlockStyle}" />
-                                <TextBlock x:Name="BloatwareCountText"
-                                           Text=""
-                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                <Expander x:Name="MicrosoftExpander"
+                          IsExpanded="True"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="8" Padding="0,8,8,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                                    <TextBlock Text="Microsoft bloatware"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock x:Name="BloatwareCountText"
+                                               Text=""
+                                               Style="{StaticResource SubtitleTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Bottom" />
+                                </StackPanel>
+                                <TextBlock x:Name="BloatwareSubtext"
+                                           Text="Pre-installed Microsoft apps en system bloat. Acties via de balk onderaan."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           VerticalAlignment="Bottom" />
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
-                            <TextBlock x:Name="BloatwareSubtext"
-                                       Text="Pre-installed Microsoft apps en system bloat. Vereist administrator rechten (UAC prompt verschijnt)."
+                            <Button Grid.Column="1"
+                                    x:Name="BloatwareSelectAllButton"
+                                    Click="BloatwareSelectAllButton_Click"
+                                    IsEnabled="False"
+                                    VerticalAlignment="Center"
+                                    Content="Select all" />
+                        </Grid>
+                    </Expander.Header>
+
+                    <StackPanel Margin="0,4,0,0" Spacing="8">
+                        <AutoSuggestBox x:Name="BloatwareSearchBox"
+                                        PlaceholderText="Search Microsoft bloatware"
+                                        QueryIcon="Find"
+                                        TextChanged="BloatwareSearchBox_TextChanged" />
+
+                        <Grid>
+                            <ProgressRing x:Name="BloatwareLoadingRing"
+                                          Width="32" Height="32"
+                                          IsIndeterminate="True"
+                                          HorizontalAlignment="Center"
+                                          Visibility="Collapsed" />
+
+                            <TextBlock x:Name="BloatwareEmptyText"
+                                       Text="Geen bekende Microsoft bloatware gedetecteerd op dit systeem."
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Margin="0,4,0,0"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                x:Name="BloatwareSelectAllButton"
-                                Click="BloatwareSelectAllButton_Click"
-                                IsEnabled="False"
-                                VerticalAlignment="Center"
-                                Content="Select all" />
-                        <Button Grid.Column="2"
-                                x:Name="BloatwareRemoveButton"
-                                Click="BloatwareRemoveButton_Click"
-                                IsEnabled="False"
-                                Style="{StaticResource AccentButtonStyle}"
-                                VerticalAlignment="Center"
-                                Content="Remove selected" />
-                    </Grid>
+                                       HorizontalAlignment="Center"
+                                       Visibility="Collapsed"
+                                       Margin="0,12,0,0" />
 
-                    <Grid>
-                        <ProgressRing x:Name="BloatwareLoadingRing"
-                                      Width="32" Height="32"
-                                      IsIndeterminate="True"
-                                      HorizontalAlignment="Center"
-                                      Visibility="Collapsed" />
-
-                        <TextBlock x:Name="BloatwareEmptyText"
-                                   Text="Geen bekende Microsoft bloatware gedetecteerd op dit systeem."
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   HorizontalAlignment="Center"
-                                   Visibility="Collapsed"
-                                   Margin="0,12,0,0" />
-
-                        <ItemsRepeater x:Name="BloatwareList"
-                                       ItemTemplate="{StaticResource BloatwareCardTemplate}">
-                            <ItemsRepeater.Layout>
-                                <StackLayout Spacing="4" />
-                            </ItemsRepeater.Layout>
-                        </ItemsRepeater>
-                    </Grid>
-                </StackPanel>
+                            <ItemsRepeater x:Name="BloatwareList"
+                                           ItemTemplate="{StaticResource BloatwareCardTemplate}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="4" />
+                                </ItemsRepeater.Layout>
+                            </ItemsRepeater>
+                        </Grid>
+                    </StackPanel>
+                </Expander>
 
                 <!-- ================================================
                      SECTIE 2: OEM bloatware (HP / Dell / Lenovo / etc.)
                      ================================================ -->
-                <StackPanel x:Name="OemSection"
-                            Spacing="12"
-                            Visibility="Collapsed">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-                                <TextBlock Text="OEM bloatware"
-                                           Style="{StaticResource SubtitleTextBlockStyle}" />
-                                <TextBlock x:Name="OemCountText"
-                                           Text=""
-                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                <Expander x:Name="OemSection"
+                          IsExpanded="True"
+                          Visibility="Collapsed"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="8" Padding="0,8,8,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                                    <TextBlock Text="OEM bloatware"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock x:Name="OemCountText"
+                                               Text=""
+                                               Style="{StaticResource SubtitleTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Bottom" />
+                                </StackPanel>
+                                <TextBlock Text="Bundleware van je hardware-fabrikant (HP / Dell / Lenovo / ASUS / Acer / MSI). Acties via de balk onderaan."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           VerticalAlignment="Bottom" />
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
-                            <TextBlock Text="Bundleware van je hardware-fabrikant (HP / Dell / Lenovo / ASUS / Acer / MSI). Vereist administrator rechten (UAC prompt verschijnt)."
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Margin="0,4,0,0"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                x:Name="OemSelectAllButton"
-                                Click="OemSelectAllButton_Click"
-                                IsEnabled="False"
-                                VerticalAlignment="Center"
-                                Content="Select all" />
-                        <Button Grid.Column="2"
-                                x:Name="OemRemoveButton"
-                                Click="OemRemoveButton_Click"
-                                IsEnabled="False"
-                                Style="{StaticResource AccentButtonStyle}"
-                                VerticalAlignment="Center"
-                                Content="Remove selected" />
-                    </Grid>
+                            <Button Grid.Column="1"
+                                    x:Name="OemSelectAllButton"
+                                    Click="OemSelectAllButton_Click"
+                                    IsEnabled="False"
+                                    VerticalAlignment="Center"
+                                    Content="Select all" />
+                        </Grid>
+                    </Expander.Header>
 
                     <ItemsRepeater x:Name="OemList"
-                                   ItemTemplate="{StaticResource BloatwareCardTemplate}">
+                                   ItemTemplate="{StaticResource BloatwareCardTemplate}"
+                                   Margin="0,4,0,0">
                         <ItemsRepeater.Layout>
                             <StackLayout Spacing="4" />
                         </ItemsRepeater.Layout>
                     </ItemsRepeater>
-                </StackPanel>
+                </Expander>
 
                 <!-- ================================================
                      SECTIE 3: All installed apps (unified)
@@ -327,105 +343,129 @@
                      elevated PS-batch (één UAC voor de hele admin-required
                      subset).
                      ================================================ -->
-                <StackPanel Spacing="12">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-                                <TextBlock Text="All installed apps"
-                                           Style="{StaticResource SubtitleTextBlockStyle}" />
-                                <TextBlock x:Name="InstalledCountText"
-                                           Text=""
-                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                <Expander x:Name="InstalledExpander"
+                          IsExpanded="True"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="8" Padding="0,8,8,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                                    <TextBlock Text="All installed apps"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock x:Name="InstalledCountText"
+                                               Text=""
+                                               Style="{StaticResource SubtitleTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Bottom" />
+                                </StackPanel>
+                                <TextBlock Text="Alles op de PC: apps uit deze catalogus, Microsoft Store / AppX packages, en alles uit de Windows registry uninstall keys (MSI/EXE installs). Uninstall via de balk onderaan."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           VerticalAlignment="Bottom" />
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
-                            <TextBlock Text="Alles op de PC: apps uit deze catalogus, Microsoft Store / AppX packages, en alles uit de Windows registry uninstall keys (MSI/EXE installs)."
+                            <Button Grid.Column="1"
+                                    x:Name="InstalledSelectAllButton"
+                                    Click="InstalledSelectAllButton_Click"
+                                    IsEnabled="False"
+                                    VerticalAlignment="Center"
+                                    Content="Select all" />
+                        </Grid>
+                    </Expander.Header>
+
+                    <StackPanel Margin="0,4,0,0" Spacing="8">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <AutoSuggestBox Grid.Column="0"
+                                            x:Name="InstalledSearchBox"
+                                            PlaceholderText="Search installed apps"
+                                            QueryIcon="Find"
+                                            TextChanged="InstalledSearchBox_TextChanged" />
+                            <ComboBox Grid.Column="1"
+                                      x:Name="InstalledFilterBox"
+                                      SelectionChanged="InstalledFilterBox_SelectionChanged"
+                                      MinWidth="140">
+                                <ComboBoxItem Content="All sources" IsSelected="True" />
+                                <ComboBoxItem Content="Winget" />
+                                <ComboBoxItem Content="Store" />
+                                <ComboBoxItem Content="Web" />
+                                <ComboBoxItem Content="System" />
+                            </ComboBox>
+                            <CheckBox Grid.Column="2"
+                                      x:Name="ShowSystemCheckbox"
+                                      Content="Show system components"
+                                      ToolTipService.ToolTip="Include Windows system AppX packages (AAD.BrokerPlugin, BioEnrollment, etc.) — niet veilig om te uninstallen"
+                                      Checked="ShowSystemCheckbox_Toggled"
+                                      Unchecked="ShowSystemCheckbox_Toggled"
+                                      VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid>
+                            <ProgressRing x:Name="InstalledLoadingRing"
+                                          Width="32" Height="32"
+                                          IsIndeterminate="True"
+                                          HorizontalAlignment="Center"
+                                          Visibility="Collapsed" />
+
+                            <TextBlock x:Name="InstalledEmptyText"
+                                       Text=""
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Margin="0,4,0,0"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                x:Name="InstalledSelectAllButton"
-                                Click="InstalledSelectAllButton_Click"
-                                IsEnabled="False"
-                                VerticalAlignment="Center"
-                                Content="Select all" />
-                        <Button Grid.Column="2"
-                                x:Name="InstalledUninstallButton"
-                                Click="InstalledUninstallButton_Click"
-                                IsEnabled="False"
-                                Style="{StaticResource AccentButtonStyle}"
-                                VerticalAlignment="Center"
-                                Content="Uninstall selected" />
-                    </Grid>
+                                       HorizontalAlignment="Center"
+                                       Visibility="Collapsed"
+                                       Margin="0,12,0,0" />
 
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <AutoSuggestBox Grid.Column="0"
-                                        x:Name="InstalledSearchBox"
-                                        PlaceholderText="Search installed apps"
-                                        QueryIcon="Find"
-                                        TextChanged="InstalledSearchBox_TextChanged" />
-                        <ComboBox Grid.Column="1"
-                                  x:Name="InstalledFilterBox"
-                                  SelectionChanged="InstalledFilterBox_SelectionChanged"
-                                  MinWidth="140">
-                            <ComboBoxItem Content="All sources" IsSelected="True" />
-                            <ComboBoxItem Content="Winget" />
-                            <ComboBoxItem Content="Store" />
-                            <ComboBoxItem Content="Web" />
-                            <ComboBoxItem Content="System" />
-                        </ComboBox>
-                        <CheckBox Grid.Column="2"
-                                  x:Name="ShowSystemCheckbox"
-                                  Content="Show system components"
-                                  ToolTipService.ToolTip="Include Windows system AppX packages (AAD.BrokerPlugin, BioEnrollment, etc.) — niet veilig om te uninstallen"
-                                  Checked="ShowSystemCheckbox_Toggled"
-                                  Unchecked="ShowSystemCheckbox_Toggled"
-                                  VerticalAlignment="Center" />
-                    </Grid>
-
-                    <Grid>
-                        <ProgressRing x:Name="InstalledLoadingRing"
-                                      Width="32" Height="32"
-                                      IsIndeterminate="True"
-                                      HorizontalAlignment="Center"
-                                      Visibility="Collapsed" />
-
-                        <TextBlock x:Name="InstalledEmptyText"
-                                   Text=""
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   HorizontalAlignment="Center"
-                                   Visibility="Collapsed"
-                                   Margin="0,12,0,0" />
-
-                        <ItemsRepeater x:Name="InstalledList"
-                                       ItemTemplate="{StaticResource InstalledAppCardTemplate}">
-                            <ItemsRepeater.Layout>
-                                <StackLayout Spacing="4" />
-                            </ItemsRepeater.Layout>
-                        </ItemsRepeater>
-                    </Grid>
-
-                    <TextBlock x:Name="InstalledSelectionCountText"
-                               Text=""
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               HorizontalAlignment="Right" />
-                </StackPanel>
+                            <ItemsRepeater x:Name="InstalledList"
+                                           ItemTemplate="{StaticResource InstalledAppCardTemplate}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="4" />
+                                </ItemsRepeater.Layout>
+                            </ItemsRepeater>
+                        </Grid>
+                    </StackPanel>
+                </Expander>
 
             </StackPanel>
         </ScrollView>
+
+        <!-- Sticky bottom footer voor de All-apps actie. Altijd zichtbaar
+             onder aan de pagina zodat user niet hoeft te scrollen om te
+             selecteren / uninstallen. Toont count zodra er iets geselecteerd
+             is (anders blijft de count-tekst leeg en zien we een dunne strip
+             met enkel de knoppen). Border-top scheidt 'm visueel van de
+             scrollende content erboven. -->
+        <Border Grid.Row="4"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="0,12,14,0"
+                Margin="0,4,0,0">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           x:Name="InstalledSelectionCountText"
+                           Text="Nothing selected"
+                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        x:Name="InstalledUninstallButton"
+                        Click="InstalledUninstallButton_Click"
+                        IsEnabled="False"
+                        Style="{StaticResource AccentButtonStyle}"
+                        VerticalAlignment="Center"
+                        Content="Uninstall selected" />
+            </Grid>
+        </Border>
     </Grid>
 </Page>

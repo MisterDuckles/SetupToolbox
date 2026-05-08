@@ -93,6 +93,22 @@ public sealed class SettingsService
         }
     }
 
+    // Triggert na een succesvolle uninstall een scan naar overgebleven sporen
+    // (registry uninstall keys / Program Files / AppData) van de zojuist
+    // verwijderde apps. Default true — meeste users willen netjes opruimen.
+    // Wanneer false: geen scan, geen dialog, uninstall flow stopt direct na
+    // de batch. User kan handmatig nog een v0.8.6 deep-clean draaien.
+    public bool ScanLeftoversAfterUninstall
+    {
+        get => _data.ScanLeftoversAfterUninstall;
+        set
+        {
+            if (_data.ScanLeftoversAfterUninstall == value) return;
+            _data.ScanLeftoversAfterUninstall = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -136,5 +152,8 @@ public sealed class SettingsService
 
         [JsonPropertyName("parallelInstallsAsked")]
         public bool ParallelInstallsAsked { get; set; } = false;
+
+        [JsonPropertyName("scanLeftoversAfterUninstall")]
+        public bool ScanLeftoversAfterUninstall { get; set; } = true;
     }
 }

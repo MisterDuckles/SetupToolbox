@@ -26,6 +26,7 @@ public sealed partial class SettingsPage : Page
         _suppressToggleEvent = true;
         FallbackToggle.IsOn = App.Settings.FallbackToDownloadPage;
         ParallelToggle.IsOn = App.Settings.ParallelInstalls;
+        LeftoverToggle.IsOn = App.Settings.ScanLeftoversAfterUninstall;
         _suppressToggleEvent = false;
 
         await RefreshScheduleStatusAsync();
@@ -41,6 +42,12 @@ public sealed partial class SettingsPage : Page
     {
         if (_suppressToggleEvent) return;
         App.Settings.ParallelInstalls = ParallelToggle.IsOn;
+    }
+
+    private void LeftoverToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToggleEvent) return;
+        App.Settings.ScanLeftoversAfterUninstall = LeftoverToggle.IsOn;
     }
 
     private async System.Threading.Tasks.Task RefreshScheduleStatusAsync()
