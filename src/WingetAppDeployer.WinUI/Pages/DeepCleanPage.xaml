@@ -85,7 +85,7 @@
                     </Grid>
                 </Border>
 
-                <!-- Card 2: Orphaned folders scan -->
+                <!-- Card 2: Leftovers scan (folders + registry uninstall keys) -->
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -103,10 +103,10 @@
                                   VerticalAlignment="Center"
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Orphaned app folders"
+                            <TextBlock Text="Leftovers (folders + registry)"
                                        Style="{StaticResource BodyStrongTextBlockStyle}"
                                        FontSize="15" />
-                            <TextBlock Text="Scan Program Files / AppData voor folders die niet matchen met enige geïnstalleerde app. Kandidaten voor leftover data van eerder verwijderde apps. Conservatief — alle items staan default uit, jij beslist wat weg mag."
+                            <TextBlock Text="Scan Program Files / AppData voor folders zonder bijbehorende installed app, PLUS uninstall registry-keys waarvan alle pad-velden dood zijn. Bundle-by-name in de preview groept registry+folder van dezelfde app automatisch. Conservatief — alle items staan default uit."
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" />
@@ -117,7 +117,7 @@
                                 VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE721;" FontSize="14" />
-                                <TextBlock Text="Scan folders" />
+                                <TextBlock Text="Scan leftovers" />
                             </StackPanel>
                         </Button>
                     </Grid>

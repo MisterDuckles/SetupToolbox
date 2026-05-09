@@ -23,7 +23,8 @@ public enum DeepCleanCategory
     RecycleBin,         // Shell Recycle Bin — speciaal: niet via Directory.Delete
     WindowsOld,         // %WINDIR%.old — admin, caution (rollback-restpunt)
     BrowserCache,       // Edge / Chrome / Firefox / Brave caches — caution
-    OrphanedFolder      // Geen matchende installed app gevonden
+    OrphanedFolder,     // Geen matchende installed app gevonden
+    OrphanedRegistry    // Uninstall registry-key waarvan alle paden dood zijn
 }
 
 // Eén cleanup-target. Voor caches zijn DisplayName en Path vooraf bekend; voor
@@ -94,6 +95,7 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         DeepCleanCategory.WindowsOld => "Windows.old",
         DeepCleanCategory.BrowserCache => "Browser cache",
         DeepCleanCategory.OrphanedFolder => "Orphaned folder",
+        DeepCleanCategory.OrphanedRegistry => "Orphaned registry",
         _ => string.Empty
     };
 

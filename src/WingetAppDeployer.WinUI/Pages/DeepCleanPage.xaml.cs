@@ -12,14 +12,19 @@ namespace WingetAppDeployer_WinUI.Pages;
 // "Debloat → Deep clean" sub-page. Twee scan-flows:
 //   1. Windows caches — predefined paden (Temp / Update cache / Recycle / Prefetch /
 //      Windows.old / browser caches). Snelle scan, hoge ROI.
-//   2. Orphaned folders — folders in Program Files / AppData zonder bijbehorende
-//      installed app. Langzamere scan (size-walk per kandidaat), conservatief
-//      (alles default uit) want false positives kunnen portable apps treffen.
+//   2. Leftovers — orphan folders (Program Files / AppData zonder matching
+//      installed app) PLUS orphan registry uninstall entries (keys waarvan
+//      alle pad-velden naar dode bestanden wijzen). Beide bronnen parallel,
+//      gecombineerd in één DeepCleanDialog. Bundle-by-name in de dialog
+//      groept registry+folder van dezelfde app automatisch (bv. registry
+//      "Claude" + folder "AnthropicClaude" delen token "claude").
 //
 // Beide eindigen in een DeepCleanDialog met preview + delete fases. Resultaat-
 // feedback komt op de eigen InfoBar bovenaan deze pagina.
 public sealed partial class DeepCleanPage : Page
 {
+    private enum ScanKind { Caches, Leftovers }
+
     public DeepCleanPage()
     {
         InitializeComponent();
@@ -27,15 +32,15 @@ public sealed partial class DeepCleanPage : Page
 
     private async void ScanCachesButton_Click(object sender, RoutedEventArgs e)
     {
-        await RunScanAsync(scanCaches: true);
+        await RunScanAsync(ScanKind.Caches);
     }
 
     private async void ScanOrphanedButton_Click(object sender, RoutedEventArgs e)
     {
-        await RunScanAsync(scanCaches: false);
+        await RunScanAsync(ScanKind.Leftovers);
     }
 
-    private async Task RunScanAsync(bool scanCaches)
+    private async Task RunScanAsync(ScanKind kind)
     {
         // Disable beide knoppen tijdens scan zodat user niet 2x klikt en we
         // geen overlappende scans krijgen. Spinner zichtbaar onder de knoppen
@@ -47,9 +52,21 @@ public sealed partial class DeepCleanPage : Page
         List<DeepCleanItem> items;
         try
         {
-            items = scanCaches
-                ? await App.DeepClean.ScanWindowsCachesAsync()
-                : await App.DeepClean.ScanOrphanedFoldersAsync();
+            if (kind == ScanKind.Caches)
+            {
+                items = await App.DeepClean.ScanWindowsCachesAsync();
+            }
+            else
+            {
+                // Folders + registry parallel — folder-scan is de langzaamste
+                // (size-walk per kandidaat), registry is snel. Combineren spaart
+                // round-trip + de bundle-by-name in de dialog kan registry+folder
+                // van zelfde app onder één card zetten.
+                var folderTask = App.DeepClean.ScanOrphanedFoldersAsync();
+                var registryTask = App.DeepClean.ScanOrphanedRegistryAsync();
+                await Task.WhenAll(folderTask, registryTask);
+                items = (await folderTask).Concat(await registryTask).ToList();
+            }
         }
         catch (Exception)
         {
@@ -62,22 +79,26 @@ public sealed partial class DeepCleanPage : Page
             ScanOrphanedButton.IsEnabled = true;
         }
 
-        var label = scanCaches ? "Windows caches" : "Orphaned folders";
+        var label = kind == ScanKind.Caches ? "Windows caches" : "Leftovers";
         if (items.Count == 0)
         {
             CleanupResultBar.Severity = InfoBarSeverity.Success;
             CleanupResultBar.Title = $"{label}: nothing to clean";
-            CleanupResultBar.Message = scanCaches
+            CleanupResultBar.Message = kind == ScanKind.Caches
                 ? "Alle bekende cache-locaties zijn al leeg of bestaan niet."
-                : "Geen orphaned folders gevonden — elke folder matcht met een geïnstalleerde app.";
+                : "Geen orphaned folders of registry-entries gevonden — alles matcht met een geïnstalleerde app.";
             CleanupResultBar.IsOpen = true;
             return;
         }
 
         var totalSize = items.Sum(i => i.SizeBytes);
+        var folderCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedFolder);
+        var regCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedRegistry);
         CleanupResultBar.Severity = InfoBarSeverity.Informational;
         CleanupResultBar.Title = $"{label}: {items.Count} item(s) found ({FormatBytes(totalSize)})";
-        CleanupResultBar.Message = "Review and pick what to delete.";
+        CleanupResultBar.Message = kind == ScanKind.Caches
+            ? "Review and pick what to delete."
+            : $"{folderCount} folder(s) · {regCount} registry-entries. Review and pick what to delete.";
         CleanupResultBar.IsOpen = true;
 
         var dialog = new DeepCleanDialog(items, App.DeepClean) { XamlRoot = this.XamlRoot };

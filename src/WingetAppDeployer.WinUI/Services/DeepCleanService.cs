@@ -44,6 +44,19 @@ public sealed class DeepCleanService
     }
 
     /// <summary>
+    /// Returnt de registry-paden die ScanOrphanedRegistryAsync afloopt.
+    /// </summary>
+    public static IReadOnlyList<string> GetOrphanedRegistryLocations()
+    {
+        return new List<string>
+        {
+            @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+            @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        };
+    }
+
+    /// <summary>
     /// Returnt de cache-locatie patronen die ScanWindowsCachesAsync probeert.
     /// Gebruikt door de dialog header.
     /// </summary>
@@ -206,6 +219,264 @@ public sealed class DeepCleanService
     }
 
     /// <summary>
+    /// Scant uninstall registry keys (HKLM 64-bit + WOW6432Node + HKCU) en
+    /// flag entries waarvan ALLE pad-velden (InstallLocation / DisplayIcon /
+    /// UninstallString) niet meer naar bestaande paden wijzen — registry-
+    /// leftovers van apps die ooit verwijderd zijn waarvan Windows de uninstall
+    /// key niet opruimde.
+    /// Levert geen entries die we ook niet als installed-app zouden tellen
+    /// (SystemComponent / ParentKeyName / KB-updates), zodat we geen system-
+    /// patches als "orphan" voorstellen.
+    /// </summary>
+    public async Task<List<DeepCleanItem>> ScanOrphanedRegistryAsync()
+    {
+        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+        Action<string> log = msg =>
+        {
+            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+            catch { }
+        };
+        log($"=== Orphaned registry scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+        // Build cross-check token-set uit winget + AppX (non-registry sources).
+        // Een minimale registry-entry zonder werkende paden is dan nog steeds
+        // alive als winget of AppX 'm tracked.
+        var rawInstalled = await App.InstalledApps.DetectAllAsync();
+        var crossCheckTokens = BuildNonRegistryInstalledTokens(rawInstalled);
+        log($"Cross-check tokens: {crossCheckTokens.Count} from winget+AppX entries (registry-source excluded)");
+
+        return await Task.Run(() =>
+        {
+            var results = new List<DeepCleanItem>();
+            int checkedAlive = 0;
+            int skippedSystem = 0;
+            var sources = new (RegistryHive Hive, string Path, RegistryView View, bool RequiresElevation, string DisplayPrefix)[]
+            {
+                (RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", RegistryView.Registry64, true,  @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                (RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", RegistryView.Registry32, true, @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+                (RegistryHive.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", RegistryView.Default, false,    @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            };
+
+            foreach (var (hive, path, view, requiresElev, displayPrefix) in sources)
+            {
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var uninstallKey = baseKey.OpenSubKey(path);
+                    if (uninstallKey == null) continue;
+                    foreach (var subName in uninstallKey.GetSubKeyNames())
+                    {
+                        using var sub = uninstallKey.OpenSubKey(subName);
+                        if (sub == null) continue;
+
+                        // Filter out entries die we ook niet als installed-app
+                        // tellen — deze zijn geen "leftover" maar bewuste
+                        // system/patch entries.
+                        if (sub.GetValue("SystemComponent") is int sysCmp && sysCmp == 1) { skippedSystem++; continue; }
+                        if (sub.GetValue("ParentKeyName") is string parent && !string.IsNullOrEmpty(parent)) { skippedSystem++; continue; }
+                        var display = sub.GetValue("DisplayName") as string;
+                        if (string.IsNullOrWhiteSpace(display)) { skippedSystem++; continue; }
+                        if (display.StartsWith("Update for ", StringComparison.OrdinalIgnoreCase)) { skippedSystem++; continue; }
+                        if (display.StartsWith("Security Update for ", StringComparison.OrdinalIgnoreCase)) { skippedSystem++; continue; }
+                        if (display.StartsWith("Hotfix for ", StringComparison.OrdinalIgnoreCase)) { skippedSystem++; continue; }
+
+                        // Check de gezondheid van de entry: minstens één pad-veld
+                        // moet resolven, OF DisplayName moet matchen met een
+                        // winget/AppX-tracked install (cross-check).
+                        var aliveResult = CheckRegistryEntryAlive(sub, crossCheckTokens);
+                        var registryKeyPath = $"{displayPrefix}\\{subName}";
+                        var displayNameFinal = string.IsNullOrWhiteSpace(display) ? subName : display;
+
+                        if (aliveResult.IsAlive)
+                        {
+                            // Valid install — niet als orphan flaggen. Wel logging
+                            // zodat user kan verifieren waarom z'n entry niet als
+                            // orphan gemarkeerd is (bv. unins000.exe nog op disk).
+                            checkedAlive++;
+                            log($"  ALIVE : {displayNameFinal} → {aliveResult.Reason}");
+                            continue;
+                        }
+
+                        var publisher = sub.GetValue("Publisher") as string ?? string.Empty;
+
+                        log($"  ORPHAN: {displayNameFinal} → {aliveResult.Reason}");
+
+                        results.Add(new DeepCleanItem(
+                            displayName: displayNameFinal,
+                            path: registryKeyPath,
+                            category: DeepCleanCategory.OrphanedRegistry,
+                            sizeBytes: 0,
+                            requiresElevation: requiresElev,
+                            isSafe: false,
+                            description: $"Uninstall registry-entry zonder werkende paden. {aliveResult.Reason} — Windows zou deze key normaal opruimen tijdens een uninstall, maar dat is hier niet gebeurd. Veilig om te verwijderen, ruimt alleen registry op."));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log($"Registry orphan scan error in {hive}\\{path}: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            log($"Orphaned registry scan complete — checked: {results.Count + checkedAlive} entries " +
+                $"(orphan: {results.Count}, alive: {checkedAlive}, skipped system/patches: {skippedSystem})");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Walkt dezelfde uninstall registry keys als ScanOrphanedRegistryAsync en
+    /// returnt de identifiers (in InstalledAppsService Web-source format
+    /// "{hive}\\{path}\\{subName}") van entries die alive zijn. Gebruikt door
+    /// ScanOrphanedFoldersAsync om dode registry-entries uit de installed-list
+    /// te filteren — anders zou een folder die alleen via zo'n dode entry
+    /// "matched" niet als orphan terugkomen.
+    /// </summary>
+    private static HashSet<string> CollectAliveRegistryIdentifiers(HashSet<string> crossCheckTokens)
+    {
+        var alive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sources = new (RegistryHive Hive, string Path, RegistryView View)[]
+        {
+            (RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", RegistryView.Registry64),
+            (RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", RegistryView.Registry32),
+            (RegistryHive.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", RegistryView.Default),
+        };
+        foreach (var (hive, path, view) in sources)
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var uninstallKey = baseKey.OpenSubKey(path);
+                if (uninstallKey == null) continue;
+                foreach (var subName in uninstallKey.GetSubKeyNames())
+                {
+                    using var sub = uninstallKey.OpenSubKey(subName);
+                    if (sub == null) continue;
+                    var (isAlive, _) = CheckRegistryEntryAlive(sub, crossCheckTokens);
+                    if (isAlive)
+                    {
+                        // Match het exacte format dat InstalledAppsService.DetectRegistry
+                        // gebruikt voor InstalledAppEntry.Identifier: "{hive}\\{path}\\{subName}"
+                        // — daar zit GEEN spatie tussen "Local" en "Machine" omdat de enum-name
+                        // gewoon "LocalMachine" is.
+                        alive.Add($"{hive}\\{path}\\{subName}");
+                    }
+                }
+            }
+            catch
+            {
+                // Permissions / IO error — entries in die hive worden niet geverifieerd.
+                // Conservatief: niet leeg laten zodat we niet alle web-entries filteren.
+            }
+        }
+        return alive;
+    }
+
+    /// <summary>
+    /// Checkt of een uninstall registry-entry "alive" is. Twee signal-bronnen:
+    ///   1. Pad-velden — InstallLocation / DisplayIcon / UninstallString / QuietUninstallString
+    ///      Bewust GEEN InstallSource — dat is een download/staging-pad
+    ///      (typisch %TEMP%\WinGet\...) dat Windows opruimt na install.
+    ///   2. Cross-check tegen winget+AppX — een minimale registry-entry zonder
+    ///      werkende paden kan tóch een echte install zijn als winget of AppX
+    ///      'm tracked (winget-installed apps schrijven vaak een sparse uninstall
+    ///      key). Omgekeerd: een leftover registry-entry zonder paden EN zonder
+    ///      winget/AppX-tegenhanger is een echte orphan.
+    /// </summary>
+    private static (bool IsAlive, string Reason) CheckRegistryEntryAlive(
+        RegistryKey entry, HashSet<string> nonRegistryInstalledTokens)
+    {
+        var fields = new (string Name, string? Raw)[]
+        {
+            ("InstallLocation",       entry.GetValue("InstallLocation") as string),
+            ("DisplayIcon",           StripIconIndex(entry.GetValue("DisplayIcon") as string)),
+            ("UninstallString",       ExtractExePathFromCommandLine(entry.GetValue("UninstallString") as string)),
+            ("QuietUninstallString",  ExtractExePathFromCommandLine(entry.GetValue("QuietUninstallString") as string)),
+        };
+
+        var checkedFields = 0;
+        var deadFields = new List<string>();
+        foreach (var (name, raw) in fields)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            checkedFields++;
+            var resolved = ResolveToDirectory(raw);
+            if (resolved != null)
+                return (true, $"{name}='{raw}' → {resolved}");
+            deadFields.Add($"{name}='{raw}'");
+        }
+
+        // Path-check faalde of niet mogelijk. Cross-check met winget+AppX:
+        // tokenize de DisplayName en kijk of er overlap is met de set van
+        // tokens uit non-registry installed apps. Voorbeeld:
+        //   Entry "GitHub CLI" → tokens [github] (cli te kort)
+        //     winget tracked "GitHub CLI" → set bevat [github]
+        //     overlap → alive ✓
+        //   Entry "Claude" → tokens [claude]
+        //     winget/AppX heeft geen Claude → set bevat geen [claude]
+        //     no overlap → orphan ✓
+        var displayName = entry.GetValue("DisplayName") as string;
+        if (!string.IsNullOrWhiteSpace(displayName) && nonRegistryInstalledTokens.Count > 0)
+        {
+            var entryTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddWithTokens(entryTokens, displayName);
+            if (entryTokens.Overlaps(nonRegistryInstalledTokens))
+                return (true, $"DisplayName='{displayName}' matched by winget/AppX tracked install");
+        }
+
+        if (checkedFields == 0)
+        {
+            // Geen pad-velden EN geen winget/AppX cross-match. Dit is bijna
+            // zeker een leftover registry-entry zonder enige verifieerbare
+            // install-bewijs. Mark als orphan.
+            return (false, "no path fields and no winget/AppX cross-match");
+        }
+
+        return (false, $"all {checkedFields} path field(s) dead and no winget/AppX cross-match [{string.Join(" | ", deadFields)}]");
+    }
+
+    /// <summary>
+    /// Bouwt een token-set uit InstalledAppsService entries die NIET uit registry
+    /// komen — dus winget + AppX. Gebruikt door CheckRegistryEntryAlive om
+    /// minimale registry-entries (zonder werkende paden) te valideren tegen een
+    /// onafhankelijke detectiebron. Als winget of AppX een app tracked, is die
+    /// genuinely installed regardless of registry-state.
+    /// </summary>
+    private static HashSet<string> BuildNonRegistryInstalledTokens(IEnumerable<InstalledAppEntry> rawInstalled)
+    {
+        var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in rawInstalled)
+        {
+            // Skip Web-source — dat zíjn de registry-entries die we evalueren.
+            // Cross-check moet onafhankelijk zijn van registry zelf.
+            if (entry.Source == InstalledSource.Web) continue;
+            AddWithTokens(tokens, entry.DisplayName);
+            if (!string.IsNullOrEmpty(entry.Publisher)) AddWithTokens(tokens, entry.Publisher);
+            // Voor Winget: ID-segments (Publisher.AppName)
+            if (entry.Source == InstalledSource.Winget)
+            {
+                foreach (var p in entry.Identifier.Split('.'))
+                    if (p.Length >= 4) tokens.Add(NormalizeForTokens(p));
+            }
+            // Voor Store: PackageFullName-segments
+            if (entry.Source == InstalledSource.Store)
+            {
+                foreach (var p in entry.Identifier.Split('_')[0].Split('.'))
+                    if (p.Length >= 4) tokens.Add(NormalizeForTokens(p));
+            }
+        }
+        return tokens;
+    }
+
+    private static string NormalizeForTokens(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var sb = new StringBuilder(s.Length);
+        foreach (var c in s)
+            if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Scant Program Files / Program Files (x86) / %LOCALAPPDATA% / %APPDATA% /
     /// %PROGRAMDATA% en flag folders die NIET matchen met enige installed app.
     /// Loopt InstalledAppsService.DetectAllAsync om de comparison set op te bouwen.
@@ -227,7 +498,25 @@ public sealed class DeepCleanService
         // tokens (woorden) zodat een folder "VMware" matcht met installed app
         // "VMware Workstation Pro". Zonder tokenize zou alleen substring werken,
         // wat soms faalt door publisher-encoding of locale-verschillen.
-        var installed = await App.InstalledApps.DetectAllAsync();
+        //
+        // Filter eerst dode registry-entries uit de installed-list zodat een
+        // folder die alleen via een leftover registry-entry "matched" wordt
+        // niet ten onrechte als geldig wordt geskipt. CollectAliveRegistryIds
+        // walkt de uninstall keys parallel met onze ScanOrphanedRegistryAsync
+        // en bouwt de set van entries die nog werkende paden hebben — alleen
+        // die tellen als "echte installed app" voor folder-matching doeleinden.
+        var rawInstalled = await App.InstalledApps.DetectAllAsync();
+        // Cross-check tokens uit winget+AppX (non-registry) — gebruikt door
+        // CheckRegistryEntryAlive om minimale registry-entries te valideren
+        // tegen onafhankelijke detectie. Voorkomt dat "GitHub CLI" type winget-
+        // entries (sparse uninstall key) als orphan worden gemarkeerd.
+        var crossCheckTokens = BuildNonRegistryInstalledTokens(rawInstalled);
+        var aliveRegistryIds = CollectAliveRegistryIdentifiers(crossCheckTokens);
+        var installed = rawInstalled
+            .Where(e => e.Source != InstalledSource.Web || aliveRegistryIds.Contains(e.Identifier))
+            .ToList();
+        log($"Installed-list filtered: {installed.Count} of {rawInstalled.Count} kept ({rawInstalled.Count - installed.Count} dead-registry web-entries removed)");
+
         var nameSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in installed)
         {
@@ -805,14 +1094,31 @@ public sealed class DeepCleanService
         var local = items.Where(i => !i.RequiresElevation && i.Category != DeepCleanCategory.RecycleBin).ToList();
         long bytesFreed = 0;
 
-        // 1) Local deletes — geen UAC.
+        // 1) Local deletes — geen UAC. Per categorie verschillende strategie:
+        //   - OrphanedRegistry → DeleteSubKeyTree op HKCU
+        //   - OrphanedFolder   → Directory.Delete(recursive)
+        //   - Cache (rest)     → ClearFolderContents (folder zelf laten staan)
         foreach (var item in local)
         {
             try
             {
-                ClearFolderContents(item.Path);
-                results[item.Path] = (true, "Cleared");
-                bytesFreed += item.SizeBytes;
+                if (item.Category == DeepCleanCategory.OrphanedRegistry)
+                {
+                    DeleteRegistryKey(item.Path);
+                    results[item.Path] = (true, "Removed registry key");
+                }
+                else if (item.Category == DeepCleanCategory.OrphanedFolder)
+                {
+                    Directory.Delete(item.Path, recursive: true);
+                    results[item.Path] = (true, "Deleted folder");
+                    bytesFreed += item.SizeBytes;
+                }
+                else
+                {
+                    ClearFolderContents(item.Path);
+                    results[item.Path] = (true, "Cleared");
+                    bytesFreed += item.SizeBytes;
+                }
             }
             catch (Exception ex)
             {
@@ -849,6 +1155,41 @@ public sealed class DeepCleanService
     /// folders zou je wél de folder zelf willen weghalen — die handelen we
     /// daarom apart af.
     /// </summary>
+    /// <summary>
+    /// Verwijdert een registry-uninstall-key. Path format = "HKCU\..." of
+    /// "HKLM\..." zoals door ScanOrphanedRegistryAsync gegenereerd. Voor HKLM
+    /// hoort dit via de elevated PS-batch te lopen — DeleteRegistryKey gaat
+    /// hier alleen voor HKCU (user-context), maar checkt voor de zekerheid.
+    /// </summary>
+    private static void DeleteRegistryKey(string fullPath)
+    {
+        var firstSep = fullPath.IndexOf('\\');
+        if (firstSep <= 0) throw new ArgumentException($"Invalid registry path: {fullPath}");
+        var hiveName = fullPath.Substring(0, firstSep).ToUpperInvariant();
+        var subPath = fullPath.Substring(firstSep + 1);
+
+        var (hive, view) = hiveName switch
+        {
+            "HKCU" => (RegistryHive.CurrentUser, RegistryView.Default),
+            "HKLM" => (RegistryHive.LocalMachine, RegistryView.Registry64),
+            _ => throw new ArgumentException($"Unsupported hive: {hiveName}")
+        };
+        // WOW6432Node-paden gaan via 32-bit view zodat we de juiste registry-
+        // ruimte raken (Registry64 zou 'm niet vinden door reflection-mapping).
+        if (subPath.Contains("WOW6432Node", StringComparison.OrdinalIgnoreCase))
+            view = RegistryView.Registry32;
+
+        var lastSep = subPath.LastIndexOf('\\');
+        if (lastSep <= 0) throw new ArgumentException($"Invalid sub path: {subPath}");
+        var parentPath = subPath.Substring(0, lastSep);
+        var keyName = subPath.Substring(lastSep + 1);
+
+        using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+        using var parent = baseKey.OpenSubKey(parentPath, writable: true)
+                           ?? throw new InvalidOperationException($"Parent key not found: {parentPath}");
+        parent.DeleteSubKeyTree(keyName, throwOnMissingSubKey: false);
+    }
+
     private static void ClearFolderContents(string path)
     {
         var dir = new DirectoryInfo(path);
@@ -886,6 +1227,15 @@ public sealed class DeepCleanService
                 // Clear-RecycleBin pakt alle drives + force = geen confirm.
                 sb.AppendLine("    Clear-RecycleBin -Force -ErrorAction Stop");
                 sb.AppendLine($"    Log \"RESULT|{path}|OK|Recycle Bin emptied\"");
+            }
+            else if (item.Category == DeepCleanCategory.OrphanedRegistry)
+            {
+                // reg.exe accepteert HKLM\... / HKCU\... paden direct. /f =
+                // force, geen confirm. Output naar null zodat de logfile niet
+                // door reg.exe stdout vergiftigd wordt.
+                sb.AppendLine($"    & reg.exe delete '{path}' /f | Out-Null");
+                sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"reg.exe exit $LASTEXITCODE\" }}");
+                sb.AppendLine($"    Log \"RESULT|{path}|OK|Removed registry key\"");
             }
             else if (item.Category == DeepCleanCategory.OrphanedFolder)
             {
