@@ -172,7 +172,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
-                       Text="Debloat"
+                       Text="Debloat — Apps"
                        Style="{StaticResource TitleTextBlockStyle}"
                        VerticalAlignment="Center" />
             <Button Grid.Column="1"
@@ -188,10 +188,10 @@
 
         <InfoBar Grid.Row="1"
                  Severity="Informational"
-                 Title="Work in progress"
-                 Message="Deep clean (v0.8.6 — orphaned folders + caches) volgt nog. De curated Microsoft / OEM secties geven snelle quick-actions; de unified lijst onderaan toont álles dat op de PC staat. Na een uninstall scant de app automatisch naar leftovers."
+                 Title="Apps debloat"
+                 Message="Verwijder geïnstalleerde apps — Microsoft pre-install bloat, OEM bundleware, en alles uit deze catalog / Store / Web. Voor system-wide cache- en orphan-folder cleanup kies je &quot;Deep clean&quot; in de sidebar. Na een uninstall scant de app automatisch naar leftovers."
                  IsOpen="True"
-                 IsClosable="False"
+                 IsClosable="True"
                  MaxWidth="720"
                  HorizontalAlignment="Left"
                  Margin="0,0,0,8" />
@@ -212,7 +212,7 @@
                     VerticalScrollBarVisibility="Auto"
                     Padding="0,0,14,12"
                     ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
-            <StackPanel Spacing="28">
+            <StackPanel Spacing="20">
 
                 <!-- ================================================
                      SECTIE 1: Microsoft bloatware (curated quick-actions)

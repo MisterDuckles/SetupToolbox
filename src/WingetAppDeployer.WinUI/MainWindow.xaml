@@ -38,7 +38,27 @@
             <NavigationView.MenuItems>
                 <NavigationViewItem Icon="AllApps" Content="Apps" Tag="Apps" />
                 <NavigationViewItem Icon="Setting" Content="Tweaks" Tag="Tweaks" />
-                <NavigationViewItem Icon="Delete" Content="Debloat" Tag="Debloat" />
+                <!-- Debloat parent met twee sub-items. SelectsOnInvoked=False zodat
+                     klik op "Debloat" alleen de groep open/dichtklapt zonder zelf
+                     te navigeren. Default IsExpanded=True zodat user meteen ziet
+                     dat er twee opties zijn. Sub-items hebben hun eigen Tag → page
+                     mapping in NavView_SelectionChanged. -->
+                <NavigationViewItem Icon="Delete" Content="Debloat" SelectsOnInvoked="False" IsExpanded="True">
+                    <NavigationViewItem.MenuItems>
+                        <NavigationViewItem Content="Apps" Tag="DebloatApps">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE71D;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <!-- Deep clean glyph: Sweep / E7B8 — Broom bestaat niet in
+                             de Symbol enum, vandaar custom FontIcon. -->
+                        <NavigationViewItem Content="Deep clean" Tag="DebloatDeepClean">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE7B8;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationViewItem.MenuItems>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame" />

@@ -36,7 +36,11 @@ public sealed partial class MainWindow : Window
             {
                 "Apps" => typeof(AppsPage),
                 "Tweaks" => typeof(TweaksPage),
-                "Debloat" => typeof(DebloatPage),
+                // "Debloat" parent zelf navigeert niet (SelectsOnInvoked=False in
+                // XAML) — alleen z'n twee kinderen. Apps = de bloatware/uninstall
+                // flows, Deep clean = system-wide cache/orphan cleanup.
+                "DebloatApps" => typeof(DebloatPage),
+                "DebloatDeepClean" => typeof(DeepCleanPage),
                 _ => null
             };
         }

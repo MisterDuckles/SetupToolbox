@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="WingetAppDeployer_WinUI.Dialogs.DeepCleanDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:WingetAppDeployer_WinUI.Models"
+    mc:Ignorable="d"
+    Title="Deep clean"
+    PrimaryButtonText="Delete selected"
+    SecondaryButtonText="Skip"
+    DefaultButton="None"
+    CornerRadius="8"
+    PrimaryButtonStyle="{StaticResource DialogPrimaryButtonStyle}"
+    SecondaryButtonStyle="{StaticResource DialogDefaultButtonStyle}"
+    PrimaryButtonClick="OnPrimaryClick">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMinWidth">760</x:Double>
+        <x:Double x:Key="ContentDialogMaxWidth">800</x:Double>
+    </ContentDialog.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   x:Name="HeaderText"
+                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                   FontSize="15"
+                   Margin="0,0,0,4" />
+
+        <TextBlock Grid.Row="1"
+                   x:Name="ScanLocationsText"
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,4" />
+
+        <TextBlock Grid.Row="2"
+                   Text="Preview only — niets wordt verwijderd tot je op &quot;Delete selected&quot; klikt. Veilige items (Temp / Recycle Bin / Update cache) staan default aangevinkt. Caution-items (Windows.old / browser caches / orphaned folders) staan default uit."
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8" />
+
+        <Grid Grid.Row="3" Margin="0,0,0,8" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       x:Name="SelectionStatusText"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    x:Name="ToggleAllButton"
+                    Content="Select all"
+                    Click="ToggleAllButton_Click" />
+        </Grid>
+
+        <ScrollView Grid.Row="4"
+                    VerticalScrollBarVisibility="Auto"
+                    MaxHeight="440"
+                    ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
+            <StackPanel x:Name="GroupContainer" Spacing="14" />
+        </ScrollView>
+
+        <StackPanel Grid.Row="5"
+                    x:Name="ProgressPanel"
+                    Visibility="Collapsed"
+                    Margin="0,12,0,0"
+                    Spacing="6">
+            <TextBlock x:Name="ProgressStatusText"
+                       Text="Deleting..."
+                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+            <ProgressBar x:Name="ProgressBar"
+                         IsIndeterminate="True"
+                         HorizontalAlignment="Stretch" />
+        </StackPanel>
+    </Grid>
+</ContentDialog>
