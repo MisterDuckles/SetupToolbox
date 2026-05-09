@@ -58,14 +58,30 @@ public sealed partial class DeepCleanPage : Page
             }
             else
             {
-                // Folders + registry parallel — folder-scan is de langzaamste
-                // (size-walk per kandidaat), registry is snel. Combineren spaart
-                // round-trip + de bundle-by-name in de dialog kan registry+folder
-                // van zelfde app onder één card zetten.
+                // Alle leftover-bronnen parallel:
+                //   - folders (Program Files / AppData zonder matching app)
+                //   - uninstall registry keys met dode paden
+                //   - App Paths registry met dode exe-paden
+                //   - MUIcache values (recently-used programs met dode paden)
+                //   - Class handlers (\Software\Classes\Applications) met dode exes
+                //   - Start Menu / Desktop shortcuts met dode targets
+                // Folder-scan is de langzaamste; rest is snel. Bundle-by-name in
+                // de dialog groept gerelateerde items van zelfde app onder één
+                // card (registry + folder + MUIcache van "Claude" → 1 bundle).
                 var folderTask = App.DeepClean.ScanOrphanedFoldersAsync();
                 var registryTask = App.DeepClean.ScanOrphanedRegistryAsync();
-                await Task.WhenAll(folderTask, registryTask);
-                items = (await folderTask).Concat(await registryTask).ToList();
+                var appPathsTask = App.DeepClean.ScanOrphanedAppPathsAsync();
+                var muiCacheTask = App.DeepClean.ScanOrphanedMuiCacheAsync();
+                var classHandlersTask = App.DeepClean.ScanOrphanedClassHandlersAsync();
+                var shortcutsTask = App.DeepClean.ScanOrphanedShortcutsAsync();
+                await Task.WhenAll(folderTask, registryTask, appPathsTask, muiCacheTask, classHandlersTask, shortcutsTask);
+                items = (await folderTask)
+                    .Concat(await registryTask)
+                    .Concat(await appPathsTask)
+                    .Concat(await muiCacheTask)
+                    .Concat(await classHandlersTask)
+                    .Concat(await shortcutsTask)
+                    .ToList();
             }
         }
         catch (Exception)
@@ -92,13 +108,30 @@ public sealed partial class DeepCleanPage : Page
         }
 
         var totalSize = items.Sum(i => i.SizeBytes);
-        var folderCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedFolder);
-        var regCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedRegistry);
         CleanupResultBar.Severity = InfoBarSeverity.Informational;
         CleanupResultBar.Title = $"{label}: {items.Count} item(s) found ({FormatBytes(totalSize)})";
-        CleanupResultBar.Message = kind == ScanKind.Caches
-            ? "Review and pick what to delete."
-            : $"{folderCount} folder(s) · {regCount} registry-entries. Review and pick what to delete.";
+        if (kind == ScanKind.Caches)
+        {
+            CleanupResultBar.Message = "Review and pick what to delete.";
+        }
+        else
+        {
+            // Per-categorie breakdown zodat user direct ziet waar de hits zitten.
+            var folderCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedFolder);
+            var regCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedRegistry);
+            var appPathCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedAppPath);
+            var muiCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedMuiCache);
+            var classCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedClassHandler);
+            var shortcutCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedShortcut);
+            var parts = new List<string>();
+            if (folderCount > 0) parts.Add($"{folderCount} folders");
+            if (regCount > 0) parts.Add($"{regCount} registry");
+            if (appPathCount > 0) parts.Add($"{appPathCount} App Paths");
+            if (muiCount > 0) parts.Add($"{muiCount} MUIcache");
+            if (classCount > 0) parts.Add($"{classCount} class handlers");
+            if (shortcutCount > 0) parts.Add($"{shortcutCount} shortcuts");
+            CleanupResultBar.Message = $"{string.Join(" · ", parts)}. Review and pick what to delete.";
+        }
         CleanupResultBar.IsOpen = true;
 
         var dialog = new DeepCleanDialog(items, App.DeepClean) { XamlRoot = this.XamlRoot };

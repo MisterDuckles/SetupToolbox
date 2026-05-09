@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.Win32;
 using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 using WingetAppDeployer_WinUI.Services;
@@ -323,45 +327,80 @@ public sealed partial class DeepCleanDialog : ContentDialog
             });
         }
 
-        // Per-path regel met individuele size — geeft user vertrouwen dat 'ie
-        // weet welke mappen geraakt worden bij het bundle-toggle.
+        // Per-path lijst achter een ingeklapte Expander: default zien we geen
+        // paden meer (cleaner card), user kan klikken om alle locaties te
+        // bekijken. Path-rows in een Grid met width=* zodat lange MUIcache /
+        // App Paths entries netjes met ellipsis afgebroken worden i.p.v. door
+        // de card-rand heen te steken.
+        var pathExpander = new Expander
+        {
+            Header = $"Show {items.Count} location{(items.Count == 1 ? "" : "s")}",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            IsExpanded = false,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        var pathStack = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 0, 0) };
         foreach (var member in items)
         {
-            var pathRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            pathRow.Children.Add(new TextBlock
+            var pathGrid = new Grid();
+            pathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            pathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            pathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            pathGrid.ColumnSpacing = 6;
+
+            var bullet = new TextBlock
             {
                 Text = "•",
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"]
-            });
-            pathRow.Children.Add(new TextBlock
+            };
+            Grid.SetColumn(bullet, 0);
+            pathGrid.Children.Add(bullet);
+
+            // Path als HyperlinkButton met TextWrapping=Wrap — volledige path
+            // altijd zichtbaar (geen truncation meer), klik opent het pad in
+            // Explorer (folders/shortcuts) of Regedit (registry-paden).
+            var pathBlock = new TextBlock
             {
                 Text = member.Path,
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                TextWrapping = TextWrapping.NoWrap
-            });
-            pathRow.Children.Add(new TextBlock
-            {
-                Text = $"({member.SizeLabel})",
-                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"]
-            });
-            content.Children.Add(pathRow);
-        }
-
-        if (!string.IsNullOrEmpty(first.Description))
-        {
-            content.Children.Add(new TextBlock
-            {
-                Text = first.Description,
-                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0)
-            });
+                IsTextSelectionEnabled = true
+            };
+            var pathBtn = new HyperlinkButton
+            {
+                Content = pathBlock,
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Tag = member
+            };
+            pathBtn.Click += PathLink_Click;
+            ToolTipService.SetToolTip(pathBtn, "Click to open in Explorer / Regedit");
+            Grid.SetColumn(pathBtn, 1);
+            pathGrid.Children.Add(pathBtn);
+
+            // Size alleen tonen als er ruimte is (folders hebben size, registry-
+            // entries niet — voor die laatste blijft de label leeg).
+            if (member.SizeBytes > 0)
+            {
+                var sizeBlock = new TextBlock
+                {
+                    Text = $"({member.SizeLabel})",
+                    Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"]
+                };
+                Grid.SetColumn(sizeBlock, 2);
+                pathGrid.Children.Add(sizeBlock);
+            }
+            pathStack.Children.Add(pathGrid);
         }
+        pathExpander.Content = pathStack;
+        content.Children.Add(pathExpander);
+
+        // Geen description meer hier — die is generiek voor de category en
+        // wordt eenmalig bovenaan de dialog getoond i.p.v. per card herhaald.
 
         Grid.SetColumn(content, 1);
         grid.Children.Add(content);
@@ -393,6 +432,94 @@ public sealed partial class DeepCleanDialog : ContentDialog
 
         border.Child = grid;
         return border;
+    }
+
+    /// <summary>
+    /// Click op een path-link: open het pad in Explorer (folders/shortcuts)
+    /// of Regedit (registry-paden). Voor MUIcache-items wijst Path naar de
+    /// pseudo-key + value-name; we openen de echte MUIcache key in regedit.
+    /// </summary>
+    private void PathLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not HyperlinkButton btn || btn.Tag is not DeepCleanItem item) return;
+
+        try
+        {
+            switch (item.Category)
+            {
+                case DeepCleanCategory.OrphanedFolder:
+                case DeepCleanCategory.UserTemp:
+                case DeepCleanCategory.SystemTemp:
+                case DeepCleanCategory.UpdateCache:
+                case DeepCleanCategory.Prefetch:
+                case DeepCleanCategory.WindowsOld:
+                case DeepCleanCategory.BrowserCache:
+                    OpenInExplorer(item.Path);
+                    break;
+                case DeepCleanCategory.OrphanedShortcut:
+                    // Selecteer het .lnk file in Explorer zodat user de shortcut zelf ziet.
+                    OpenInExplorer(item.Path, selectFile: true);
+                    break;
+                case DeepCleanCategory.OrphanedRegistry:
+                case DeepCleanCategory.OrphanedAppPath:
+                case DeepCleanCategory.OrphanedClassHandler:
+                    OpenInRegedit(item.Path);
+                    break;
+                case DeepCleanCategory.OrphanedMuiCache:
+                    // MUIcache: Path bevat "<key> → <value-name>" voor unique identifier.
+                    // Open de key zelf (zonder de → suffix) in regedit.
+                    var arrowIdx = item.Path.IndexOf(" → ", StringComparison.Ordinal);
+                    var keyOnly = arrowIdx > 0 ? item.Path.Substring(0, arrowIdx) : item.Path;
+                    OpenInRegedit(keyOnly);
+                    break;
+                case DeepCleanCategory.RecycleBin:
+                    OpenInExplorer("shell:RecycleBinFolder");
+                    break;
+            }
+        }
+        catch
+        {
+            // Klik faalt stil — geen blocking error voor de user.
+        }
+    }
+
+    private static void OpenInExplorer(string path, bool selectFile = false)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            UseShellExecute = true
+        };
+        psi.Arguments = selectFile ? $"/select,\"{path}\"" : $"\"{path}\"";
+        Process.Start(psi);
+    }
+
+    /// <summary>
+    /// Open Regedit op de gegeven registry-key. Truc: schrijf het pad naar
+    /// HKCU\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit\LastKey
+    /// en start regedit.exe — die opent automatisch op de LastKey. Path-format
+    /// dat regedit verwacht is `Computer\HKEY_<HIVE>\...`.
+    /// </summary>
+    private static void OpenInRegedit(string registryPath)
+    {
+        // Convert "HKLM\..." → "Computer\HKEY_LOCAL_MACHINE\..."
+        // Convert "HKCU\..." → "Computer\HKEY_CURRENT_USER\..."
+        string regPath = registryPath;
+        if (regPath.StartsWith("HKLM\\", StringComparison.OrdinalIgnoreCase))
+            regPath = "Computer\\HKEY_LOCAL_MACHINE\\" + regPath.Substring(5);
+        else if (regPath.StartsWith("HKCU\\", StringComparison.OrdinalIgnoreCase))
+            regPath = "Computer\\HKEY_CURRENT_USER\\" + regPath.Substring(5);
+        else
+            regPath = "Computer\\" + regPath;
+
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Applets\Regedit");
+            key?.SetValue("LastKey", regPath);
+        }
+        catch { /* if we can't set LastKey, regedit just opens at last position */ }
+
+        Process.Start(new ProcessStartInfo { FileName = "regedit.exe", UseShellExecute = true });
     }
 
     private void BundleCheck_Toggled(object sender, RoutedEventArgs e)
@@ -461,26 +588,29 @@ public sealed partial class DeepCleanDialog : ContentDialog
         });
         content.Children.Add(titleRow);
 
-        content.Children.Add(new TextBlock
+        // Path als HyperlinkButton met TextWrapping=Wrap zodat user altijd het
+        // volledige pad ziet en kan klikken om in Explorer/Regedit te openen.
+        var pathTextBlock = new TextBlock
         {
             Text = item.Path,
             Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            TextWrapping = TextWrapping.NoWrap
-        });
-
-        if (!string.IsNullOrEmpty(item.Description))
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
+        };
+        var pathButton = new HyperlinkButton
         {
-            content.Children.Add(new TextBlock
-            {
-                Text = item.Description,
-                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0)
-            });
-        }
+            Content = pathTextBlock,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Tag = item
+        };
+        pathButton.Click += PathLink_Click;
+        ToolTipService.SetToolTip(pathButton, "Click to open in Explorer / Regedit");
+        content.Children.Add(pathButton);
+
+        // Geen per-item description meer — de generieke uitleg per category
+        // staat eenmalig bovenaan de dialog.
 
         if (item.LastModified != null)
         {

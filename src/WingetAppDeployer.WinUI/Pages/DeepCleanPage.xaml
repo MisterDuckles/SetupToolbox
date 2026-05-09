@@ -103,10 +103,10 @@
                                   VerticalAlignment="Center"
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Leftovers (folders + registry)"
+                            <TextBlock Text="Leftovers (full deep clean)"
                                        Style="{StaticResource BodyStrongTextBlockStyle}"
                                        FontSize="15" />
-                            <TextBlock Text="Scan Program Files / AppData voor folders zonder bijbehorende installed app, PLUS uninstall registry-keys waarvan alle pad-velden dood zijn. Bundle-by-name in de preview groept registry+folder van dezelfde app automatisch. Conservatief — alle items staan default uit."
+                            <TextBlock Text="Folders zonder bijbehorende installed app, uninstall registry-keys met dode paden, App Paths met dode exes, MUIcache (recently-used) met dode paden, file-extension class handlers, en Start Menu / Desktop shortcuts met dode targets. Bundle-by-name groept alles van dezelfde app onder één card. Conservatief — alle items staan default uit."
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" />

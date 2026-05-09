@@ -24,7 +24,11 @@ public enum DeepCleanCategory
     WindowsOld,         // %WINDIR%.old — admin, caution (rollback-restpunt)
     BrowserCache,       // Edge / Chrome / Firefox / Brave caches — caution
     OrphanedFolder,     // Geen matchende installed app gevonden
-    OrphanedRegistry    // Uninstall registry-key waarvan alle paden dood zijn
+    OrphanedRegistry,   // Uninstall registry-key waarvan alle paden dood zijn
+    OrphanedAppPath,    // App Paths\<exe> entry waarvan exe niet meer bestaat
+    OrphanedMuiCache,   // MUIcache value (recently-used) met dood pad
+    OrphanedClassHandler, // File-extension/ProgID class waarvan shell-handler exe weg is
+    OrphanedShortcut    // Start Menu .lnk met dood target
 }
 
 // Eén cleanup-target. Voor caches zijn DisplayName en Path vooraf bekend; voor
@@ -46,6 +50,12 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
     public bool IsSafe { get; }
     public string? Description { get; }
 
+    // Voor MUIcache items: de value-name die uit de key verwijderd moet worden.
+    // Path houdt dan de key zelf, RegistryValueName de specifieke value (kan
+    // backslashes en spaties bevatten — daarom apart i.p.v. encoding in Path).
+    // Voor andere categorieën null.
+    public string? RegistryValueName { get; }
+
     public DeepCleanItem(
         string displayName,
         string path,
@@ -54,7 +64,8 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         bool requiresElevation,
         bool isSafe,
         DateTime? lastModified = null,
-        string? description = null)
+        string? description = null,
+        string? registryValueName = null)
     {
         DisplayName = displayName;
         Path = path;
@@ -64,6 +75,7 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         IsSafe = isSafe;
         LastModified = lastModified;
         Description = description;
+        RegistryValueName = registryValueName;
         // Default checked alleen voor "altijd-veilige" items met content. Lege
         // folders (size 0) niet checken — dan zou user per ongeluk meedoen aan
         // een no-op delete. Caution-items (browser caches / Windows.old /
@@ -96,6 +108,10 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         DeepCleanCategory.BrowserCache => "Browser cache",
         DeepCleanCategory.OrphanedFolder => "Orphaned folder",
         DeepCleanCategory.OrphanedRegistry => "Orphaned registry",
+        DeepCleanCategory.OrphanedAppPath => "App Paths",
+        DeepCleanCategory.OrphanedMuiCache => "MUIcache",
+        DeepCleanCategory.OrphanedClassHandler => "Class handler",
+        DeepCleanCategory.OrphanedShortcut => "Shortcut",
         _ => string.Empty
     };
 

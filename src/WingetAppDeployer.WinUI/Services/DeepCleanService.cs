@@ -661,6 +661,349 @@ public sealed class DeepCleanService
     }
 
     /// <summary>
+    /// Scant App Paths registry (HKLM/WOW6432Node/HKCU) — Windows' "where is
+    /// this exe" register. Elke entry heeft typisch een (Default) value met
+    /// het volledige pad naar de exe. Als die exe niet bestaat = orphan.
+    /// Dit is bredere registry-scope dan alleen uninstall keys; vangt residue
+    /// van apps wiens uninstall-key wel werd opgeruimd maar App Paths niet.
+    /// </summary>
+    public Task<List<DeepCleanItem>> ScanOrphanedAppPathsAsync()
+    {
+        return Task.Run(() =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+            Action<string> log = msg =>
+            {
+                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+                catch { }
+            };
+            log($"=== Orphaned App Paths scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+            var results = new List<DeepCleanItem>();
+            var sources = new (RegistryHive Hive, string Path, RegistryView View, bool RequiresElevation, string DisplayPrefix)[]
+            {
+                (RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths", RegistryView.Registry64, true, @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+                (RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths", RegistryView.Registry32, true, @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths"),
+                (RegistryHive.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths", RegistryView.Default, false, @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+            };
+
+            foreach (var (hive, path, view, requiresElev, displayPrefix) in sources)
+            {
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var appPathsKey = baseKey.OpenSubKey(path);
+                    if (appPathsKey == null) continue;
+                    foreach (var subName in appPathsKey.GetSubKeyNames())
+                    {
+                        using var sub = appPathsKey.OpenSubKey(subName);
+                        if (sub == null) continue;
+
+                        var defaultExe = sub.GetValue(null) as string;
+                        var pathValue = sub.GetValue("Path") as string;
+
+                        // Beide kunnen aanwezig zijn. Als minstens één resolveert
+                        // naar een bestaand bestand of directory → alive.
+                        var exeResolved = ResolveToDirectory(defaultExe?.Trim().Trim('"'));
+                        var dirResolved = ResolveToDirectory(pathValue);
+                        if (exeResolved != null || dirResolved != null) continue;
+
+                        // Geen velden gevuld? Dan kunnen we niet zeggen of orphan.
+                        // Conservatief: skip.
+                        if (string.IsNullOrWhiteSpace(defaultExe) && string.IsNullOrWhiteSpace(pathValue)) continue;
+
+                        var keyPath = $"{displayPrefix}\\{subName}";
+                        log($"ORPHAN App Paths: {keyPath} (Default='{defaultExe}', Path='{pathValue}')");
+                        results.Add(new DeepCleanItem(
+                            displayName: subName,  // exe filename = de subkey-naam
+                            path: keyPath,
+                            category: DeepCleanCategory.OrphanedAppPath,
+                            sizeBytes: 0,
+                            requiresElevation: requiresElev,
+                            isSafe: false,
+                            description: $"App Paths registry-entry voor '{subName}' wijst naar een exe die niet meer bestaat. Windows gebruikt deze entries om 'Start > Run > {subName}' te resolven; bij een dood pad faalt dat."));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log($"App Paths scan error in {hive}\\{path}: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            log($"Orphaned App Paths scan complete — {results.Count} broken entries");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Scant MUIcache (`HKCU\Software\Classes\Local Settings\Software\Microsoft\
+    /// Windows\Shell\MuiCache`) — Windows shell cache voor recently-launched
+    /// programma's. Elke value name = exe-pad, value data = friendly name.
+    /// Value names die naar dode exes wijzen = leftover MUIcache entries van
+    /// apps die ooit gestart zijn en nu weg zijn. CCleaner-style.
+    /// </summary>
+    public Task<List<DeepCleanItem>> ScanOrphanedMuiCacheAsync()
+    {
+        return Task.Run(() =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+            Action<string> log = msg =>
+            {
+                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+                catch { }
+            };
+            log($"=== Orphaned MUIcache scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+            var results = new List<DeepCleanItem>();
+            const string muiPath = @"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+            const string displayPrefix = @"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(muiPath);
+                if (key == null)
+                {
+                    log("MUIcache key not found — skipping");
+                    return results;
+                }
+
+                foreach (var valueName in key.GetValueNames())
+                {
+                    // MUIcache value names hebben formaat:
+                    //   "C:\Program Files\App\app.exe.FriendlyAppName"
+                    //   "C:\path\file.exe.ApplicationCompany"
+                    // Strip de ".FriendlyAppName" / ".ApplicationCompany" suffix
+                    // om het pure exe-pad te krijgen.
+                    if (string.IsNullOrEmpty(valueName)) continue;
+                    var exePath = StripMuiCacheSuffix(valueName);
+                    if (string.IsNullOrEmpty(exePath)) continue;
+
+                    // Skip if path resolves
+                    try { if (File.Exists(exePath) || Directory.Exists(exePath)) continue; } catch { continue; }
+
+                    var friendlyName = key.GetValue(valueName) as string ?? Path.GetFileName(exePath);
+                    log($"ORPHAN MUIcache: '{friendlyName}' → '{exePath}' (gone)");
+                    // Path moet uniek zijn per item (results-dict in DeleteAsync
+                    // keys op Path). Daarom de value-name erbij. Format laat user
+                    // zien WAT er leeft in MUIcache key en de exe waar het naar
+                    // wijst.
+                    results.Add(new DeepCleanItem(
+                        displayName: friendlyName,
+                        path: $"{displayPrefix} → {valueName}",
+                        category: DeepCleanCategory.OrphanedMuiCache,
+                        sizeBytes: 0,
+                        requiresElevation: false,
+                        isSafe: false,
+                        description: $"MUIcache entry voor '{friendlyName}' wijst naar exe '{exePath}' die niet meer bestaat. Windows shell onthoudt zo het laatst-gebruikte programma; bij dode entries is het pure ruis.",
+                        registryValueName: valueName));
+                }
+            }
+            catch (Exception ex)
+            {
+                log($"MUIcache scan error: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            log($"Orphaned MUIcache scan complete — {results.Count} broken entries");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Suffix-stripper voor MUIcache value names. Format:
+    ///   "<exe-pad>.FriendlyAppName"  → exe-pad
+    ///   "<exe-pad>.ApplicationCompany" → exe-pad
+    ///   Special values als "LangID" zonder pad → null
+    /// </summary>
+    private static string StripMuiCacheSuffix(string raw)
+    {
+        // De suffix is altijd één van bekende reserved namen. We weten 'm
+        // niet exact; pak alles tot de laatste punt VOOR de suffix.
+        var suffixes = new[] { ".FriendlyAppName", ".ApplicationCompany" };
+        foreach (var suffix in suffixes)
+        {
+            if (raw.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return raw.Substring(0, raw.Length - suffix.Length);
+        }
+        // Als geen bekende suffix maar het lijkt op een exe-pad (bevat ":\"), pak het zo
+        if (raw.Length >= 3 && raw[1] == ':' && raw[2] == '\\') return raw;
+        return string.Empty;  // skip — meta values zoals LangID
+    }
+
+    /// <summary>
+    /// Scant `HKLM\Software\Classes\Applications\<exe>\shell\open\command` en
+    /// HKCU equivalent — file-extension class handlers waarvan de exe weg is.
+    /// Voorbeeld: na uninstall blijft soms een `Applications\app.exe` entry
+    /// staan met `\shell\open\command` = `"C:\old\app.exe" "%1"`. Als
+    /// `C:\old\app.exe` niet bestaat = orphan.
+    /// </summary>
+    public Task<List<DeepCleanItem>> ScanOrphanedClassHandlersAsync()
+    {
+        return Task.Run(() =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+            Action<string> log = msg =>
+            {
+                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+                catch { }
+            };
+            log($"=== Orphaned class handlers scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+            var results = new List<DeepCleanItem>();
+            var sources = new (RegistryHive Hive, string Path, RegistryView View, bool RequiresElevation, string DisplayPrefix)[]
+            {
+                (RegistryHive.LocalMachine, @"SOFTWARE\Classes\Applications", RegistryView.Registry64, true, @"HKLM\SOFTWARE\Classes\Applications"),
+                (RegistryHive.CurrentUser,  @"SOFTWARE\Classes\Applications", RegistryView.Default, false, @"HKCU\SOFTWARE\Classes\Applications"),
+            };
+
+            foreach (var (hive, path, view, requiresElev, displayPrefix) in sources)
+            {
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var appsKey = baseKey.OpenSubKey(path);
+                    if (appsKey == null) continue;
+                    foreach (var exeName in appsKey.GetSubKeyNames())
+                    {
+                        using var exeKey = appsKey.OpenSubKey(exeName);
+                        if (exeKey == null) continue;
+                        using var cmdKey = exeKey.OpenSubKey(@"shell\open\command");
+                        var commandRaw = cmdKey?.GetValue(null) as string;
+                        if (string.IsNullOrWhiteSpace(commandRaw)) continue;
+
+                        // Extract exe-pad uit command line. Format meestal:
+                        //   "C:\path\app.exe" "%1"
+                        //   C:\path\app.exe %1
+                        var exePath = ExtractExePathFromCommandLine(commandRaw);
+                        if (string.IsNullOrEmpty(exePath)) continue;
+                        try { if (File.Exists(exePath)) continue; } catch { continue; }
+
+                        var keyPath = $"{displayPrefix}\\{exeName}";
+                        log($"ORPHAN class handler: {keyPath} → '{exePath}' (gone)");
+                        results.Add(new DeepCleanItem(
+                            displayName: exeName,
+                            path: keyPath,
+                            category: DeepCleanCategory.OrphanedClassHandler,
+                            sizeBytes: 0,
+                            requiresElevation: requiresElev,
+                            isSafe: false,
+                            description: $"File-association registry-entry voor '{exeName}' wijst naar exe '{exePath}' die niet meer bestaat. Veroorzaakt failed Open With dialogs en lege right-click menu's."));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log($"Class handlers scan error in {hive}\\{path}: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            log($"Orphaned class handlers scan complete — {results.Count} broken entries");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Scant Start Menu folders voor `.lnk` shortcuts waarvan het target-pad
+    /// niet meer bestaat. Walk both per-user en all-users Start Menu.
+    /// </summary>
+    public Task<List<DeepCleanItem>> ScanOrphanedShortcutsAsync()
+    {
+        return Task.Run(() =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+            Action<string> log = msg =>
+            {
+                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+                catch { }
+            };
+            log($"=== Orphaned shortcuts scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+            var results = new List<DeepCleanItem>();
+            var roots = new (string Path, bool RequiresElevation)[]
+            {
+                (Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), false),
+                (Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), true),
+                (Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), false),
+                (Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), true),
+            };
+
+            foreach (var (rootPath, requiresElev) in roots.Where(r => !string.IsNullOrEmpty(r.Path) && Directory.Exists(r.Path)))
+            {
+                IEnumerable<string> lnkFiles;
+                try { lnkFiles = Directory.EnumerateFiles(rootPath, "*.lnk", SearchOption.AllDirectories); }
+                catch (Exception ex)
+                {
+                    log($"Shortcut enum error in {rootPath}: {ex.GetType().Name}: {ex.Message}");
+                    continue;
+                }
+
+                foreach (var lnk in lnkFiles)
+                {
+                    try
+                    {
+                        var target = ResolveShortcutTarget(lnk);
+                        if (string.IsNullOrEmpty(target)) continue;
+                        // Target check — File of Directory.
+                        if (File.Exists(target) || Directory.Exists(target)) continue;
+
+                        var displayName = Path.GetFileNameWithoutExtension(lnk);
+                        var size = SafeFileSize(lnk);
+                        log($"ORPHAN shortcut: '{lnk}' → '{target}' (gone)");
+                        results.Add(new DeepCleanItem(
+                            displayName: displayName,
+                            path: lnk,
+                            category: DeepCleanCategory.OrphanedShortcut,
+                            sizeBytes: size,
+                            requiresElevation: requiresElev,
+                            isSafe: false,
+                            description: $"Shortcut wijst naar target '{target}' die niet meer bestaat. Klikken doet niets — kan veilig weg."));
+                    }
+                    catch (Exception ex)
+                    {
+                        log($"Shortcut parse error for {lnk}: {ex.GetType().Name}: {ex.Message}");
+                    }
+                }
+            }
+
+            log($"Orphaned shortcuts scan complete — {results.Count} broken shortcuts");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Resolveert een .lnk file naar z'n target via WSH Shell COM-interface.
+    /// Returnt empty string bij failure of als target niet leesbaar is.
+    /// </summary>
+    private static string ResolveShortcutTarget(string lnkPath)
+    {
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return string.Empty;
+            dynamic? shell = Activator.CreateInstance(shellType);
+            if (shell == null) return string.Empty;
+            try
+            {
+                dynamic shortcut = shell.CreateShortcut(lnkPath);
+                string target = shortcut.TargetPath ?? string.Empty;
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut);
+                return target;
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+            }
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static long SafeFileSize(string path)
+    {
+        try { return new FileInfo(path).Length; } catch { return 0; }
+    }
+
+    /// <summary>
     /// Walkt registry uninstall keys (HKLM 64-bit + WOW6432Node + HKCU) en
     /// extraheert install-paden uit MEERDERE velden — niet alleen
     /// InstallLocation. Veel apps (VMware, Razer, WinRAR, etc.) schrijven
@@ -1095,17 +1438,35 @@ public sealed class DeepCleanService
         long bytesFreed = 0;
 
         // 1) Local deletes — geen UAC. Per categorie verschillende strategie:
-        //   - OrphanedRegistry → DeleteSubKeyTree op HKCU
+        //   - OrphanedRegistry / AppPath / ClassHandler → DeleteSubKeyTree op HKCU
+        //   - OrphanedMuiCache → specifieke value (niet hele key) deleten
+        //   - OrphanedShortcut → File.Delete op de .lnk
         //   - OrphanedFolder   → Directory.Delete(recursive)
         //   - Cache (rest)     → ClearFolderContents (folder zelf laten staan)
         foreach (var item in local)
         {
             try
             {
-                if (item.Category == DeepCleanCategory.OrphanedRegistry)
+                if (item.Category == DeepCleanCategory.OrphanedRegistry ||
+                    item.Category == DeepCleanCategory.OrphanedAppPath ||
+                    item.Category == DeepCleanCategory.OrphanedClassHandler)
                 {
                     DeleteRegistryKey(item.Path);
                     results[item.Path] = (true, "Removed registry key");
+                }
+                else if (item.Category == DeepCleanCategory.OrphanedMuiCache)
+                {
+                    // Hardcoded MUIcache key — Path bevat ook value-name voor
+                    // uniqueness in dialog/dict, maar de echte key is constant.
+                    const string muiKey = @"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+                    DeleteRegistryValue(muiKey, item.RegistryValueName ?? string.Empty);
+                    results[item.Path] = (true, "Removed MUIcache value");
+                }
+                else if (item.Category == DeepCleanCategory.OrphanedShortcut)
+                {
+                    File.Delete(item.Path);
+                    results[item.Path] = (true, "Deleted shortcut");
+                    bytesFreed += item.SizeBytes;
                 }
                 else if (item.Category == DeepCleanCategory.OrphanedFolder)
                 {
@@ -1190,6 +1551,34 @@ public sealed class DeepCleanService
         parent.DeleteSubKeyTree(keyName, throwOnMissingSubKey: false);
     }
 
+    /// <summary>
+    /// Verwijdert een specifieke value uit een registry key (zonder de key
+    /// zelf te raken). Voor MUIcache: we willen alleen de leftover-value
+    /// weghalen, andere apps' values in dezelfde MuiCache key blijven staan.
+    /// </summary>
+    private static void DeleteRegistryValue(string fullKeyPath, string valueName)
+    {
+        if (string.IsNullOrEmpty(valueName))
+            throw new ArgumentException("Value name required for MUIcache delete");
+
+        var firstSep = fullKeyPath.IndexOf('\\');
+        if (firstSep <= 0) throw new ArgumentException($"Invalid registry path: {fullKeyPath}");
+        var hiveName = fullKeyPath.Substring(0, firstSep).ToUpperInvariant();
+        var subPath = fullKeyPath.Substring(firstSep + 1);
+
+        var (hive, view) = hiveName switch
+        {
+            "HKCU" => (RegistryHive.CurrentUser, RegistryView.Default),
+            "HKLM" => (RegistryHive.LocalMachine, RegistryView.Registry64),
+            _ => throw new ArgumentException($"Unsupported hive: {hiveName}")
+        };
+
+        using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+        using var key = baseKey.OpenSubKey(subPath, writable: true)
+                        ?? throw new InvalidOperationException($"Key not found: {subPath}");
+        key.DeleteValue(valueName, throwOnMissingValue: false);
+    }
+
     private static void ClearFolderContents(string path)
     {
         var dir = new DirectoryInfo(path);
@@ -1228,7 +1617,9 @@ public sealed class DeepCleanService
                 sb.AppendLine("    Clear-RecycleBin -Force -ErrorAction Stop");
                 sb.AppendLine($"    Log \"RESULT|{path}|OK|Recycle Bin emptied\"");
             }
-            else if (item.Category == DeepCleanCategory.OrphanedRegistry)
+            else if (item.Category == DeepCleanCategory.OrphanedRegistry ||
+                     item.Category == DeepCleanCategory.OrphanedAppPath ||
+                     item.Category == DeepCleanCategory.OrphanedClassHandler)
             {
                 // reg.exe accepteert HKLM\... / HKCU\... paden direct. /f =
                 // force, geen confirm. Output naar null zodat de logfile niet
@@ -1236,6 +1627,12 @@ public sealed class DeepCleanService
                 sb.AppendLine($"    & reg.exe delete '{path}' /f | Out-Null");
                 sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"reg.exe exit $LASTEXITCODE\" }}");
                 sb.AppendLine($"    Log \"RESULT|{path}|OK|Removed registry key\"");
+            }
+            else if (item.Category == DeepCleanCategory.OrphanedShortcut)
+            {
+                // Shortcut file delete via PowerShell (elevated voor common Start Menu).
+                sb.AppendLine($"    Remove-Item -LiteralPath '{path}' -Force -ErrorAction Stop");
+                sb.AppendLine($"    Log \"RESULT|{path}|OK|Deleted shortcut\"");
             }
             else if (item.Category == DeepCleanCategory.OrphanedFolder)
             {
