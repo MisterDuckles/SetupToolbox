@@ -969,6 +969,292 @@ public sealed class DeepCleanService
     }
 
     /// <summary>
+    /// Scant scheduled tasks via `schtasks /Query /XML ONE` + XML-parse. Per
+    /// task: extract `<Actions><Exec><Command>` path, check of exe bestaat. Als
+    /// exe weg is = orphan task. Filtert `\Microsoft\` system-tasks weg
+    /// (Windows Update, Defender, etc. — daar willen we vanaf blijven).
+    /// </summary>
+    public Task<List<DeepCleanItem>> ScanOrphanedScheduledTasksAsync()
+    {
+        return Task.Run(async () =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+            Action<string> log = msg =>
+            {
+                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+                catch { }
+            };
+            log($"=== Orphaned scheduled tasks scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+            var sw = Stopwatch.StartNew();
+
+            var results = new List<DeepCleanItem>();
+            string xmlOutput;
+            try
+            {
+                // schtasks /XML ONE dumpt alle tasks in één XML — sneller dan
+                // per-task PowerShell. Locale-onafhankelijk (XML format = stabiel).
+                xmlOutput = await RunCommandAsync("schtasks.exe", "/Query /XML ONE", log);
+                log($"schtasks.exe completed in {sw.ElapsedMilliseconds}ms ({xmlOutput.Length} bytes)");
+            }
+            catch (Exception ex)
+            {
+                log($"schtasks.exe failed: {ex.GetType().Name}: {ex.Message}");
+                return results;
+            }
+
+            // schtasks /XML ONE output is een concatenatie van XML-documents
+            // gescheiden door `<?xml` declarations. Plus elk task-block heeft
+            // een TaskPath header line ("Folder: \..." of "TaskPath: ...").
+            // Robust parsing: split op `<?xml` en parse elk fragment apart.
+            var fragments = xmlOutput.Split(new[] { "<?xml" }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var frag in fragments)
+            {
+                var fullXml = "<?xml" + frag;
+                try
+                {
+                    var doc = new System.Xml.XmlDocument();
+                    doc.LoadXml(fullXml);
+                    var ns = new System.Xml.XmlNamespaceManager(doc.NameTable);
+                    ns.AddNamespace("t", "http://schemas.microsoft.com/windows/2004/02/mit/task");
+
+                    // RegistrationInfo/URI = volledige task-path inclusief naam
+                    var uri = doc.SelectSingleNode("//t:RegistrationInfo/t:URI", ns)?.InnerText
+                              ?? doc.SelectSingleNode("//RegistrationInfo/URI")?.InnerText;
+                    if (string.IsNullOrWhiteSpace(uri)) continue;
+
+                    // Skip Microsoft system-tasks — niet onze verantwoordelijkheid
+                    // en delete kan boot/update kapot maken.
+                    if (uri.StartsWith(@"\Microsoft\", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    // Pak alle Exec/Command paden — een task kan multiple actions hebben.
+                    var commandNodes = doc.SelectNodes("//t:Actions/t:Exec/t:Command", ns);
+                    if (commandNodes == null || commandNodes.Count == 0)
+                    {
+                        // Geen Exec actions (alleen ComHandler / SendEmail / ShowMessage) — niet checkable
+                        continue;
+                    }
+
+                    var deadCommands = new List<string>();
+                    var hasAliveCommand = false;
+                    foreach (System.Xml.XmlNode? cmdNode in commandNodes)
+                    {
+                        if (cmdNode == null) continue;
+                        var cmdRaw = cmdNode.InnerText?.Trim();
+                        if (string.IsNullOrWhiteSpace(cmdRaw)) continue;
+
+                        // Resolve env vars (%SystemRoot%, etc.)
+                        var resolved = Environment.ExpandEnvironmentVariables(cmdRaw.Trim('"'));
+                        if (File.Exists(resolved) || Directory.Exists(resolved))
+                        {
+                            hasAliveCommand = true;
+                            break;
+                        }
+                        deadCommands.Add(cmdRaw);
+                    }
+                    if (hasAliveCommand) continue;
+                    if (deadCommands.Count == 0) continue;
+
+                    // Task-naam = deel na laatste `\`
+                    var taskName = uri.Substring(uri.LastIndexOf('\\') + 1);
+                    var deadList = string.Join(", ", deadCommands);
+                    log($"ORPHAN task: {uri} → dead command(s): {deadList}");
+
+                    // System-tasks (root-level paths zonder \Users\) typisch admin
+                    // om te deleten. User-tasks onder \Users\<user>\ kunnen zonder UAC.
+                    var requiresElev = !uri.StartsWith(@"\Users\", StringComparison.OrdinalIgnoreCase);
+
+                    results.Add(new DeepCleanItem(
+                        displayName: taskName,
+                        path: uri,
+                        category: DeepCleanCategory.OrphanedScheduledTask,
+                        sizeBytes: 0,
+                        requiresElevation: requiresElev,
+                        isSafe: false,
+                        description: $"Scheduled task '{taskName}' verwijst naar een exe die niet meer bestaat ({deadList}). Veilig om te deleten — Windows Task Scheduler probeert anders periodiek een dood programma te starten."));
+                }
+                catch (Exception ex)
+                {
+                    log($"Task XML parse error: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            log($"Orphaned scheduled tasks scan complete in {sw.ElapsedMilliseconds}ms — {results.Count} orphan task(s)");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Scant Windows Defender Firewall rules via DIRECTE registry-read i.p.v.
+    /// `Get-NetFirewallRule` PowerShell cmdlet — die laatste is berucht traag
+    /// (10-30+ seconden op een gemiddeld systeem) door COM-overhead. Rules
+    /// zitten in `HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\
+    /// Parameters\FirewallPolicy\FirewallRules` als value-pairs:
+    ///   value-name = rule-id (gebruikt door Remove-NetFirewallRule -Name)
+    ///   value-data = pipe-separated config: "v2.31|Action=Allow|App=C:\..|Name=...|..."
+    /// Direct lezen = fractie van een seconde i.p.v. tientallen seconden.
+    /// </summary>
+    public Task<List<DeepCleanItem>> ScanOrphanedFirewallRulesAsync()
+    {
+        return Task.Run(() =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+            Action<string> log = msg =>
+            {
+                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+                catch { }
+            };
+            var sw = Stopwatch.StartNew();
+            log($"=== Orphaned firewall rules scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+            var results = new List<DeepCleanItem>();
+            const string fwPath = @"SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules";
+
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+                using var fwKey = baseKey.OpenSubKey(fwPath);
+                if (fwKey == null)
+                {
+                    log("Firewall rules registry key not found");
+                    return results;
+                }
+
+                int total = 0;
+                foreach (var ruleName in fwKey.GetValueNames())
+                {
+                    total++;
+                    if (string.IsNullOrEmpty(ruleName)) continue;
+                    var raw = fwKey.GetValue(ruleName) as string;
+                    if (string.IsNullOrEmpty(raw)) continue;
+
+                    // Parse pipe-separated key=value format. App= heeft het
+                    // program path; Name= heeft de display-name (kan @-prefix
+                    // hebben voor indirect string, dan val terug op rule-id).
+                    string? appPath = null;
+                    string? displayName = null;
+                    foreach (var segment in raw.Split('|'))
+                    {
+                        var eq = segment.IndexOf('=');
+                        if (eq <= 0) continue;
+                        var k = segment.Substring(0, eq);
+                        var v = segment.Substring(eq + 1);
+                        if (k.Equals("App", StringComparison.OrdinalIgnoreCase)) appPath = v;
+                        else if (k.Equals("Name", StringComparison.OrdinalIgnoreCase)) displayName = v;
+                    }
+
+                    if (string.IsNullOrEmpty(appPath)) continue;  // port-only rule, geen program-pad
+                    if (appPath.Equals("Any", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (appPath.Equals("System", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var resolved = Environment.ExpandEnvironmentVariables(appPath);
+
+                    // Microsoft system-rules: skip om geen Windows-component te raken.
+                    if (resolved.StartsWith(@"C:\Windows\", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (resolved.StartsWith(@"%SystemRoot%", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    if (File.Exists(resolved)) continue;  // alive
+
+                    // DisplayName kan een indirect string zijn (`@C:\path\res.dll,-123`)
+                    // of een GUID-rule-id. Voor user-friendly weergave: val
+                    // terug op de exe-filename (zonder extensie) — die zegt
+                    // user direct welke app de rule was. "vmware.exe" → "vmware".
+                    var exeName = Path.GetFileNameWithoutExtension(resolved);
+                    var friendlyName =
+                        !string.IsNullOrEmpty(displayName) && !displayName.StartsWith("@") && !LooksLikeGuid(displayName)
+                            ? displayName
+                            : (!string.IsNullOrEmpty(exeName) ? exeName : ruleName);
+
+                    log($"ORPHAN firewall: '{friendlyName}' [{ruleName}] → '{appPath}' (gone)");
+                    results.Add(new DeepCleanItem(
+                        displayName: friendlyName,
+                        path: $"{ruleName} → {appPath}",
+                        category: DeepCleanCategory.OrphanedFirewallRule,
+                        sizeBytes: 0,
+                        requiresElevation: true,
+                        isSafe: false,
+                        description: $"Firewall rule '{friendlyName}' verwijst naar program '{appPath}' die niet meer bestaat. De rule heeft geen effect meer — verwijderen is veilig.",
+                        registryValueName: ruleName));
+                }
+
+                log($"Firewall scan checked {total} rule(s) in {sw.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                log($"Firewall registry read error: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            log($"Orphaned firewall rules scan complete — {results.Count} orphan rule(s)");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// Heuristiek: ziet een string eruit als een GUID? Firewall rules in
+    /// registry hebben soms `{8A547BE2-...}` als DisplayName voor system-rules.
+    /// Geen guarantee, gewoon "begint met `{` en bevat een hex-pattern".
+    /// </summary>
+    private static bool LooksLikeGuid(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        if (!s.StartsWith("{") || !s.EndsWith("}")) return false;
+        // Niet exact-parsen, gewoon: heeft het >=20 chars en bevat het dashes?
+        return s.Length >= 30 && s.Count(c => c == '-') >= 4;
+    }
+
+    /// <summary>
+    /// Generieke command-runner met stdout-capture (synchroon). Voor schtasks.exe
+    /// die we niet via base64-encoded PS willen wrappen — schtasks output is
+    /// XML en daar willen we direct toegang tot.
+    /// </summary>
+    private static async Task<string> RunCommandAsync(string fileName, string args, Action<string> log)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = args,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8
+        };
+        using var proc = new Process { StartInfo = psi };
+        proc.Start();
+        var stdout = await proc.StandardOutput.ReadToEndAsync();
+        var stderr = await proc.StandardError.ReadToEndAsync();
+        await proc.WaitForExitAsync();
+        if (!string.IsNullOrEmpty(stderr))
+            log($"{fileName} stderr: {stderr.Substring(0, Math.Min(stderr.Length, 200))}");
+        return stdout;
+    }
+
+    /// <summary>
+    /// Encoded PS script runner (UTF-16 LE base64), zelfde patroon als
+    /// InstalledAppsService gebruikt. Voor multi-line scripts met quote-escaping
+    /// die anders een hoofdpijn zou zijn.
+    /// </summary>
+    private static async Task<string> RunPowerShellAsync(string script)
+    {
+        var bytes = Encoding.Unicode.GetBytes(script);
+        var encoded = Convert.ToBase64String(bytes);
+        var psi = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8
+        };
+        using var proc = new Process { StartInfo = psi };
+        proc.Start();
+        var stdout = await proc.StandardOutput.ReadToEndAsync();
+        await proc.WaitForExitAsync();
+        return stdout;
+    }
+
+    /// <summary>
     /// Resolveert een .lnk file naar z'n target via WSH Shell COM-interface.
     /// Returnt empty string bij failure of als target niet leesbaar is.
     /// </summary>
@@ -1433,8 +1719,20 @@ public sealed class DeepCleanService
             return new DeepCleanDeleteResult(0, 0, 0, new Dictionary<string, (bool, string)>(), Cancelled: false);
 
         var results = new Dictionary<string, (bool, string)>();
-        var elevated = items.Where(i => i.RequiresElevation || i.Category == DeepCleanCategory.RecycleBin).ToList();
-        var local = items.Where(i => !i.RequiresElevation && i.Category != DeepCleanCategory.RecycleBin).ToList();
+        // ScheduledTask + FirewallRule altijd via elevated batch — schtasks /Delete
+        // en Remove-NetFirewallRule hebben anders timing-gevoelige permission
+        // checks die per-task kunnen slagen of falen. Eén UAC voor het hele zooitje
+        // is voorspelbaarder.
+        var elevated = items.Where(i =>
+            i.RequiresElevation
+            || i.Category == DeepCleanCategory.RecycleBin
+            || i.Category == DeepCleanCategory.OrphanedScheduledTask
+            || i.Category == DeepCleanCategory.OrphanedFirewallRule).ToList();
+        var local = items.Where(i =>
+            !i.RequiresElevation
+            && i.Category != DeepCleanCategory.RecycleBin
+            && i.Category != DeepCleanCategory.OrphanedScheduledTask
+            && i.Category != DeepCleanCategory.OrphanedFirewallRule).ToList();
         long bytesFreed = 0;
 
         // 1) Local deletes — geen UAC. Per categorie verschillende strategie:
@@ -1633,6 +1931,22 @@ public sealed class DeepCleanService
                 // Shortcut file delete via PowerShell (elevated voor common Start Menu).
                 sb.AppendLine($"    Remove-Item -LiteralPath '{path}' -Force -ErrorAction Stop");
                 sb.AppendLine($"    Log \"RESULT|{path}|OK|Deleted shortcut\"");
+            }
+            else if (item.Category == DeepCleanCategory.OrphanedScheduledTask)
+            {
+                // schtasks /Delete /TN "<path>" /F. Path bevat de full task URI
+                // (bv. "\Vendor\Update Task"). /F = no confirm prompt.
+                sb.AppendLine($"    & schtasks.exe /Delete /TN '{path}' /F | Out-Null");
+                sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"schtasks exit $LASTEXITCODE\" }}");
+                sb.AppendLine($"    Log \"RESULT|{path}|OK|Deleted scheduled task\"");
+            }
+            else if (item.Category == DeepCleanCategory.OrphanedFirewallRule)
+            {
+                // Remove-NetFirewallRule -Name <ruleName>. Het ruleName zit in
+                // RegistryValueName-veld (hergebruikt voor unique identifier).
+                var ruleName = Escape(item.RegistryValueName ?? string.Empty);
+                sb.AppendLine($"    Remove-NetFirewallRule -Name '{ruleName}' -ErrorAction Stop");
+                sb.AppendLine($"    Log \"RESULT|{path}|OK|Removed firewall rule\"");
             }
             else if (item.Category == DeepCleanCategory.OrphanedFolder)
             {

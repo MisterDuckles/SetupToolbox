@@ -475,6 +475,16 @@ public sealed partial class DeepCleanDialog : ContentDialog
                 case DeepCleanCategory.RecycleBin:
                     OpenInExplorer("shell:RecycleBinFolder");
                     break;
+                case DeepCleanCategory.OrphanedScheduledTask:
+                    // Task Scheduler MMC console — kan niet rechtstreeks naar
+                    // een specifieke task navigeren via command line, dus
+                    // alleen het console openen.
+                    Process.Start(new ProcessStartInfo { FileName = "taskschd.msc", UseShellExecute = true });
+                    break;
+                case DeepCleanCategory.OrphanedFirewallRule:
+                    // Windows Defender Firewall met geavanceerde beveiliging
+                    Process.Start(new ProcessStartInfo { FileName = "wf.msc", UseShellExecute = true });
+                    break;
             }
         }
         catch

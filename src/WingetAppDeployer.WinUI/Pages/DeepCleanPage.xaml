@@ -106,7 +106,7 @@
                             <TextBlock Text="Leftovers (full deep clean)"
                                        Style="{StaticResource BodyStrongTextBlockStyle}"
                                        FontSize="15" />
-                            <TextBlock Text="Folders zonder bijbehorende installed app, uninstall registry-keys met dode paden, App Paths met dode exes, MUIcache (recently-used) met dode paden, file-extension class handlers, en Start Menu / Desktop shortcuts met dode targets. Bundle-by-name groept alles van dezelfde app onder één card. Conservatief — alle items staan default uit."
+                            <TextBlock Text="Folders zonder bijbehorende installed app, uninstall registry-keys met dode paden, App Paths met dode exes, MUIcache (recently-used) met dode paden, file-extension class handlers, Start Menu / Desktop shortcuts, scheduled tasks, en firewall rules met dode targets. Bundle-by-name groept alles van dezelfde app onder één card. Conservatief — alle items staan default uit."
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" />

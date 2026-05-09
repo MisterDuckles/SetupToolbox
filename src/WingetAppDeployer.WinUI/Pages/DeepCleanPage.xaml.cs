@@ -74,13 +74,17 @@ public sealed partial class DeepCleanPage : Page
                 var muiCacheTask = App.DeepClean.ScanOrphanedMuiCacheAsync();
                 var classHandlersTask = App.DeepClean.ScanOrphanedClassHandlersAsync();
                 var shortcutsTask = App.DeepClean.ScanOrphanedShortcutsAsync();
-                await Task.WhenAll(folderTask, registryTask, appPathsTask, muiCacheTask, classHandlersTask, shortcutsTask);
+                var tasksTask = App.DeepClean.ScanOrphanedScheduledTasksAsync();
+                var firewallTask = App.DeepClean.ScanOrphanedFirewallRulesAsync();
+                await Task.WhenAll(folderTask, registryTask, appPathsTask, muiCacheTask, classHandlersTask, shortcutsTask, tasksTask, firewallTask);
                 items = (await folderTask)
                     .Concat(await registryTask)
                     .Concat(await appPathsTask)
                     .Concat(await muiCacheTask)
                     .Concat(await classHandlersTask)
                     .Concat(await shortcutsTask)
+                    .Concat(await tasksTask)
+                    .Concat(await firewallTask)
                     .ToList();
             }
         }
@@ -123,6 +127,8 @@ public sealed partial class DeepCleanPage : Page
             var muiCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedMuiCache);
             var classCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedClassHandler);
             var shortcutCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedShortcut);
+            var taskCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedScheduledTask);
+            var firewallCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedFirewallRule);
             var parts = new List<string>();
             if (folderCount > 0) parts.Add($"{folderCount} folders");
             if (regCount > 0) parts.Add($"{regCount} registry");
@@ -130,6 +136,8 @@ public sealed partial class DeepCleanPage : Page
             if (muiCount > 0) parts.Add($"{muiCount} MUIcache");
             if (classCount > 0) parts.Add($"{classCount} class handlers");
             if (shortcutCount > 0) parts.Add($"{shortcutCount} shortcuts");
+            if (taskCount > 0) parts.Add($"{taskCount} scheduled tasks");
+            if (firewallCount > 0) parts.Add($"{firewallCount} firewall rules");
             CleanupResultBar.Message = $"{string.Join(" · ", parts)}. Review and pick what to delete.";
         }
         CleanupResultBar.IsOpen = true;

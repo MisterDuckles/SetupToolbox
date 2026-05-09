@@ -28,7 +28,9 @@ public enum DeepCleanCategory
     OrphanedAppPath,    // App Paths\<exe> entry waarvan exe niet meer bestaat
     OrphanedMuiCache,   // MUIcache value (recently-used) met dood pad
     OrphanedClassHandler, // File-extension/ProgID class waarvan shell-handler exe weg is
-    OrphanedShortcut    // Start Menu .lnk met dood target
+    OrphanedShortcut,   // Start Menu .lnk met dood target
+    OrphanedScheduledTask, // Scheduled task die naar een verdwenen exe verwijst
+    OrphanedFirewallRule   // Firewall rule met Program-pad dat niet meer bestaat
 }
 
 // Eén cleanup-target. Voor caches zijn DisplayName en Path vooraf bekend; voor
@@ -112,6 +114,8 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         DeepCleanCategory.OrphanedMuiCache => "MUIcache",
         DeepCleanCategory.OrphanedClassHandler => "Class handler",
         DeepCleanCategory.OrphanedShortcut => "Shortcut",
+        DeepCleanCategory.OrphanedScheduledTask => "Scheduled task",
+        DeepCleanCategory.OrphanedFirewallRule => "Firewall rule",
         _ => string.Empty
     };
 
