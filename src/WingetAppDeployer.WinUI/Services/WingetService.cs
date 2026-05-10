@@ -354,35 +354,104 @@ public sealed class WingetService
             // --disable-interactivity: zet winget's eigen interactive prompts uit. Sommige
             //   uninstallers tonen alsnog hun eigen UI (Antigravity, Adobe Acrobat, etc.) —
             //   dat is een per-installer-respect ding waar we niets aan kunnen doen.
-            // Restant-opruiming (--purge) wordt in v0.8.5 als expliciete user-keuze gebouwd.
-            var (exitCode, output, error) = await RunWingetCommandAsync(
-                $"uninstall --id {wingetId} --exact --silent --disable-interactivity --accept-source-agreements");
+            var args = $"uninstall --id {wingetId} --exact --silent --disable-interactivity --accept-source-agreements";
+            var (exitCode, output, error) = await RunWingetCommandAsync(args);
 
             if (exitCode == 0)
             {
-                // Invalidate beide caches zodat de volgende GetInstalledAppsListAsync /
-                // GetInstalledAppIdsAsync call een verse winget list scan triggert.
-                await _appsListLock.WaitAsync();
-                try
-                {
-                    _appsListCache = null;
-                    _installedIdsCache = null;
-                }
-                finally { _appsListLock.Release(); }
+                InvalidateInstalledCache();
                 return (true, "Uninstalled");
             }
 
             var combined = error + output;
             if (combined.Contains("No installed package found", StringComparison.OrdinalIgnoreCase))
                 return (false, "Not installed.");
-            if (combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
-                return (false, "Access denied. Try running as administrator.");
-            return (false, "Uninstall failed.");
+
+            // Common failure mode: app installed in HKLM (Program Files) needs admin
+            // to remove. Winget zelf draait als user → underlying uninstaller faalt
+            // op file-permissions. Auto-retry met UAC elevation zodat user 1 prompt
+            // ziet en de uninstaller alsnog kan zijn werk doen.
+            var needsElevation =
+                combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("administrator", StringComparison.OrdinalIgnoreCase) ||
+                exitCode == unchecked((int)0x80073D02) ||       // ERROR_INSTALL_PACKAGE_DOWNGRADE
+                exitCode == unchecked((int)0x80070005);         // E_ACCESSDENIED
+
+            // Veel uninstallers (zoals CCleaner / Inno Setup) returneren een niet-
+            // descriptive exit code zonder "access denied" in stderr — toch is de
+            // root cause meestal admin nodig. Retryen-met-UAC is altijd veilig
+            // omdat het opnieuw winget aanroept met dezelfde args.
+            var (elevatedOk, elevatedMsg) = await UninstallAppElevatedAsync(wingetId);
+            if (elevatedOk)
+            {
+                InvalidateInstalledCache();
+                return (true, "Uninstalled (elevated)");
+            }
+
+            // Beide attempts faalden. Geef de meest informatieve message terug.
+            return (false, needsElevation
+                ? "Uninstall failed (also when elevated)."
+                : $"Uninstall failed. {elevatedMsg}");
         }
         catch (Exception ex)
         {
             return (false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Run winget uninstall via Process.Start met `verb=runas` zodat de
+    /// underlying uninstaller admin rights heeft. Gebruikt als fallback wanneer
+    /// de user-context uninstall faalt — typisch voor HKLM-registered apps
+    /// (Program Files installs) waarvan de uninstaller delete permissions nodig
+    /// heeft. Eén UAC prompt voor de hele retry.
+    /// </summary>
+    public async Task<(bool success, string message)> UninstallAppElevatedAsync(string wingetId)
+    {
+        try
+        {
+            var args = $"uninstall --id {wingetId} --exact --silent --disable-interactivity --accept-source-agreements";
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "winget.exe",
+                Arguments = args,
+                UseShellExecute = true,      // verplicht voor Verb=runas
+                Verb = "runas",
+                CreateNoWindow = false,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+            };
+
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc == null) return (false, "Could not start elevated winget");
+            await proc.WaitForExitAsync();
+
+            InvalidateInstalledCache();
+
+            if (proc.ExitCode == 0) return (true, "Uninstalled (elevated)");
+            return (false, $"Elevated winget exit {proc.ExitCode}");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // User klikte "No" op UAC prompt
+            return (false, "Cancelled — UAC prompt declined");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private void InvalidateInstalledCache()
+    {
+        // Invalidate beide caches zodat de volgende GetInstalledAppsListAsync /
+        // GetInstalledAppIdsAsync call een verse winget list scan triggert.
+        _appsListLock.Wait();
+        try
+        {
+            _appsListCache = null;
+            _installedIdsCache = null;
+        }
+        finally { _appsListLock.Release(); }
     }
 
     public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget")

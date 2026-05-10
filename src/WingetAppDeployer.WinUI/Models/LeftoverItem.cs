@@ -21,7 +21,22 @@ public enum LeftoverType
     // Map in %LOCALAPPDATA% / %APPDATA% / %PROGRAMDATA%. User-data, configs,
     // caches. Lager vertrouwen — sommige users willen settings bewaren voor
     // herinstallatie. Default uitgevinkt.
-    AppDataFolder
+    AppDataFolder,
+
+    // App Paths registry-entry (HKLM/HKCU\...\App Paths\<exe>) voor de
+    // verwijderde app's exe. Window's "where is this exe" register.
+    AppPath,
+
+    // MUIcache value (HKCU shell cache) — Windows onthoudt de friendly-name
+    // van laatst-gestarte exes. Per app vaak meerdere values (per exe één).
+    MuiCache,
+
+    // File-extension class handler in `HKLM/HKCU\Software\Classes\Applications`
+    // — broken file-association registry leftover.
+    ClassHandler,
+
+    // Start Menu / Desktop .lnk shortcut die naar verwijderde exe wijst.
+    Shortcut
 }
 
 // Hoe zeker zijn we dat dit echt leftover is van de zojuist verwijderde app?
@@ -53,13 +68,19 @@ public sealed class LeftoverItem : INotifyPropertyChanged
     public long SizeBytes { get; }
     public bool RequiresElevation { get; }
 
+    // Voor MUIcache-items: de specifieke value-name die uit de key verwijderd
+    // moet worden. Path houdt de key zelf, RegistryValueName de value (kan
+    // backslashes/spaties bevatten; daarom apart). Voor andere types null.
+    public string? RegistryValueName { get; }
+
     public LeftoverItem(
         string path,
         LeftoverType type,
         LeftoverConfidence confidence,
         string sourceAppName,
         long sizeBytes,
-        bool requiresElevation)
+        bool requiresElevation,
+        string? registryValueName = null)
     {
         Path = path;
         Type = type;
@@ -67,6 +88,7 @@ public sealed class LeftoverItem : INotifyPropertyChanged
         SourceAppName = sourceAppName;
         SizeBytes = sizeBytes;
         RequiresElevation = requiresElevation;
+        RegistryValueName = registryValueName;
         // High-confidence orphans default checked; medium/low laat user kiezen.
         _isSelected = confidence == LeftoverConfidence.High;
     }
@@ -90,6 +112,10 @@ public sealed class LeftoverItem : INotifyPropertyChanged
         LeftoverType.RegistryKey => "Registry",
         LeftoverType.ProgramFilesFolder => "Program Files",
         LeftoverType.AppDataFolder => "AppData",
+        LeftoverType.AppPath => "App Paths",
+        LeftoverType.MuiCache => "MUIcache",
+        LeftoverType.ClassHandler => "Class handler",
+        LeftoverType.Shortcut => "Shortcut",
         _ => string.Empty
     };
 
@@ -98,6 +124,10 @@ public sealed class LeftoverItem : INotifyPropertyChanged
         LeftoverType.RegistryKey => (Brush)Application.Current.Resources["SystemFillColorAttentionBackgroundBrush"],
         LeftoverType.ProgramFilesFolder => (Brush)Application.Current.Resources["SystemFillColorCautionBackgroundBrush"],
         LeftoverType.AppDataFolder => (Brush)Application.Current.Resources["ControlAltFillColorSecondaryBrush"],
+        LeftoverType.AppPath => (Brush)Application.Current.Resources["SystemFillColorAttentionBackgroundBrush"],
+        LeftoverType.MuiCache => (Brush)Application.Current.Resources["SystemFillColorAttentionBackgroundBrush"],
+        LeftoverType.ClassHandler => (Brush)Application.Current.Resources["SystemFillColorAttentionBackgroundBrush"],
+        LeftoverType.Shortcut => (Brush)Application.Current.Resources["ControlAltFillColorSecondaryBrush"],
         _ => (Brush)Application.Current.Resources["ControlAltFillColorSecondaryBrush"]
     };
 

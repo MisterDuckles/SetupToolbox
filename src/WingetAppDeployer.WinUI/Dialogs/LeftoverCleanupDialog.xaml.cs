@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.Win32;
 using WingetAppDeployer_WinUI.Models;
 using WingetAppDeployer_WinUI.Services;
 
@@ -72,6 +75,10 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         LeftoverType.RegistryKey => $"Registry uninstall keys ({count})",
         LeftoverType.ProgramFilesFolder => $"Program Files folders ({count})",
         LeftoverType.AppDataFolder => $"AppData folders ({count})",
+        LeftoverType.AppPath => $"App Paths registry entries ({count})",
+        LeftoverType.MuiCache => $"MUIcache values ({count})",
+        LeftoverType.ClassHandler => $"File-association class handlers ({count})",
+        LeftoverType.Shortcut => $"Start Menu / Desktop shortcuts ({count})",
         _ => $"Other ({count})"
     };
 
@@ -107,14 +114,46 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         grid.Children.Add(check);
 
         var content = new StackPanel { Spacing = 2 };
-        var pathBlock = new TextBlock
+
+        // Type-badge bovenaan zodat user direct ziet welk soort leftover dit is
+        // (Registry / AppData / MUIcache / etc.) zonder naar de section-header
+        // boven te hoeven kijken bij scrollen.
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        titleRow.Children.Add(new Border
+        {
+            Background = item.TypeBadgeBrush,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 2, 6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = item.TypeBadgeText,
+                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"]
+            }
+        });
+        content.Children.Add(titleRow);
+
+        // Path als HyperlinkButton met TextWrapping=Wrap: volledig pad zichtbaar
+        // (geen truncation), klik opent in Explorer (folder/shortcut) of Regedit
+        // (registry-paden) zodat user kan inspecteren wat er weggaat.
+        var pathTextBlock = new TextBlock
         {
             Text = item.Path,
             Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyTextBlockStyle"],
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            TextWrapping = TextWrapping.NoWrap
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
         };
-        content.Children.Add(pathBlock);
+        var pathButton = new HyperlinkButton
+        {
+            Content = pathTextBlock,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Tag = item
+        };
+        pathButton.Click += PathLink_Click;
+        ToolTipService.SetToolTip(pathButton, "Click to open in Explorer / Regedit");
+        content.Children.Add(pathButton);
 
         var meta = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         meta.Children.Add(new TextBlock
@@ -174,6 +213,74 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         LeftoverConfidence.Low => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
         _ => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
     };
+
+    /// <summary>
+    /// Klik op een path-link → open in Explorer (folders/shortcuts) of Regedit
+    /// (registry-paden). Voor MUIcache: Path heeft format `<key> → <value>` —
+    /// extract de key voor regedit. Geen feedback bij fail (silent).
+    /// </summary>
+    private void PathLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not HyperlinkButton btn || btn.Tag is not LeftoverItem item) return;
+        try
+        {
+            switch (item.Type)
+            {
+                case LeftoverType.ProgramFilesFolder:
+                case LeftoverType.AppDataFolder:
+                    OpenInExplorer(item.Path);
+                    break;
+                case LeftoverType.Shortcut:
+                    OpenInExplorer(item.Path, selectFile: true);
+                    break;
+                case LeftoverType.RegistryKey:
+                case LeftoverType.AppPath:
+                case LeftoverType.ClassHandler:
+                    OpenInRegedit(item.Path);
+                    break;
+                case LeftoverType.MuiCache:
+                    var arrowIdx = item.Path.IndexOf(" → ", StringComparison.Ordinal);
+                    var keyOnly = arrowIdx > 0 ? item.Path.Substring(0, arrowIdx) : item.Path;
+                    OpenInRegedit(keyOnly);
+                    break;
+            }
+        }
+        catch { /* swallow — klik faalt stil */ }
+    }
+
+    private static void OpenInExplorer(string path, bool selectFile = false)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = selectFile ? $"/select,\"{path}\"" : $"\"{path}\"",
+            UseShellExecute = true
+        };
+        Process.Start(psi);
+    }
+
+    private static void OpenInRegedit(string registryPath)
+    {
+        // Convert "HKLM\..." → "Computer\HKEY_LOCAL_MACHINE\..." voor regedit's
+        // LastKey-format. Schrijf naar HKCU LastKey en start regedit — die opent
+        // automatisch op die key.
+        string regPath = registryPath;
+        if (regPath.StartsWith("HKLM\\", StringComparison.OrdinalIgnoreCase))
+            regPath = "Computer\\HKEY_LOCAL_MACHINE\\" + regPath.Substring(5);
+        else if (regPath.StartsWith("HKCU\\", StringComparison.OrdinalIgnoreCase))
+            regPath = "Computer\\HKEY_CURRENT_USER\\" + regPath.Substring(5);
+        else
+            regPath = "Computer\\" + regPath;
+
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Applets\Regedit");
+            key?.SetValue("LastKey", regPath);
+        }
+        catch { }
+
+        Process.Start(new ProcessStartInfo { FileName = "regedit.exe", UseShellExecute = true });
+    }
 
     private void ItemCheck_Toggled(object sender, RoutedEventArgs e)
     {

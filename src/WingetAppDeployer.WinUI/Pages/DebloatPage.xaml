@@ -220,7 +220,7 @@
                      sectie kan zonder eerst door alle Microsoft items te scrollen.
                      ================================================ -->
                 <Expander x:Name="MicrosoftExpander"
-                          IsExpanded="True"
+                          IsExpanded="False"
                           HorizontalAlignment="Stretch"
                           HorizontalContentAlignment="Stretch">
                     <Expander.Header>

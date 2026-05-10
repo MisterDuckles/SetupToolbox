@@ -51,23 +51,39 @@ public sealed class LeftoverScannerService
 
         var sw = Stopwatch.StartNew();
 
-        // Drie scans parallel. Registry is snel (synchroon), folder-scans bevatten
-        // size-berekening die per app traag kan zijn → Task.Run.
+        // 7 scans parallel. Registry-walks zijn snel (sync), folder-scans
+        // bevatten size-berekening die per app traag kan zijn → Task.Run.
+        // App Paths / MUIcache / class handlers / shortcuts toegevoegd in
+        // v0.8.9.5 zodat post-uninstall cleanup op niveau van full deep clean
+        // ligt voor app-specifieke leftovers.
         var registryTask = Task.Run(() => ScanRegistry(apps, log));
         var programFilesTask = Task.Run(() => ScanProgramFilesFolders(apps, log));
         var appDataTask = Task.Run(() => ScanAppDataFolders(apps, log));
+        var appPathsTask = Task.Run(() => ScanAppPaths(apps, log));
+        var muiCacheTask = Task.Run(() => ScanMuiCache(apps, log));
+        var classHandlersTask = Task.Run(() => ScanClassHandlers(apps, log));
+        var shortcutsTask = Task.Run(() => ScanShortcuts(apps, log));
 
-        await Task.WhenAll(registryTask, programFilesTask, appDataTask);
+        await Task.WhenAll(registryTask, programFilesTask, appDataTask,
+                           appPathsTask, muiCacheTask, classHandlersTask, shortcutsTask);
 
         var results = new List<LeftoverItem>();
         results.AddRange(await registryTask);
         results.AddRange(await programFilesTask);
         results.AddRange(await appDataTask);
+        results.AddRange(await appPathsTask);
+        results.AddRange(await muiCacheTask);
+        results.AddRange(await classHandlersTask);
+        results.AddRange(await shortcutsTask);
 
         log($"Scan complete in {sw.ElapsedMilliseconds}ms — {results.Count} leftovers (" +
             $"reg:{results.Count(r => r.Type == LeftoverType.RegistryKey)} " +
             $"pf:{results.Count(r => r.Type == LeftoverType.ProgramFilesFolder)} " +
-            $"ad:{results.Count(r => r.Type == LeftoverType.AppDataFolder)})");
+            $"ad:{results.Count(r => r.Type == LeftoverType.AppDataFolder)} " +
+            $"ap:{results.Count(r => r.Type == LeftoverType.AppPath)} " +
+            $"mui:{results.Count(r => r.Type == LeftoverType.MuiCache)} " +
+            $"cls:{results.Count(r => r.Type == LeftoverType.ClassHandler)} " +
+            $"sc:{results.Count(r => r.Type == LeftoverType.Shortcut)})");
 
         // Sorteer op (Type, Confidence, Path) zodat de UI ze in een logische
         // volgorde toont — registry eerst (snel weg te klikken), folders laatst.
@@ -328,6 +344,326 @@ public sealed class LeftoverScannerService
         return sb.ToString();
     }
 
+    // ── App Paths scan (v0.8.9.5) ─────────────────────────────────
+
+    /// <summary>
+    /// Walkt HKLM/HKCU `\Software\Microsoft\Windows\CurrentVersion\App Paths\<exe>`
+    /// keys en flag entries waar de exe-naam matcht met een uninstalled app.
+    /// App Paths is Windows' canonical "where is this exe" register; na
+    /// uninstall blijven entries soms achter.
+    /// </summary>
+    private static List<LeftoverItem> ScanAppPaths(IReadOnlyList<UninstalledAppRef> apps, Action<string> log)
+    {
+        var results = new List<LeftoverItem>();
+        var sources = new (RegistryHive Hive, string Path, RegistryView View, bool RequiresElevation, string DisplayPrefix)[]
+        {
+            (RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths", RegistryView.Registry64, true, @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+            (RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths", RegistryView.Registry32, true, @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths"),
+            (RegistryHive.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths", RegistryView.Default, false, @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+        };
+
+        foreach (var (hive, path, view, requiresElev, displayPrefix) in sources)
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var appPathsKey = baseKey.OpenSubKey(path);
+                if (appPathsKey == null) continue;
+
+                foreach (var subName in appPathsKey.GetSubKeyNames())
+                {
+                    using var sub = appPathsKey.OpenSubKey(subName);
+                    if (sub == null) continue;
+
+                    var defaultExe = (sub.GetValue(null) as string)?.Trim().Trim('"');
+                    var exePath = defaultExe ?? string.Empty;
+
+                    foreach (var app in apps)
+                    {
+                        // Match: exe-name (bv. "vmware.exe") tegen app-naam tokens, OF
+                        // het exe-pad bevat de app-naam.
+                        var exeName = subName;  // subkey name = exe filename
+                        var conf = MatchExeNameAgainstApp(exeName, exePath, app);
+                        if (conf == null) continue;
+
+                        var fullKey = $"{displayPrefix}\\{subName}";
+                        results.Add(new LeftoverItem(
+                            path: fullKey,
+                            type: LeftoverType.AppPath,
+                            confidence: conf.Value,
+                            sourceAppName: app.DisplayName,
+                            sizeBytes: 0,
+                            requiresElevation: requiresElev));
+                        log($"AP match {conf}: '{exeName}' ↔ {app.DisplayName} → {fullKey}");
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log($"AppPaths scan error in {hive}\\{path}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+        return results;
+    }
+
+    // ── MUIcache scan (v0.8.9.5) ──────────────────────────────────
+
+    /// <summary>
+    /// Walkt HKCU MUIcache values en flag values waarvan de exe-pad in de
+    /// value-name matcht met een uninstalled app. MUIcache slaat per exe-pad
+    /// een friendly-name op; na uninstall blijven die entries achter.
+    /// </summary>
+    private static List<LeftoverItem> ScanMuiCache(IReadOnlyList<UninstalledAppRef> apps, Action<string> log)
+    {
+        var results = new List<LeftoverItem>();
+        const string muiPath = @"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+        const string displayPrefix = @"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(muiPath);
+            if (key == null) return results;
+
+            foreach (var valueName in key.GetValueNames())
+            {
+                if (string.IsNullOrEmpty(valueName)) continue;
+                // Strip MUIcache suffix (.FriendlyAppName / .ApplicationCompany)
+                var exePath = StripMuiCacheSuffix(valueName);
+                if (string.IsNullOrEmpty(exePath)) continue;
+
+                foreach (var app in apps)
+                {
+                    var conf = MatchPathContainsApp(exePath, app);
+                    if (conf == null) continue;
+
+                    results.Add(new LeftoverItem(
+                        path: $"{displayPrefix} → {valueName}",
+                        type: LeftoverType.MuiCache,
+                        confidence: conf.Value,
+                        sourceAppName: app.DisplayName,
+                        sizeBytes: 0,
+                        requiresElevation: false,
+                        registryValueName: valueName));
+                    log($"MUI match {conf}: '{exePath}' ↔ {app.DisplayName}");
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            log($"MUIcache scan error: {ex.GetType().Name}: {ex.Message}");
+        }
+        return results;
+    }
+
+    private static string StripMuiCacheSuffix(string raw)
+    {
+        var suffixes = new[] { ".FriendlyAppName", ".ApplicationCompany" };
+        foreach (var suffix in suffixes)
+        {
+            if (raw.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return raw.Substring(0, raw.Length - suffix.Length);
+        }
+        if (raw.Length >= 3 && raw[1] == ':' && raw[2] == '\\') return raw;
+        return string.Empty;
+    }
+
+    // ── Class handlers scan (v0.8.9.5) ────────────────────────────
+
+    /// <summary>
+    /// Walkt `HKLM/HKCU\Software\Classes\Applications\<exe>` keys en flag
+    /// entries die met de uninstalled app matchen.
+    /// </summary>
+    private static List<LeftoverItem> ScanClassHandlers(IReadOnlyList<UninstalledAppRef> apps, Action<string> log)
+    {
+        var results = new List<LeftoverItem>();
+        var sources = new (RegistryHive Hive, string Path, RegistryView View, bool RequiresElevation, string DisplayPrefix)[]
+        {
+            (RegistryHive.LocalMachine, @"SOFTWARE\Classes\Applications", RegistryView.Registry64, true, @"HKLM\SOFTWARE\Classes\Applications"),
+            (RegistryHive.CurrentUser,  @"SOFTWARE\Classes\Applications", RegistryView.Default, false, @"HKCU\SOFTWARE\Classes\Applications"),
+        };
+
+        foreach (var (hive, path, view, requiresElev, displayPrefix) in sources)
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var appsKey = baseKey.OpenSubKey(path);
+                if (appsKey == null) continue;
+                foreach (var exeName in appsKey.GetSubKeyNames())
+                {
+                    foreach (var app in apps)
+                    {
+                        var conf = MatchExeNameAgainstApp(exeName, string.Empty, app);
+                        if (conf == null) continue;
+
+                        var keyPath = $"{displayPrefix}\\{exeName}";
+                        results.Add(new LeftoverItem(
+                            path: keyPath,
+                            type: LeftoverType.ClassHandler,
+                            confidence: conf.Value,
+                            sourceAppName: app.DisplayName,
+                            sizeBytes: 0,
+                            requiresElevation: requiresElev));
+                        log($"CLS match {conf}: '{exeName}' ↔ {app.DisplayName}");
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log($"ClassHandlers scan error in {hive}\\{path}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+        return results;
+    }
+
+    // ── Shortcuts scan (v0.8.9.5) ─────────────────────────────────
+
+    /// <summary>
+    /// Walkt Start Menu en Desktop folders voor `.lnk` files waarvan het
+    /// target naar de uninstalled app's exe verwijst.
+    /// </summary>
+    private static List<LeftoverItem> ScanShortcuts(IReadOnlyList<UninstalledAppRef> apps, Action<string> log)
+    {
+        var results = new List<LeftoverItem>();
+        var roots = new (string Path, bool RequiresElevation)[]
+        {
+            (Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), false),
+            (Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), true),
+            (Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), false),
+            (Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), true),
+        };
+
+        foreach (var (rootPath, requiresElev) in roots.Where(r => !string.IsNullOrEmpty(r.Path) && Directory.Exists(r.Path)))
+        {
+            IEnumerable<string> lnkFiles;
+            try { lnkFiles = Directory.EnumerateFiles(rootPath, "*.lnk", SearchOption.AllDirectories); }
+            catch (Exception ex)
+            {
+                log($"Shortcut enum error in {rootPath}: {ex.GetType().Name}: {ex.Message}");
+                continue;
+            }
+
+            foreach (var lnk in lnkFiles)
+            {
+                string target;
+                try { target = ResolveShortcutTarget(lnk); }
+                catch { continue; }
+                if (string.IsNullOrEmpty(target)) continue;
+
+                foreach (var app in apps)
+                {
+                    var conf = MatchPathContainsApp(target, app);
+                    if (conf == null) continue;
+
+                    results.Add(new LeftoverItem(
+                        path: lnk,
+                        type: LeftoverType.Shortcut,
+                        confidence: conf.Value,
+                        sourceAppName: app.DisplayName,
+                        sizeBytes: SafeFileSize(lnk),
+                        requiresElevation: requiresElev));
+                    log($"SC match {conf}: '{lnk}' → '{target}' ↔ {app.DisplayName}");
+                    break;
+                }
+            }
+        }
+        return results;
+    }
+
+    private static string ResolveShortcutTarget(string lnkPath)
+    {
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return string.Empty;
+            dynamic? shell = Activator.CreateInstance(shellType);
+            if (shell == null) return string.Empty;
+            try
+            {
+                dynamic shortcut = shell.CreateShortcut(lnkPath);
+                string target = shortcut.TargetPath ?? string.Empty;
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut);
+                return target;
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+            }
+        }
+        catch { return string.Empty; }
+    }
+
+    private static long SafeFileSize(string path)
+    {
+        try { return new FileInfo(path).Length; } catch { return 0; }
+    }
+
+    // ── Match helpers (extra voor v0.8.9.5 types) ────────────────
+
+    /// <summary>
+    /// Match een exe-name (`foo.exe`) of optioneel exe-pad tegen een app.
+    /// Voor App Paths en class handlers waar subkey = exe filename.
+    /// </summary>
+    private static LeftoverConfidence? MatchExeNameAgainstApp(string exeName, string exePath, UninstalledAppRef app)
+    {
+        var normExe = Normalize(System.IO.Path.GetFileNameWithoutExtension(exeName));
+        var normApp = Normalize(app.DisplayName);
+        if (normExe.Length < 3) return null;
+
+        if (normExe == normApp) return LeftoverConfidence.High;
+        if (normApp.Length >= 4 && (normExe.Contains(normApp) || normApp.Contains(normExe)))
+            return LeftoverConfidence.High;
+
+        // Fallback: exe-pad bevat de app-naam (vaak voor App Paths met expliciet pad).
+        if (!string.IsNullOrEmpty(exePath))
+        {
+            var normPath = Normalize(exePath);
+            if (normApp.Length >= 4 && normPath.Contains(normApp))
+                return LeftoverConfidence.Medium;
+        }
+
+        if (!string.IsNullOrEmpty(app.Publisher))
+        {
+            var normPub = Normalize(app.Publisher);
+            if (normPub.Length >= 4 && normExe.Contains(normPub))
+                return LeftoverConfidence.Low;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Match een path-string (bv. exe-pad uit MUIcache value-name of shortcut
+    /// target) tegen een app door te checken of de app-naam ergens in het pad
+    /// voorkomt.
+    /// </summary>
+    private static LeftoverConfidence? MatchPathContainsApp(string fullPath, UninstalledAppRef app)
+    {
+        var normPath = Normalize(fullPath);
+        var normApp = Normalize(app.DisplayName);
+        if (normApp.Length < 4) return null;
+
+        if (normPath.Contains(normApp)) return LeftoverConfidence.High;
+
+        // PackageName voor Store-apps (bv. "Microsoft.X" → "X")
+        if (!string.IsNullOrEmpty(app.PackageName))
+        {
+            var lastSegment = app.PackageName.Split('.').LastOrDefault() ?? string.Empty;
+            if (lastSegment.Length >= 4 && normPath.Contains(Normalize(lastSegment)))
+                return LeftoverConfidence.High;
+        }
+
+        if (!string.IsNullOrEmpty(app.Publisher))
+        {
+            var normPub = Normalize(app.Publisher);
+            if (normPub.Length >= 4 && normPath.Contains(normPub))
+                return LeftoverConfidence.Low;
+        }
+        return null;
+    }
+
     private static long TrySizeOf(DirectoryInfo dir)
     {
         try
@@ -388,8 +724,18 @@ public sealed class LeftoverScannerService
             switch (item.Type)
             {
                 case LeftoverType.RegistryKey:
+                case LeftoverType.AppPath:
+                case LeftoverType.ClassHandler:
                     DeleteRegistryKey(item.Path);
                     return (true, "Removed registry key");
+                case LeftoverType.MuiCache:
+                    // MUIcache: hardcoded key, value-name in RegistryValueName.
+                    const string muiKey = @"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+                    DeleteRegistryValue(muiKey, item.RegistryValueName ?? string.Empty);
+                    return (true, "Removed MUIcache value");
+                case LeftoverType.Shortcut:
+                    File.Delete(item.Path);
+                    return (true, "Deleted shortcut");
                 case LeftoverType.AppDataFolder:
                 case LeftoverType.ProgramFilesFolder:
                     Directory.Delete(item.Path, recursive: true);
@@ -402,6 +748,29 @@ public sealed class LeftoverScannerService
         {
             return (false, ex.Message);
         }
+    }
+
+    private static void DeleteRegistryValue(string fullKeyPath, string valueName)
+    {
+        if (string.IsNullOrEmpty(valueName))
+            throw new ArgumentException("Value name required for MUIcache delete");
+
+        var firstSep = fullKeyPath.IndexOf('\\');
+        if (firstSep <= 0) throw new ArgumentException($"Invalid registry path: {fullKeyPath}");
+        var hiveName = fullKeyPath.Substring(0, firstSep).ToUpperInvariant();
+        var subPath = fullKeyPath.Substring(firstSep + 1);
+
+        var (hive, view) = hiveName switch
+        {
+            "HKCU" => (RegistryHive.CurrentUser, RegistryView.Default),
+            "HKLM" => (RegistryHive.LocalMachine, RegistryView.Registry64),
+            _ => throw new ArgumentException($"Unsupported hive: {hiveName}")
+        };
+
+        using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+        using var key = baseKey.OpenSubKey(subPath, writable: true)
+                        ?? throw new InvalidOperationException($"Key not found: {subPath}");
+        key.DeleteValue(valueName, throwOnMissingValue: false);
     }
 
     private static void DeleteRegistryKey(string fullPath)
@@ -458,13 +827,21 @@ public sealed class LeftoverScannerService
             var path = Escape(item.Path);
             sb.AppendLine($"Log \"PROGRESS|{i + 1}|{items.Count}|{path}\"");
             sb.AppendLine("try {");
-            if (item.Type == LeftoverType.RegistryKey)
+            if (item.Type == LeftoverType.RegistryKey ||
+                item.Type == LeftoverType.AppPath ||
+                item.Type == LeftoverType.ClassHandler)
             {
                 // reg.exe accepts forward HKLM\\... paths cleanly. /f = force,
                 // geen confirmatie-prompt.
                 sb.AppendLine($"    & reg.exe delete '{path}' /f | Out-Null");
                 sb.AppendLine("    if ($LASTEXITCODE -ne 0) { throw \"reg.exe exit $LASTEXITCODE\" }");
                 sb.AppendLine($"    Log \"RESULT|{path}|OK|Removed registry key\"");
+            }
+            else if (item.Type == LeftoverType.Shortcut)
+            {
+                // .lnk file delete (CommonStartMenu paths require admin)
+                sb.AppendLine($"    Remove-Item -LiteralPath '{path}' -Force -ErrorAction Stop");
+                sb.AppendLine($"    Log \"RESULT|{path}|OK|Deleted shortcut\"");
             }
             else
             {
