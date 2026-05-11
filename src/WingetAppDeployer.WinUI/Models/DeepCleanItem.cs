@@ -30,7 +30,9 @@ public enum DeepCleanCategory
     OrphanedClassHandler, // File-extension/ProgID class waarvan shell-handler exe weg is
     OrphanedShortcut,   // Start Menu .lnk met dood target
     OrphanedScheduledTask, // Scheduled task die naar een verdwenen exe verwijst
-    OrphanedFirewallRule   // Firewall rule met Program-pad dat niet meer bestaat
+    OrphanedFirewallRule,  // Firewall rule met Program-pad dat niet meer bestaat
+    OrphanedService,       // Windows service met dood ImagePath (sc.exe delete)
+    OrphanedHkcuVendor     // HKCU\Software\<Vendor>\<App> met alle pad-values dood
 }
 
 // Eén cleanup-target. Voor caches zijn DisplayName en Path vooraf bekend; voor
@@ -116,6 +118,8 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         DeepCleanCategory.OrphanedShortcut => "Shortcut",
         DeepCleanCategory.OrphanedScheduledTask => "Scheduled task",
         DeepCleanCategory.OrphanedFirewallRule => "Firewall rule",
+        DeepCleanCategory.OrphanedService => "Service",
+        DeepCleanCategory.OrphanedHkcuVendor => "HKCU vendor",
         _ => string.Empty
     };
 

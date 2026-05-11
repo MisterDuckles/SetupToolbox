@@ -485,6 +485,16 @@ public sealed partial class DeepCleanDialog : ContentDialog
                     // Windows Defender Firewall met geavanceerde beveiliging
                     Process.Start(new ProcessStartInfo { FileName = "wf.msc", UseShellExecute = true });
                     break;
+                case DeepCleanCategory.OrphanedService:
+                    // services.msc — Services console. Kan niet rechtstreeks
+                    // naar een specifieke service navigeren, alleen het console
+                    // openen zodat user manueel kan inspecteren.
+                    Process.Start(new ProcessStartInfo { FileName = "services.msc", UseShellExecute = true });
+                    break;
+                case DeepCleanCategory.OrphanedHkcuVendor:
+                    // HKCU\Software\<Vendor>\<App> — open in regedit op die key.
+                    OpenInRegedit(item.Path);
+                    break;
             }
         }
         catch

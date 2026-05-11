@@ -65,6 +65,9 @@ public sealed partial class DeepCleanPage : Page
                 //   - MUIcache values (recently-used programs met dode paden)
                 //   - Class handlers (\Software\Classes\Applications) met dode exes
                 //   - Start Menu / Desktop shortcuts met dode targets
+                //   - Scheduled tasks + Firewall rules met dode program-paden
+                //   - Orphan services (Stopped + Manual/Disabled + dode ImagePath)
+                //   - HKCU\Software vendor-keys met enkel dode pad-values
                 // Folder-scan is de langzaamste; rest is snel. Bundle-by-name in
                 // de dialog groept gerelateerde items van zelfde app onder één
                 // card (registry + folder + MUIcache van "Claude" → 1 bundle).
@@ -76,7 +79,9 @@ public sealed partial class DeepCleanPage : Page
                 var shortcutsTask = App.DeepClean.ScanOrphanedShortcutsAsync();
                 var tasksTask = App.DeepClean.ScanOrphanedScheduledTasksAsync();
                 var firewallTask = App.DeepClean.ScanOrphanedFirewallRulesAsync();
-                await Task.WhenAll(folderTask, registryTask, appPathsTask, muiCacheTask, classHandlersTask, shortcutsTask, tasksTask, firewallTask);
+                var servicesTask = App.DeepClean.ScanOrphanedServicesAsync();
+                var hkcuVendorTask = App.DeepClean.ScanOrphanedHkcuVendorAsync();
+                await Task.WhenAll(folderTask, registryTask, appPathsTask, muiCacheTask, classHandlersTask, shortcutsTask, tasksTask, firewallTask, servicesTask, hkcuVendorTask);
                 items = (await folderTask)
                     .Concat(await registryTask)
                     .Concat(await appPathsTask)
@@ -85,6 +90,8 @@ public sealed partial class DeepCleanPage : Page
                     .Concat(await shortcutsTask)
                     .Concat(await tasksTask)
                     .Concat(await firewallTask)
+                    .Concat(await servicesTask)
+                    .Concat(await hkcuVendorTask)
                     .ToList();
             }
         }
@@ -129,6 +136,8 @@ public sealed partial class DeepCleanPage : Page
             var shortcutCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedShortcut);
             var taskCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedScheduledTask);
             var firewallCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedFirewallRule);
+            var serviceCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedService);
+            var hkcuCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedHkcuVendor);
             var parts = new List<string>();
             if (folderCount > 0) parts.Add($"{folderCount} folders");
             if (regCount > 0) parts.Add($"{regCount} registry");
@@ -138,6 +147,8 @@ public sealed partial class DeepCleanPage : Page
             if (shortcutCount > 0) parts.Add($"{shortcutCount} shortcuts");
             if (taskCount > 0) parts.Add($"{taskCount} scheduled tasks");
             if (firewallCount > 0) parts.Add($"{firewallCount} firewall rules");
+            if (serviceCount > 0) parts.Add($"{serviceCount} services");
+            if (hkcuCount > 0) parts.Add($"{hkcuCount} HKCU vendor keys");
             CleanupResultBar.Message = $"{string.Join(" · ", parts)}. Review and pick what to delete.";
         }
         CleanupResultBar.IsOpen = true;

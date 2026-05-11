@@ -40,7 +40,14 @@ public sealed class DeepCleanService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         };
-        return paths.Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
+        var result = paths.Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
+        // Ook de "soft" categorie-locations meenemen zodat de scan-summary
+        // tekst dekkend is — anders denkt user dat we alleen folders scanden.
+        result.Add("Uninstall registry keys + App Paths + MUIcache + class handlers");
+        result.Add("Start Menu / Desktop shortcuts");
+        result.Add("Scheduled tasks + Firewall rules");
+        result.Add("Windows services + HKCU\\Software vendor keys");
+        return result;
     }
 
     /// <summary>
@@ -1189,6 +1196,314 @@ public sealed class DeepCleanService
     }
 
     /// <summary>
+    /// Scant Windows services via `Get-CimInstance Win32_Service`. Flag een
+    /// service als orphan ALLEEN als ALLE strikte criteria kloppen:
+    ///   (a) ImagePath wijst naar een exe die niet meer bestaat,
+    ///   (b) service is Stopped (niet Running),
+    ///   (c) StartMode is Manual of Disabled (geen Auto / Boot / System —
+    ///       die zijn cruciaal voor boot/login en raken we niet aan),
+    ///   (d) PathName start niet met svchost.exe (DLL-hosted Windows services
+    ///       die hun host-dll elders hebben),
+    ///   (e) ImagePath niet in C:\Windows\ of System32 (system services),
+    ///   (f) geen overlap met winget/AppX-tracked install tokens.
+    /// Strict filter zodat we GEEN system-services per ongeluk weghalen.
+    /// Default unchecked + caution-tier — user moet expliciet kiezen.
+    /// </summary>
+    public async Task<List<DeepCleanItem>> ScanOrphanedServicesAsync()
+    {
+        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+        Action<string> log = msg =>
+        {
+            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+            catch { }
+        };
+        log($"=== Orphaned services scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+        var sw = Stopwatch.StartNew();
+
+        // Cross-check tokens uit winget+AppX — service met dezelfde tokens als
+        // een tracked install is GEEN orphan, ook niet als z'n exe-pad faalt te
+        // resolven (bv. lege string, "%SystemRoot%\sysnative\..." etc.).
+        var rawInstalled = await App.InstalledApps.DetectAllAsync();
+        var crossCheckTokens = BuildNonRegistryInstalledTokens(rawInstalled);
+        log($"Cross-check tokens: {crossCheckTokens.Count} from winget+AppX");
+
+        var results = new List<DeepCleanItem>();
+        string psOutput;
+        try
+        {
+            // Pipe-separated dump: Name|DisplayName|State|StartMode|PathName
+            // -split '\|',5 garandeert dat PathName intact blijft als 'ie pipes
+            // zou bevatten (rare maar mogelijk).
+            const string script =
+                "Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | " +
+                "ForEach-Object { \"$($_.Name)|$($_.DisplayName)|$($_.State)|$($_.StartMode)|$($_.PathName)\" }";
+            psOutput = await RunPowerShellAsync(script);
+            log($"Get-CimInstance Win32_Service completed in {sw.ElapsedMilliseconds}ms ({psOutput.Length} bytes)");
+        }
+        catch (Exception ex)
+        {
+            log($"Win32_Service query failed: {ex.GetType().Name}: {ex.Message}");
+            return results;
+        }
+
+        var lines = psOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        int totalChecked = 0;
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimEnd('\r').Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var parts = line.Split('|', 5);
+            if (parts.Length < 5) continue;
+            totalChecked++;
+
+            var name = parts[0].Trim();
+            var displayName = parts[1].Trim();
+            var state = parts[2].Trim();
+            var startMode = parts[3].Trim();
+            var pathName = parts[4].Trim();
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(pathName)) continue;
+
+            // (b) State moet Stopped zijn — Running services zijn ofwel actief
+            //     of net gecrasht; in beide gevallen niet onze taak om weg te halen.
+            if (!state.Equals("Stopped", StringComparison.OrdinalIgnoreCase)) continue;
+
+            // (c) StartMode strict op Manual/Disabled. Auto = wordt bij boot
+            //     gestart, Boot/System = cruciaal voor Windows zelf.
+            if (!startMode.Equals("Manual", StringComparison.OrdinalIgnoreCase) &&
+                !startMode.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // (d) svchost.exe is een shared DLL-host. Kan niet zomaar de
+            //     service-key weghalen want de DLL-implementatie zit elders
+            //     (HKLM\SYSTEM\CurrentControlSet\Services\<name>\Parameters\ServiceDll).
+            //     Out-of-scope voor onze orphan-scope.
+            var pathTrimmed = pathName.Trim('"').TrimStart();
+            if (pathTrimmed.StartsWith("svchost", StringComparison.OrdinalIgnoreCase) ||
+                pathTrimmed.IndexOf("\\svchost.exe", StringComparison.OrdinalIgnoreCase) >= 0)
+                continue;
+
+            // Extract exe-pad uit PathName. Format kan zijn:
+            //   "C:\path\service.exe" -arg
+            //   C:\path\service.exe
+            //   %SystemRoot%\system32\foo.exe
+            var exePath = ExtractExePathFromCommandLine(pathName);
+            if (string.IsNullOrEmpty(exePath)) continue;
+            var resolvedExe = Environment.ExpandEnvironmentVariables(exePath);
+
+            // (e) Skip alles onder C:\Windows\ — system services. Boot drive
+            //     kan op een andere letter staan, dus check %SystemRoot% ook.
+            var sysRoot = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (!string.IsNullOrEmpty(sysRoot) &&
+                resolvedExe.StartsWith(sysRoot, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (resolvedExe.StartsWith(@"C:\Windows\", StringComparison.OrdinalIgnoreCase)) continue;
+
+            // (a) Exe moet daadwerkelijk dood zijn.
+            try { if (File.Exists(resolvedExe)) continue; } catch { continue; }
+
+            // (f) Cross-check: tokens uit Name+DisplayName matchen met winget/AppX?
+            //     Skip — dit is een echte managed install, alleen de service entry
+            //     is mogelijk gestale (bv. tijdens auto-update).
+            var entryTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddWithTokens(entryTokens, name);
+            if (!string.IsNullOrEmpty(displayName)) AddWithTokens(entryTokens, displayName);
+            if (crossCheckTokens.Count > 0 && entryTokens.Overlaps(crossCheckTokens))
+            {
+                log($"  ALIVE service: {name} ({displayName}) — token cross-match with winget/AppX");
+                continue;
+            }
+
+            var friendlyName = string.IsNullOrWhiteSpace(displayName) ? name : displayName;
+            log($"  ORPHAN service: '{friendlyName}' [{name}] state={state} startMode={startMode} → '{resolvedExe}' (gone)");
+            results.Add(new DeepCleanItem(
+                displayName: friendlyName,
+                path: $"{name} → {pathName}",
+                category: DeepCleanCategory.OrphanedService,
+                sizeBytes: 0,
+                requiresElevation: true,
+                isSafe: false,
+                description: $"Windows service '{friendlyName}' verwijst naar exe '{resolvedExe}' die niet meer bestaat (Stopped, StartMode={startMode}). Veilig om te deleten via sc.exe — de service kan nooit meer starten.",
+                registryValueName: name));
+        }
+
+        log($"Orphaned services scan complete in {sw.ElapsedMilliseconds}ms — checked {totalChecked}, found {results.Count} orphan(s)");
+        return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Walkt `HKCU\Software\<Vendor>\<App>` (top 2 levels) en flag <App>-keys
+    /// waarvan ALLE pad-values dood zijn — vendor-residue dat na uninstall
+    /// blijft hangen omdat de uninstaller HKCU niet ruimt.
+    ///
+    /// Path-value detectie:
+    ///   - Value-name in {InstallPath, InstallDir, InstallLocation, Path,
+    ///     Program, ExecutablePath, ExePath, AppPath, Location, ...}
+    ///   - Of value-data start met een drive-letter pattern (`X:\`)
+    ///
+    /// Voorwaarden voor orphan-flag:
+    ///   - Minstens 1 pad-value gevonden in de key (anders niets te checken)
+    ///   - ALLE pad-values resolven niet (file/dir bestaat niet)
+    ///   - Geen overlap met winget/AppX tokens
+    ///
+    /// Skip protected top-level keys: Microsoft, Classes, Policies, Wow6432Node,
+    /// RegisteredApplications — die zijn van Windows / system shells.
+    /// </summary>
+    public async Task<List<DeepCleanItem>> ScanOrphanedHkcuVendorAsync()
+    {
+        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
+        Action<string> log = msg =>
+        {
+            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
+            catch { }
+        };
+        log($"=== Orphaned HKCU vendor scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+
+        var rawInstalled = await App.InstalledApps.DetectAllAsync();
+        var crossCheckTokens = BuildNonRegistryInstalledTokens(rawInstalled);
+        log($"Cross-check tokens: {crossCheckTokens.Count} from winget+AppX");
+
+        return await Task.Run(() =>
+        {
+            var sw = Stopwatch.StartNew();
+            var results = new List<DeepCleanItem>();
+
+            // Protected top-level subkeys onder HKCU\Software die we nooit
+            // aanraken. "Microsoft" is gigantisch en heeft tienduizenden
+            // sub-keys voor system-componenten; "Classes" is shell-binding;
+            // "Policies" is group policy state.
+            var protectedTop = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Microsoft", "Classes", "Policies", "Wow6432Node",
+                "RegisteredApplications", "Clients", "Khronos",
+                "Intel", "AMD", "NVIDIA", "Realtek",  // driver vendors — skip om GPU/audio state niet te raken
+                "Google",    // Chrome + andere Google apps onder Google\<App>; Chrome heeft eigen uninstall
+                "Mozilla"    // Firefox + thunderbird onder Mozilla\<App>; eigen uninstall
+            };
+
+            // Common-app names binnen vendor-keys die we niet als "key" willen
+            // weergeven want ze zijn op zichzelf niet de vendor-naam. Niet
+            // strict needed maar helpt logs cleaner houden.
+            var pathValueNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "InstallPath", "InstallDir", "InstallLocation", "Install Path",
+                "Path", "Program", "ProgramPath", "ExecutablePath", "Executable",
+                "Exe", "ExePath", "AppPath", "InstallationDirectory", "Location",
+                "AppDir", "BinPath", "BinaryPath", "RootDir", "WorkingDirectory"
+            };
+
+            try
+            {
+                using var softwareKey = Registry.CurrentUser.OpenSubKey("Software");
+                if (softwareKey == null)
+                {
+                    log("HKCU\\Software niet leesbaar — skipping");
+                    return results;
+                }
+
+                int vendorsChecked = 0;
+                int appsChecked = 0;
+                foreach (var vendorName in softwareKey.GetSubKeyNames())
+                {
+                    if (protectedTop.Contains(vendorName)) continue;
+                    vendorsChecked++;
+                    using var vendorKey = softwareKey.OpenSubKey(vendorName);
+                    if (vendorKey == null) continue;
+
+                    foreach (var appName in vendorKey.GetSubKeyNames())
+                    {
+                        appsChecked++;
+                        using var appKey = vendorKey.OpenSubKey(appName);
+                        if (appKey == null) continue;
+
+                        // Verzamel pad-values uit deze key. We kijken alleen
+                        // naar top-level VALUES (geen recursive subkey-walk) —
+                        // diepere keys kunnen we niet zonder false-positives
+                        // verifieren.
+                        var pathValues = new List<(string Name, string Resolved)>();
+                        foreach (var valName in appKey.GetValueNames())
+                        {
+                            if (appKey.GetValueKind(valName) is not (RegistryValueKind.String or RegistryValueKind.ExpandString))
+                                continue;
+                            var raw = appKey.GetValue(valName) as string;
+                            if (string.IsNullOrWhiteSpace(raw)) continue;
+
+                            var looksLikeKnownPathName = pathValueNames.Contains(valName);
+                            var looksLikeDrivePath = LooksLikeDriveRootedPath(raw);
+                            if (!looksLikeKnownPathName && !looksLikeDrivePath) continue;
+
+                            var resolved = Environment.ExpandEnvironmentVariables(raw.Trim().Trim('"'));
+                            pathValues.Add((valName, resolved));
+                        }
+
+                        if (pathValues.Count == 0) continue;
+
+                        // Alle pad-values moeten dood zijn om als orphan te
+                        // tellen. Eén leeft → dit is een legit app-config.
+                        var allDead = true;
+                        foreach (var (_, resolved) in pathValues)
+                        {
+                            try
+                            {
+                                if (File.Exists(resolved) || Directory.Exists(resolved)) { allDead = false; break; }
+                            }
+                            catch { /* ACL / IO — wees conservatief, beschouw als levend */ allDead = false; break; }
+                        }
+                        if (!allDead) continue;
+
+                        // Cross-check tegen winget/AppX op zowel vendor- als app-tokens.
+                        var entryTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        AddWithTokens(entryTokens, vendorName);
+                        AddWithTokens(entryTokens, appName);
+                        if (crossCheckTokens.Count > 0 && entryTokens.Overlaps(crossCheckTokens))
+                        {
+                            log($"  ALIVE HKCU: {vendorName}\\{appName} — token cross-match with winget/AppX");
+                            continue;
+                        }
+
+                        var keyPath = $@"HKCU\Software\{vendorName}\{appName}";
+                        var deadPathsList = string.Join(", ", pathValues.Take(3).Select(p => $"{p.Name}='{p.Resolved}'"));
+                        log($"  ORPHAN HKCU: {keyPath} → dead: {deadPathsList}");
+                        results.Add(new DeepCleanItem(
+                            displayName: $"{vendorName} · {appName}",
+                            path: keyPath,
+                            category: DeepCleanCategory.OrphanedHkcuVendor,
+                            sizeBytes: 0,
+                            requiresElevation: false,
+                            isSafe: false,
+                            description: $"HKCU registry-key voor '{appName}' (van {vendorName}) heeft {pathValues.Count} pad-value(s) die allemaal dood zijn. Vendor-residue uit een uninstall die HKCU niet ruimde — kan weg."));
+                    }
+                }
+
+                log($"HKCU vendor scan checked {vendorsChecked} vendors / {appsChecked} apps in {sw.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                log($"HKCU vendor scan error: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            log($"Orphaned HKCU vendor scan complete — {results.Count} orphan key(s)");
+            return results.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+    }
+
+    /// <summary>
+    /// True als de string lijkt op een absoluut drive-rooted pad — bv.
+    /// "C:\Program Files\...", "D:\Tools\app.exe". Bewust ruim: geen file-
+    /// bestaanscheck hier, alleen de heuristic voor value-data classificatie.
+    /// </summary>
+    private static bool LooksLikeDriveRootedPath(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return false;
+        var t = raw.Trim().Trim('"');
+        if (t.Length < 3) return false;
+        if (char.IsLetter(t[0]) && t[1] == ':' && (t[2] == '\\' || t[2] == '/')) return true;
+        // %SystemRoot%\... / %ProgramFiles%\... / %LocalAppData%\... als path-like
+        if (t.StartsWith("%") && t.IndexOf('%', 1) > 1 && t.Contains('\\')) return true;
+        return false;
+    }
+
+    /// <summary>
     /// Heuristiek: ziet een string eruit als een GUID? Firewall rules in
     /// registry hebben soms `{8A547BE2-...}` als DisplayName voor system-rules.
     /// Geen guarantee, gewoon "begint met `{` en bevat een hex-pattern".
@@ -1719,20 +2034,22 @@ public sealed class DeepCleanService
             return new DeepCleanDeleteResult(0, 0, 0, new Dictionary<string, (bool, string)>(), Cancelled: false);
 
         var results = new Dictionary<string, (bool, string)>();
-        // ScheduledTask + FirewallRule altijd via elevated batch — schtasks /Delete
-        // en Remove-NetFirewallRule hebben anders timing-gevoelige permission
-        // checks die per-task kunnen slagen of falen. Eén UAC voor het hele zooitje
-        // is voorspelbaarder.
+        // ScheduledTask + FirewallRule + Service altijd via elevated batch —
+        // schtasks /Delete, Remove-NetFirewallRule en sc.exe delete hebben anders
+        // timing-gevoelige permission checks. Eén UAC voor het hele zooitje is
+        // voorspelbaarder.
         var elevated = items.Where(i =>
             i.RequiresElevation
             || i.Category == DeepCleanCategory.RecycleBin
             || i.Category == DeepCleanCategory.OrphanedScheduledTask
-            || i.Category == DeepCleanCategory.OrphanedFirewallRule).ToList();
+            || i.Category == DeepCleanCategory.OrphanedFirewallRule
+            || i.Category == DeepCleanCategory.OrphanedService).ToList();
         var local = items.Where(i =>
             !i.RequiresElevation
             && i.Category != DeepCleanCategory.RecycleBin
             && i.Category != DeepCleanCategory.OrphanedScheduledTask
-            && i.Category != DeepCleanCategory.OrphanedFirewallRule).ToList();
+            && i.Category != DeepCleanCategory.OrphanedFirewallRule
+            && i.Category != DeepCleanCategory.OrphanedService).ToList();
         long bytesFreed = 0;
 
         // 1) Local deletes — geen UAC. Per categorie verschillende strategie:
@@ -1747,7 +2064,8 @@ public sealed class DeepCleanService
             {
                 if (item.Category == DeepCleanCategory.OrphanedRegistry ||
                     item.Category == DeepCleanCategory.OrphanedAppPath ||
-                    item.Category == DeepCleanCategory.OrphanedClassHandler)
+                    item.Category == DeepCleanCategory.OrphanedClassHandler ||
+                    item.Category == DeepCleanCategory.OrphanedHkcuVendor)
                 {
                     DeleteRegistryKey(item.Path);
                     results[item.Path] = (true, "Removed registry key");
@@ -1947,6 +2265,17 @@ public sealed class DeepCleanService
                 var ruleName = Escape(item.RegistryValueName ?? string.Empty);
                 sb.AppendLine($"    Remove-NetFirewallRule -Name '{ruleName}' -ErrorAction Stop");
                 sb.AppendLine($"    Log \"RESULT|{path}|OK|Removed firewall rule\"");
+            }
+            else if (item.Category == DeepCleanCategory.OrphanedService)
+            {
+                // sc.exe delete <ServiceName>. Service-name (NIET DisplayName)
+                // zit in RegistryValueName. Service moet vooraf Stopped zijn,
+                // wat onze scan-filter al garandeert. /quiet niet nodig — sc.exe
+                // is silent by default als de service exists.
+                var serviceName = Escape(item.RegistryValueName ?? string.Empty);
+                sb.AppendLine($"    & sc.exe delete '{serviceName}' | Out-Null");
+                sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"sc.exe exit $LASTEXITCODE\" }}");
+                sb.AppendLine($"    Log \"RESULT|{path}|OK|Removed service\"");
             }
             else if (item.Category == DeepCleanCategory.OrphanedFolder)
             {
