@@ -40,7 +40,10 @@ public sealed partial class DeepCleanPage : Page
         await RunScanAsync(ScanKind.Leftovers);
     }
 
-    private async Task RunScanAsync(ScanKind kind)
+    // isAutoRefresh = true wanneer deze scan automatisch wordt getriggerd na
+    // een delete-batch (verificatie-pass). UI-tekst is in dat geval anders zodat
+    // user weet dat het een verify-run is i.p.v. een nieuwe scan.
+    private async Task RunScanAsync(ScanKind kind, bool isAutoRefresh = false)
     {
         // Disable beide knoppen tijdens scan zodat user niet 2x klikt en we
         // geen overlappende scans krijgen. Spinner zichtbaar onder de knoppen
@@ -48,6 +51,7 @@ public sealed partial class DeepCleanPage : Page
         ScanCachesButton.IsEnabled = false;
         ScanOrphanedButton.IsEnabled = false;
         DeepCleanScanRing.Visibility = Visibility.Visible;
+        EmptyStatePanel.Visibility = Visibility.Collapsed;
 
         List<DeepCleanItem> items;
         try
@@ -109,11 +113,34 @@ public sealed partial class DeepCleanPage : Page
         var label = kind == ScanKind.Caches ? "Windows caches" : "Leftovers";
         if (items.Count == 0)
         {
-            CleanupResultBar.Severity = InfoBarSeverity.Success;
-            CleanupResultBar.Title = $"{label}: nothing to clean";
-            CleanupResultBar.Message = kind == ScanKind.Caches
-                ? "Alle bekende cache-locaties zijn al leeg of bestaan niet."
-                : "Geen orphaned folders of registry-entries gevonden — alles matcht met een geïnstalleerde app.";
+            // Empty-state panel toont een groen check-icon + heading + uitleg.
+            // Bij auto-refresh (verify-pass) houden we de success-InfoBar van
+            // de vorige delete intact zodat user de "X freed" feedback nog
+            // ziet. Bij een normale handmatige scan ruimen we de bar op want
+            // het empty-panel zegt al hetzelfde.
+            if (!isAutoRefresh) CleanupResultBar.IsOpen = false;
+            EmptyStateTitle.Text = isAutoRefresh
+                ? $"{label}: cleanup verified"
+                : "Looking clean!";
+            EmptyStateDescription.Text = isAutoRefresh
+                ? "Alle aangevinkte items zijn verwijderd en blijken nu echt weg te zijn."
+                : kind == ScanKind.Caches
+                    ? "Alle bekende cache-locaties zijn al leeg of bestaan niet."
+                    : "Geen leftovers gevonden — alles op je systeem matcht met een geïnstalleerde app.";
+            EmptyStatePanel.Visibility = Visibility.Visible;
+            return;
+        }
+
+        // Auto-refresh modus met items > 0: de delete-batch was deels effectief
+        // maar er zijn items overgebleven (typisch failed deletes door in-use
+        // files). Toon dat in de InfoBar maar open GEEN nieuwe dialog — user
+        // heeft net z'n eerste delete-poging gedaan, een tweede automatisch
+        // openen voelt opdringerig.
+        if (isAutoRefresh)
+        {
+            CleanupResultBar.Severity = InfoBarSeverity.Warning;
+            CleanupResultBar.Title = $"{label}: {items.Count} item(s) still present after cleanup";
+            CleanupResultBar.Message = "Sommige items konden niet verwijderd worden (typisch: in gebruik, of permissions). Klik nogmaals \"Scan\" om opnieuw te proberen.";
             CleanupResultBar.IsOpen = true;
             return;
         }
@@ -163,12 +190,23 @@ public sealed partial class DeepCleanPage : Page
             CleanupResultBar.Message = dialog.DeleteResult.FailedCount > 0
                 ? $"{FormatBytes(dialog.DeleteResult.BytesFreed)} freed · {dialog.DeleteResult.FailedCount} item(s) couldn't be deleted."
                 : $"{FormatBytes(dialog.DeleteResult.BytesFreed)} freed.";
+            CleanupResultBar.IsOpen = true;
+
+            // Auto-refresh: na een succesvolle delete-batch dezelfde scan
+            // opnieuw runnen zodat user direct ziet of de verwijderde items
+            // ook écht weg zijn. Skip wanneer we al in een auto-refresh zitten
+            // (anders kan een falende delete in een loop blijven hangen).
+            if (!isAutoRefresh)
+            {
+                await RunScanAsync(kind, isAutoRefresh: true);
+            }
         }
         else if (dialog.DeleteResult is { Cancelled: true })
         {
             CleanupResultBar.Severity = InfoBarSeverity.Warning;
             CleanupResultBar.Title = $"{label}: cleanup cancelled";
             CleanupResultBar.Message = "UAC prompt was declined — nothing was deleted.";
+            CleanupResultBar.IsOpen = true;
         }
     }
 

@@ -129,6 +129,39 @@
                               HorizontalAlignment="Center"
                               Visibility="Collapsed"
                               Margin="0,8,0,0" />
+
+                <!-- Empty-state panel — netter dan een InfoBar als de scan
+                     niets vond. Default Collapsed; pagina-code toggelt 'm
+                     wanneer items.Count == 0. -->
+                <Border x:Name="EmptyStatePanel"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="32,28"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,8,0,0">
+                    <StackPanel HorizontalAlignment="Center" Spacing="10">
+                        <FontIcon Glyph="&#xE73E;"
+                                  FontSize="38"
+                                  HorizontalAlignment="Center"
+                                  Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
+                        <TextBlock x:Name="EmptyStateTitle"
+                                   Text="Looking clean!"
+                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center" />
+                        <TextBlock x:Name="EmptyStateDescription"
+                                   Text="Nothing to clean up — all known locations look healthy."
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   MaxWidth="480"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollView>
     </Grid>

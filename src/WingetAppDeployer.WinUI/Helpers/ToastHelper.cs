@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace WingetAppDeployer_WinUI.Helpers;
@@ -11,8 +10,6 @@ namespace WingetAppDeployer_WinUI.Helpers;
 // (WinAppSDK's eigen AppNotificationManager faalt op unpackaged met "Class not registered".)
 internal static class ToastHelper
 {
-    private static string LogPath => Path.Combine(Path.GetTempPath(), "WingetAppDeployer_toast.log");
-
     public static void ShowAutoUpdateResult(bool success)
     {
         try
@@ -24,20 +21,11 @@ internal static class ToastHelper
                     : "Update finished with errors. Open the app for details.")
                 .Show();
 
-            Log($"Show() OK (success={success})");
+            Diagnostics.Log("WingetAppDeployer_toast.log", $"Show() OK (success={success})");
         }
         catch (Exception ex)
         {
-            Log($"Show() FAILED: {ex.GetType().Name}: {ex.Message}");
+            Diagnostics.Log("WingetAppDeployer_toast.log", $"Show() FAILED: {ex.GetType().Name}: {ex.Message}");
         }
-    }
-
-    private static void Log(string line)
-    {
-        try
-        {
-            File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} {line}{Environment.NewLine}");
-        }
-        catch { /* swallow — logging is best-effort */ }
     }
 }

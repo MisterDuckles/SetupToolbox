@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 
 namespace WingetAppDeployer_WinUI.Services;
@@ -33,21 +34,10 @@ public sealed class LeftoverScannerService
     {
         if (apps.Count == 0) return new List<LeftoverItem>();
 
-        // Diagnostic log per scan — overschreven per run zodat we per item
-        // kunnen terugzien waarom het wel/niet matchte.
-        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_leftovers.log");
-        Action<string> log = msg =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
-        try
-        {
-            File.WriteAllText(logPath,
-                $"=== LeftoverScanner run {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}" +
-                $"Apps: {string.Join(", ", apps.Select(a => a.DisplayName))}{Environment.NewLine}");
-        }
-        catch { }
+        // Diagnostic log — gated via Helpers.Diagnostics.Enabled (false in prod).
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_leftovers.log", msg);
+        log($"=== LeftoverScanner run {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+        log($"Apps: {string.Join(", ", apps.Select(a => a.DisplayName))}");
 
         var sw = Stopwatch.StartNew();
 

@@ -30,6 +30,9 @@ public sealed partial class DeepCleanDialog : ContentDialog
     private readonly DeepCleanService _service;
     private bool _deleteRunning;
     private bool _deleteCompleted;
+    // Filter-query uit de AutoSuggestBox bovenaan. Lege string = geen filter.
+    // Matcht case-insensitive op bundle-label + item DisplayName + Path.
+    private string _filterQuery = string.Empty;
     public DeepCleanDeleteResult? DeleteResult { get; private set; }
 
     public DeepCleanDialog(IReadOnlyList<DeepCleanItem> items, DeepCleanService service)
@@ -58,18 +61,54 @@ public sealed partial class DeepCleanDialog : ContentDialog
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
         ScrollViewSpeedup.OnStarting(sender, args);
 
+    /// <summary>
+    /// Filter-textbox handler. Alleen reageren op user-input (typing), niet
+    /// op programmatic SuggestionChosen — voorkomt onnodige rebuilds. Bij
+    /// elke change rebuilden we de lijst met de nieuwe query als filter.
+    /// </summary>
+    private void FilterBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        _filterQuery = (sender.Text ?? string.Empty).Trim();
+        BuildGroupedList();
+        UpdateSelectionStatus();
+    }
+
     private void BuildGroupedList()
     {
         GroupContainer.Children.Clear();
 
         var totalSize = _items.Sum(i => i.SizeBytes);
-        HeaderText.Text = $"Found {_items.Count} cleanup item(s) — {FormatBytes(totalSize)} total";
+        HeaderText.Text = string.IsNullOrEmpty(_filterQuery)
+            ? $"Found {_items.Count} cleanup item(s) — {FormatBytes(totalSize)} total"
+            : $"Found {_items.Count} item(s) — filter active";
+
+        // Apply filter eerst: query matcht case-insensitive op DisplayName,
+        // Path én category-label. Daarna pas bundle-by-token zodat een filter
+        // op "brave" precies de Brave-cluster terugbrengt. Empty query = alles.
+        var filteredItems = string.IsNullOrEmpty(_filterQuery)
+            ? _items
+            : (IReadOnlyList<DeepCleanItem>)_items.Where(MatchesFilter).ToList();
+
+        if (filteredItems.Count == 0)
+        {
+            var noMatch = new TextBlock
+            {
+                Text = $"Geen items matchen \"{_filterQuery}\".",
+                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyTextBlockStyle"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 20, 0, 20)
+            };
+            GroupContainer.Children.Add(noMatch);
+            return;
+        }
 
         // Group by IsSafe eerst (caution items onderaan), dan binnen elke tier:
         // bundel items met dezelfde DisplayName (bv. "VMware" in 3 locaties)
         // onder één card zodat user ze als één geheel kan toggle. Single items
         // blijven als losse cards.
-        foreach (var safetyGroup in _items.GroupBy(i => i.IsSafe).OrderByDescending(g => g.Key))
+        foreach (var safetyGroup in filteredItems.GroupBy(i => i.IsSafe).OrderByDescending(g => g.Key))
         {
             var sectionPanel = new StackPanel { Spacing = 6 };
             sectionPanel.Children.Add(new TextBlock
@@ -236,6 +275,29 @@ public sealed partial class DeepCleanDialog : ContentDialog
     }
 
     /// <summary>
+    /// Filter-match voor de search box: query matcht op DisplayName, Path of
+    /// CategoryLabel van een item. Case-insensitive substring + extra normalized
+    /// vergelijking (alfanum-only) zodat een query "bravesoftware" ook matcht
+    /// met DisplayName "BraveSoftware · Promo" (`Â·` weggestript via normalize).
+    /// </summary>
+    private bool MatchesFilter(DeepCleanItem item)
+    {
+        if (string.IsNullOrEmpty(_filterQuery)) return true;
+        var q = _filterQuery;
+        if (item.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+        if (item.Path.Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+        if (item.CategoryLabel.Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+
+        // Genormaliseerde fallback voor namen met scheidingstekens (· / _ / -)
+        // die de raw substring-match missen.
+        var normQuery = Normalize(q);
+        if (normQuery.Length == 0) return false;
+        if (Normalize(item.DisplayName).Contains(normQuery)) return true;
+        if (Normalize(item.Path).Contains(normQuery)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// Bundel-card voor 2+ items met dezelfde DisplayName (typisch orphans als
     /// "VMware" in Program Files + Program Files (x86) + ProgramData). Eén
     /// master-checkbox toggelt alle children. Sub-paths inline gelist met
@@ -287,30 +349,33 @@ public sealed partial class DeepCleanDialog : ContentDialog
             Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
             VerticalAlignment = VerticalAlignment.Center
         });
-        titleRow.Children.Add(new Border
+        // Eén badge per unieke category in de bundle. Voor een mixed bundle
+        // (bv. folder + HKCU + registry van zelfde app) ziet user nu alle 3
+        // de subcategorie-labels naast elkaar i.p.v. alleen de category van
+        // het eerste item. Count per category in de badge zodat user weet of
+        // het bv. 1 folder of 3 folders zijn.
+        foreach (var categoryGroup in items
+            .GroupBy(i => i.Category)
+            .OrderBy(g => (int)g.Key))
         {
-            Background = first.CategoryBadgeBrush,
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6, 2, 6, 2),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
+            var sample = categoryGroup.First();
+            var count = categoryGroup.Count();
+            var badgeText = count > 1
+                ? $"{sample.CategoryLabel} ×{count}"
+                : sample.CategoryLabel;
+            titleRow.Children.Add(new Border
             {
-                Text = first.CategoryLabel,
-                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"]
-            }
-        });
-        titleRow.Children.Add(new Border
-        {
-            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ControlAltFillColorSecondaryBrush"],
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6, 2, 6, 2),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = $"{items.Count} folders",
-                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"]
-            }
-        });
+                Background = sample.CategoryBadgeBrush,
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = badgeText,
+                    Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"]
+                }
+            });
+        }
         content.Children.Add(titleRow);
 
         // Sub-line met de individuele folder-namen zodat user weet waarom dit

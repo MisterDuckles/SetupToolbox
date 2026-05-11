@@ -27,6 +27,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -51,30 +52,38 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,8" />
 
+        <!-- Filter-bar: zoeken op naam/pad, plus toggle-all aan rechterkant. -->
         <Grid Grid.Row="3" Margin="0,0,0,8" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0"
-                       x:Name="SelectionStatusText"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center" />
+            <AutoSuggestBox Grid.Column="0"
+                            x:Name="FilterBox"
+                            PlaceholderText="Zoek op naam, vendor of pad (bv. brave, vmware, C:\Program Files)"
+                            QueryIcon="Find"
+                            TextChanged="FilterBox_TextChanged" />
             <Button Grid.Column="1"
                     x:Name="ToggleAllButton"
                     Content="Select all"
                     Click="ToggleAllButton_Click" />
         </Grid>
 
-        <ScrollView Grid.Row="4"
+        <!-- Selection-status onder de filter-bar, telt over de zichtbare items. -->
+        <TextBlock Grid.Row="4"
+                   x:Name="SelectionStatusText"
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Margin="0,0,0,8" />
+
+        <ScrollView Grid.Row="5"
                     VerticalScrollBarVisibility="Auto"
                     MaxHeight="440"
                     ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
             <StackPanel x:Name="GroupContainer" Spacing="14" />
         </ScrollView>
 
-        <StackPanel Grid.Row="5"
+        <StackPanel Grid.Row="6"
                     x:Name="ProgressPanel"
                     Visibility="Collapsed"
                     Margin="0,12,0,0"

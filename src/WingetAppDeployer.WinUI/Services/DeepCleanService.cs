@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 
 namespace WingetAppDeployer_WinUI.Services;
@@ -89,17 +90,8 @@ public sealed class DeepCleanService
     /// </summary>
     public async Task<List<DeepCleanItem>> ScanWindowsCachesAsync()
     {
-        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-        Action<string> log = msg =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
-        try
-        {
-            File.WriteAllText(logPath, $"=== DeepClean caches scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}");
-        }
-        catch { }
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
+        log($"=== DeepClean caches scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
         var sw = Stopwatch.StartNew();
         var results = new List<DeepCleanItem>();
@@ -237,12 +229,7 @@ public sealed class DeepCleanService
     /// </summary>
     public async Task<List<DeepCleanItem>> ScanOrphanedRegistryAsync()
     {
-        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-        Action<string> log = msg =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
         log($"=== Orphaned registry scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
         // Build cross-check token-set uit winget + AppX (non-registry sources).
@@ -492,12 +479,7 @@ public sealed class DeepCleanService
     /// </summary>
     public async Task<List<DeepCleanItem>> ScanOrphanedFoldersAsync()
     {
-        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-        Action<string> log = msg =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
         log($"=== Orphaned folders scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
         var sw = Stopwatch.StartNew();
 
@@ -678,12 +660,7 @@ public sealed class DeepCleanService
     {
         return Task.Run(() =>
         {
-            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-            Action<string> log = msg =>
-            {
-                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-                catch { }
-            };
+            Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
             log($"=== Orphaned App Paths scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
             var results = new List<DeepCleanItem>();
@@ -753,12 +730,7 @@ public sealed class DeepCleanService
     {
         return Task.Run(() =>
         {
-            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-            Action<string> log = msg =>
-            {
-                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-                catch { }
-            };
+            Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
             log($"=== Orphaned MUIcache scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
             var results = new List<DeepCleanItem>();
@@ -847,12 +819,7 @@ public sealed class DeepCleanService
     {
         return Task.Run(() =>
         {
-            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-            Action<string> log = msg =>
-            {
-                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-                catch { }
-            };
+            Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
             log($"=== Orphaned class handlers scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
             var results = new List<DeepCleanItem>();
@@ -915,12 +882,7 @@ public sealed class DeepCleanService
     {
         return Task.Run(() =>
         {
-            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-            Action<string> log = msg =>
-            {
-                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-                catch { }
-            };
+            Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
             log($"=== Orphaned shortcuts scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
             var results = new List<DeepCleanItem>();
@@ -985,12 +947,7 @@ public sealed class DeepCleanService
     {
         return Task.Run(async () =>
         {
-            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-            Action<string> log = msg =>
-            {
-                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-                catch { }
-            };
+            Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
             log($"=== Orphaned scheduled tasks scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
             var sw = Stopwatch.StartNew();
 
@@ -1104,12 +1061,7 @@ public sealed class DeepCleanService
     {
         return Task.Run(() =>
         {
-            var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-            Action<string> log = msg =>
-            {
-                try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-                catch { }
-            };
+            Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
             var sw = Stopwatch.StartNew();
             log($"=== Orphaned firewall rules scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
@@ -1211,12 +1163,7 @@ public sealed class DeepCleanService
     /// </summary>
     public async Task<List<DeepCleanItem>> ScanOrphanedServicesAsync()
     {
-        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-        Action<string> log = msg =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
         log($"=== Orphaned services scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
         var sw = Stopwatch.StartNew();
 
@@ -1351,12 +1298,7 @@ public sealed class DeepCleanService
     /// </summary>
     public async Task<List<DeepCleanItem>> ScanOrphanedHkcuVendorAsync()
     {
-        var logPath = Path.Combine(Path.GetTempPath(), "WingetAppDeployer_deepclean.log");
-        Action<string> log = msg =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_deepclean.log", msg);
         log($"=== Orphaned HKCU vendor scan {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
         var rawInstalled = await App.InstalledApps.DetectAllAsync();

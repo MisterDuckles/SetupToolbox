@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 
 namespace WingetAppDeployer_WinUI.Services;
@@ -31,15 +32,9 @@ public sealed class InstalledAppsService
 {
     public async Task<List<InstalledAppEntry>> DetectAllAsync()
     {
-        // Diagnostic log — overschreven per detectie-run zodat we bij issues kunnen
-        // zien WELKE source faalde en met welke exception.
-        var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WingetAppDeployer_debloat.log");
-        Action<string> log = msg =>
-        {
-            try { System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); }
-            catch { }
-        };
-        try { System.IO.File.WriteAllText(logPath, $"=== DetectAllAsync run {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}"); } catch { }
+        // Diagnostic log — gated via Helpers.Diagnostics.Enabled (false in prod).
+        Action<string> log = msg => Diagnostics.Log("WingetAppDeployer_debloat.log", msg);
+        log($"=== DetectAllAsync run {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         // Catalog dictionary — GroupBy+First voorkomt ArgumentException op duplicate
