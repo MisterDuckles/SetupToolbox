@@ -11,20 +11,56 @@
     <Grid Padding="36,24,36,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+
         <TextBlock Grid.Row="0"
                    Text="Tweaks"
                    Style="{StaticResource TitleTextBlockStyle}"
-                   Margin="0,0,0,16" />
+                   Margin="0,0,0,8" />
+
         <InfoBar Grid.Row="1"
                  Severity="Informational"
-                 Title="Coming soon"
-                 Message="Windows tweaks integratie volgt in een latere release."
+                 Title="Quick Windows tweaks"
+                 Message="Toggle veelgebruikte Windows-instellingen direct hier — geen Settings-app, geen regedit. Status reflecteert je huidige systeem. Iconen rechts tonen of een Explorer-restart, sign-out of reboot nodig is voor zichtbaarheid."
                  IsOpen="True"
-                 IsClosable="False"
-                 VerticalAlignment="Top"
-                 MaxWidth="720"
-                 HorizontalAlignment="Left" />
+                 IsClosable="True"
+                 MaxWidth="780"
+                 HorizontalAlignment="Left"
+                 Margin="0,0,0,12" />
+
+        <!-- Resultaat-bar voor apply/revert feedback. -->
+        <InfoBar x:Name="ResultBar"
+                 Grid.Row="2"
+                 Severity="Success"
+                 IsOpen="False"
+                 IsClosable="True"
+                 MaxWidth="780"
+                 HorizontalAlignment="Left"
+                 Margin="0,0,0,12" />
+
+        <ScrollView Grid.Row="3"
+                    VerticalScrollBarVisibility="Auto"
+                    Padding="0,0,14,12"
+                    ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
+            <StackPanel x:Name="CategoriesContainer" Spacing="20" />
+        </ScrollView>
+
+        <!-- Loading-overlay tijdens initial state-detection. -->
+        <Grid x:Name="LoadingOverlay"
+              Grid.RowSpan="4"
+              Background="{ThemeResource SmokeFillColorDefaultBrush}"
+              Visibility="Visible">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <ProgressRing Width="40" Height="40" IsIndeterminate="True" />
+                <TextBlock Text="Reading Windows state..."
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

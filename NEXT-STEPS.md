@@ -10,6 +10,15 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.1 — Tweaks tab foundation + Explorer category
+
+- **Architectuur**: nieuwe `Models/Tweak.cs` met `TweakCategory` enum (12 buckets — Explorer / Taskbar / StartMenu / AdsBloat / AiCopilot / Privacy / UiTheme / Performance / ContextMenu / NotificationsLock / Updates / Gaming), `TweakOperation` record met `EnabledValue` + `DisabledValue` voor full reversibility, `RestartRequirement` enum (None/ExplorerRestart/SignOut/Reboot), `TweakState` enum (Disabled/Enabled/Partial/Unknown), `Tweak` class met INPC voor state-binding. Multi-op support: één tweak kan meerdere registry-ops bundelen (bv OFGB later met 22 keys). Special `DeleteKeyOnAbsent` flag voor tweaks die een hele key-tree aanmaken bij apply (classic context menu CLSID-subkey)
+- **`Services/TweakService.cs`**: data-driven `BuildAll()` registreert alle tweak-definities (geen per-tweak UI code). `DetectStatesAsync` walkt elke op's registry-pad en zet `Tweak.State` op Enabled/Disabled/Partial/Unknown door actual vs EnabledValue/DisabledValue te vergelijken. `ApplyAsync(tweaks, apply: bool)` splitst user-ops (HKCU, in-process via Microsoft.Win32.Registry) van elevated-ops (HKLM, 1 UAC voor de hele subset via PowerShell + reg.exe batch — zelfde patroon als DeepCleanService). `RestartExplorerAsync()` static helper voor de "Restart Explorer?" dialog
+- **`TweaksPage` rebuild**: was placeholder InfoBar, nu volledige page met per-tweak Border-cards gegroepeerd per categorie. Per card: naam + status-pill (Active/Default/Partial/Unknown met groen/grijs/geel/grijs achtergrond) + omschrijving + use-case (italic), rechts admin/UAC lock-icoon (alleen bij HKLM-tweaks), uiterst rechts `ToggleSwitch`. Loading-overlay met spinner tijdens initial registry-walk. Toggle-event triggert immediate apply/revert + InfoBar-feedback ("Restart Explorer to see the effect" voor explorer-restart tweaks) + optionele "Restart Explorer?" dialog
+- **5 Explorer-tweaks geregistreerd**: show file extensions (`HideFileExt`), show hidden files (`Hidden`), taskbar aligned left (`TaskbarAl`), launch File Explorer to This PC (`LaunchTo`), classic context menu (CLSID `{86ca1aa0-…}\InprocServer32` key-add/delete via DeleteKeyOnAbsent)
+- **`App.Tweaks` singleton** toegevoegd
+- **Geen restart-icoon per card** — initial draft had Refresh/SignOut/Power glyphs naast elke ToggleSwitch, weggehaald omdat 't verwarrend was. Restart-info komt via de InfoBar-message direct na toggle (contextueel duidelijker). Admin/Lock icoon blijft wel voor HKLM-tweaks omdat dat aankondigt dat UAC gaat triggeren (niet-evident anders)
+
 ### v0.8.11 — Diagnostic logs gated + multi-badge + empty-state + auto-refresh + dialog search
 
 - **Diagnostic logs uit voor productie**: nieuwe `Helpers/Diagnostics.cs` met `Enabled` static-readonly bool (false in productie). Alle persistent diagnostic logfiles (`WingetAppDeployer_deepclean.log` / `_leftovers.log` / `_debloat.log` / `_toast.log`) lopen nu via `Diagnostics.Log(fileName, msg)` — no-op wanneer Enabled=false. Geen rommel meer in `%TEMP%` op user-systemen. Voor dev: flip de readonly naar true om de full per-scan trace weer aan te zetten. Load-bearing IPC logs (timestamped per-batch elevated PS-batches voor delete-progress + `_schtasks.log` voor schtasks stderr capture) lopen NIET via deze gate — die hebben hun eigen lifecycle en zijn nodig voor de UI om progress te tonen
@@ -346,17 +355,113 @@ Per sub-feature één patch versie. Milestone v0.8.0 = release zodra alle v0.8.x
 - **v0.8.12** — Milestone v0.8.0 release voorbereiding:
   - Versie-bump naar **v0.8.0** als milestone-release zodra dit af is → release op GitHub met exe-artifacts
 
-### v0.9.0 — Tweaks tab
+### v0.9.x — Tweaks tab (uitgebreid uit research mei 2026)
 
-- Windows tweaks UI met toggles per categorie:
-  - Explorer: hidden files, file extensions, classic context menu, taskbar align left
-  - Privacy: telemetry, ad ID, location tracking
-  - Performance: visual effects, startup apps
-  - UI: dark mode systeem-wide, accent kleur, transparency
-  - Updates: pause N dagen, active hours
-- Registry-backed (HKCU / HKLM) met SettingsCard + ToggleSwitch
-- Apply / revert (originele waardes onthouden)
-- Preset profiles ("Privacy-focused", "Performance", "Minimal UI") als één-klik batches
+Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Titus winutil + OFGB + ExplorerPatcher + Winaero + O&O ShutUp10 + community lists + Win11 24H2/25H2 specific). Core feature: **live state-detection** — elke toggle leest huidige registry-waarde bij page-load en reflecteert of de tweak al actief is. Per tweak `EnabledValue` + `DisabledValue` voor full reversibility. Multi-op bundles (bv OFGB = 22 keys onder 1 toggle) krijgen "partial state" indicator. HKLM-ops batchen in 1 elevated PS-call (zelfde patroon als BloatwareService / DeepCleanService). Per toggle een restart-indicator icoon: 🔄 explorer-restart / ⚙️ sign-out / 🔁 reboot / 🔒 admin.
+
+~~**v0.9.1 — Foundation + Explorer (vertical slice)**~~ — gedaan (zie Voltooide versies)
+
+**v0.9.2 — Taskbar**
+- Hide buttons: search box, task view, widgets, Copilot, Chat/MeetNow
+- End-task in right-click menu, never combine taskbar buttons
+- Show seconds in tray clock, show battery percentage
+
+**v0.9.3 — Start Menu**
+- Layout: More Pins, hide Recommended section, hide MRU apps/files
+- Disable Bing/web search in Start, disable Search Highlights
+- Disable Cortana
+
+**v0.9.4 — Ads & Bloat (OFGB-equivalent)**
+- 22 keys onder `ContentDeliveryManager` als 1 bundle-toggle "Disable all suggested/sponsored content"
+- File Explorer OneDrive sync ads (`ShowSyncProviderNotifications`)
+- Lock-screen tips/tricks/facts, Welcome experience after updates
+- Settings app ads (3 keys: 338393 / 353694 / 353696)
+- "Finish setting up your device" full-screen popup (`ScoobeSystemSettingEnabled`)
+- Auto-install OEM/Store apps (`PreInstalledAppsEnabled`, `SilentInstalledAppsEnabled`, `OemPreInstalledAppsEnabled`)
+- Optioneel: HKLM CloudContent policies (Pro/Edu only — Home grayed out met tooltip)
+
+**v0.9.5 — AI / Copilot (Win11 24H2+)**
+- Disable Copilot (Win+C key), hide Copilot button op taskbar (al in v0.9.2)
+- Disable Recall (HKLM + HKCU policy), Click to Do, AI in Paint/Notepad/Photos
+- Remove Copilot app uitvoeren via AppX uninstall (Microsoft.Copilot / MicrosoftWindows.Client.AI)
+
+**v0.9.6 — Privacy uitbreidingen**
+- Disable Activity History / Timeline, Tailored Experiences with diagnostic data
+- Disable Inking & Typing personalization, Feedback Hub auto-prompts
+- Disable CEIP scheduled tasks (Application Experience / ProgramDataUpdater / Consolidator)
+- Disable Suggested Actions on clipboard copy
+- Disable Clipboard cloud-sync (+ optioneel clipboard-history zelf)
+- Disable DiagTrack service (sc.exe)
+- WPBT disable (OEM-vendor-boot blob blocking)
+
+**v0.9.7 — UI / Theme**
+- Dark mode system-wide, accent color override, transparency on/off, animations system-wide off
+- Show seconds in tray clock (al in v0.9.2 — verplaatsen of dupliceren), verbose logon messages
+- Detailed BSoD info (display parameters bij blue screen)
+- Always-on NumLock at boot, disable login-screen acrylic blur
+- Restore classic Photo Viewer voor .jpg/.png
+
+**v0.9.8 — Performance**
+- Disable visual effects (perf-preset combo: VisualFXSetting=2 + UserPreferencesMask binary)
+- Startup apps cleanup
+- Disable hibernation (powercfg /hibernate off — bespaart hiberfil.sys), disable Fast Startup
+- Enable Ultimate Performance power plan (`powercfg -duplicatescheme e9a42b02-...`)
+- Disable power throttling, Storage Sense, background apps (UWP)
+- Curated services to Manual (DiagTrack + WerSvc + MapsBroker + RetailDemo + Xbox-stack)
+- Long path support (`LongPathsEnabled=1` — voor dev-tools)
+- Prefer IPv4 over IPv6 (`DisabledComponents=0x20`)
+- Disable Multiplane Overlay (fix screen-tearing op sommige GPUs)
+
+**v0.9.9 — Context Menu uitbreidingen**
+- Add custom verbs: Open PowerShell here, Open Terminal as Admin (Directory\Background\shell)
+- Add Take Ownership (recursive icacls)
+- Add Move to / Copy to flyouts (CLSID handlers `{C2FBB630-...}` + `{C2FBB631-...}`)
+- Remove cluttery handlers: Edit with Photos / Paint 3D / Clipchamp
+
+**v0.9.10 — Notifications & Lock Screen**
+- Disable "Suggest ways to finish setup" notifications
+- Disable lock screen entirely (no-lock-screen, ga direct naar login)
+- Disable Action Center / Notification Center (heavy-handed optie)
+- Hide Calendar from systray click (revert to Win10-style tray clock)
+
+**v0.9.11 — Updates uitbreidingen**
+- Pause N dagen, active hours (al gepland in originele scope)
+- Defer feature updates (max 365 days) + quality updates (max 30 days)
+- Skip driver updates via WU (`ExcludeWUDriversInQualityUpdate=1`)
+- Disable auto-restart with logged-on users
+- Disable "Get latest as soon as available" continuous-innovation opt-in
+- Set Ethernet metered (defers most updates)
+
+**v0.9.12 — Gaming (lagere prio)**
+- Disable Game DVR (background recording)
+- Disable Game Bar (Xbox overlay), Game Bar capture features
+- Disable Xbox services (XblAuthManager / XblGameSave / XboxNetApiSvc / XboxGipSvc)
+
+**v0.9.13 — Presets / Profiles**
+- `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"
+- Eén klik vinkt een set tweaks aan in de Tweaks tab (user kan nog deselecten voor Apply)
+- Inspiratie: WinUtil's preset-knoppen
+
+**v0.9.0 — Milestone release**
+- Versie-bump naar v0.9.0 → release op GitHub met exe-artifacts (na Inno installer in v1.0)
+
+### Tweaks parking-lot (uit research, niet ingepland — voor v1.x feature pack)
+
+Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse later oppakken:
+
+- **Network tweaks**: DNS swap (Cloudflare/Google/Quad9 per-adapter), Disable IPv6 entirely, Disable Teredo tunneling, Disable NetBIOS-over-TCP/IP, Disable LLMNR — niche, raakt netwerkstack
+- **Edge browser debloat** (17 keys onder `HKLM\SOFTWARE\Policies\Microsoft\Edge`): Startup Boost, Background mode, Hubs sidebar, Bing chat, Shopping, Wallet donation, Personalized ads, Address-bar Bing, Search suggestions, Auto-launch on logon
+- **Security caution-tier** (achter "I know what I'm doing"-checkbox): Set UAC to Never notify, Set UAC notify-without-dimming, Disable SmartScreen apps, Disable Defender real-time (vereist Tamper Protection off — Safe Mode)
+- **ExplorerPatcher integratie** (taskbar grouping labels = naast icon ook app-name) — vereist third-party tool install, scope-creep
+- **Remove Edge entirely** — destructive `setup.exe --force-uninstall` flag, kan apps breken
+- **Disable SMB1** — security, maar legacy network shares (NAS, oude printers) breken
+- **Disable Sticky Keys prompt + Toggle Keys + Filter Keys prompts** — accessibility quality-of-life, lage prio
+- **System clock to UTC** (Linux dual-boot users)
+- **Disable Razer Synapse auto-install on USB-connect**
+- **Disable downloaded-exe security warning** (zone 3 `1806=0`) — security implicatie
+- **Always show scrollbars in UWP/Settings apps** (`DynamicScrollbars=0`) — kleine UX-preference
+- **Disable folder auto-type discovery** (voorkomt dat folders ineens als "pictures" weergegeven worden)
+- **Auto-folder LaunchTo backup** — alternatieve setting voor User Files start-folder
 
 ### v0.10.0 — Settings + app self-update
 

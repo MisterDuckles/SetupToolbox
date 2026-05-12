@@ -43,6 +43,7 @@ public partial class App : Application
     public static MixedSourceUninstaller MixedUninstaller { get; } = new();
     public static LeftoverScannerService LeftoverScanner { get; } = new();
     public static DeepCleanService DeepClean { get; } = new();
+    public static TweakService Tweaks { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
