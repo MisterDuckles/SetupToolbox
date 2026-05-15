@@ -969,7 +969,7 @@ public sealed class TweakService
             id: "StartMenu.HideRecommendedSection",
             category: TweakCategory.StartMenu,
             name: "Hide Recommended section",
-            description: "Verbergt de 'Recommended' sectie onderaan Start. Policy-key — werkt op Win11 22H2+ ook op Home. Detectie pikt ook de HKLM-policy + de Win11 Home Settings-toggle Start_IrisRecommendations + MDM PolicyManager op.",
+            description: "Verbergt de 'Recommended' sectie onderaan Start. Policy-key — werkt op Win11 22H2+ ook op Home. Vereist UAC: Microsoft heeft de Policies-subtree op 24H2+ gehard zodat alleen Administrators kunnen schrijven. Detectie pikt ook HKLM-policy + Start_IrisRecommendations + MDM PolicyManager op.",
             useCase: "Strakker Start menu zonder MRU-files en cloud-tips.",
             restart: RestartRequirement.None,
             operations: new[]
@@ -981,6 +981,11 @@ public sealed class TweakService
                     Kind = RegistryValueKind.DWord,
                     EnabledValue = 1,
                     DisabledValue = 0,
+                    // Win11 24H2+ ACL: HKCU\Software\Policies\Microsoft\Windows\Explorer
+                    // is alleen writable door BUILTIN\Administrators. In-process
+                    // user-token heeft ReadKey → access denied. Forceer via
+                    // elevated reg.exe batch zodat admin-token de ACL passeert.
+                    RequiresElevation = true,
                     // Detectie voor alternatieve mechanismen:
                     //  - HKLM policy (gpedit Pro/Enterprise schrijft hier)
                     //  - MDM/Intune via PolicyManager
@@ -1047,7 +1052,7 @@ public sealed class TweakService
             id: "StartMenu.DisableBingSearch",
             category: TweakCategory.StartMenu,
             name: "Disable web search in Start",
-            description: "Schakelt Bing-resultaten en web-suggesties in het Start zoek-veld uit. Schrijft 3 keys (Explorer-policy + Bing toggle + Cortana consent) voor consistent gedrag op Win11 22H2 t/m 25H2 — verschillende builds honoreren verschillende keys.",
+            description: "Schakelt Bing-resultaten en web-suggesties in het Start zoek-veld uit. Schrijft 3 keys (Explorer-policy + Bing toggle + Cortana consent) voor consistent gedrag op Win11 22H2 t/m 25H2 — verschillende builds honoreren verschillende keys. Vereist UAC voor de Policies-key write (Win11 24H2+ ACL-hardening).",
             useCase: "Geen browser-opens meer als je per ongeluk een typo maakt in Start — lokale resultaten only.",
             restart: RestartRequirement.None,
             operations: new[]
@@ -1059,6 +1064,10 @@ public sealed class TweakService
                     Kind = RegistryValueKind.DWord,
                     EnabledValue = 1,
                     DisabledValue = 0,
+                    // Win11 24H2+ ACL: HKCU\Software\Policies\Microsoft\Windows\Explorer
+                    // is alleen writable door BUILTIN\Administrators. Forceer
+                    // elevated batch (zie HideRecommendedSection toelichting).
+                    RequiresElevation = true,
                     // Alternates: HKLM-policy van gpedit Pro/Ent + ConnectedSearchUseWeb
                     // (de "Don't search the web or display web results" policy)
                     // + Win11 25H2 nieuwere variant. Detection-only — we schrijven
@@ -1073,7 +1082,10 @@ public sealed class TweakService
                 // BingSearchEnabled=0 is een legacy key die op 22H2/23H2 wel
                 // honored wordt; op 24H2+ heeft Microsoft 'm grotendeels
                 // genegeerd, maar 't schrijven schaadt niet en pikt sub-builds
-                // op die 'm nog wel checken.
+                // op die 'm nog wel checken. AbsenceMeans bewust Disabled
+                // gelaten zodat een fresh Win11 install (alles absent) niet
+                // Partial toont — als user nog niets gedaan heeft moet de pill
+                // Disabled zijn ("nog niet getweakt"), niet Partial.
                 new TweakOperation
                 {
                     Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Search",
@@ -1083,8 +1095,9 @@ public sealed class TweakService
                     DisabledValue = 1
                 },
                 // CortanaConsent=0 was Win10-era companion. Niet meer
-                // dwingend nodig op moderne Win11, maar blokkeert eventuele
-                // resterende Cortana-search code paths.
+                // dwingend nodig op moderne Win11 (Cortana removed in 24H2+),
+                // maar blokkeert eventuele resterende Cortana-search code
+                // paths op legacy installs.
                 new TweakOperation
                 {
                     Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Search",
@@ -1142,6 +1155,131 @@ public sealed class TweakService
                 }
             }));
 
+        // ── ADS & BLOAT (OFGB-equivalent) ───────────────────────────
+        // Inspired by xM4ddy/OFGB ("Oh Frick Go Back") en ChrisTitusTech winutil.
+        // Alle HKCU — werkt op Home/Pro/Enterprise zonder UAC. HKLM CloudContent
+        // policies (Pro/Edu only, vereisen admin) zijn voor latere iteratie.
+        const string contentDeliveryManager = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
+        const string userProfileEngagement = @"HKCU\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement";
+        const string privacyPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Privacy";
+        const string advertisingInfo = @"HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo";
+
+        // Mega-bundle: 18 keys die samen de complete OFGB-set vormen. ÉÉN toggle
+        // schakelt alles. State-detect: Partial wanneer user al een subset
+        // handmatig had gezet — visueel zien ze dat in de status-pill.
+        list.Add(new Tweak(
+            id: "Ads.DisableAllSuggestedContent",
+            category: TweakCategory.AdsBloat,
+            name: "Disable all suggested & sponsored content (OFGB bundle)",
+            description: "Schakelt 18 HKCU registry-keys uit voor: lock-screen tips, Start menu suggesties, Settings-ads (3 keys), Welcome experience na updates, 'Finish setting up' popup, auto-install OEM/Store apps, Tailored Experiences, en notification suggestions. Geen UAC.",
+            useCase: "Schone Windows-ervaring zonder Microsoft marketing-touchpoints. Mirror van wat xM4ddy/OFGB tool doet maar als 1 toggle.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                // Lock screen
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "RotatingLockScreenOverlayEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-338387Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Start menu suggestions
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-338388Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Notification suggestions
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-338389Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Settings app ads (3 known IDs)
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-338393Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-353694Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-353696Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Welcome experience na updates
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SubscribedContent-310093Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Auto-install OEM / Store apps (Candy Crush etc.)
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SilentInstalledAppsEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "PreInstalledAppsEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "OemPreInstalledAppsEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "PreInstalledAppsEverEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Generic content delivery
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "FeatureManagementEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SoftLandingEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "ContentDeliveryAllowed", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                new TweakOperation { Path = contentDeliveryManager, ValueName = "SystemPaneSuggestionsEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // "Finish setting up your device" full-screen popup
+                new TweakOperation { Path = userProfileEngagement, ValueName = "ScoobeSystemSettingEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+                // Tailored experiences (personalized ads based on diagnostic data)
+                new TweakOperation { Path = privacyPath, ValueName = "TailoredExperiencesWithDiagnosticDataEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1 },
+            }));
+
+        list.Add(new Tweak(
+            id: "Ads.DisableAdvertisingId",
+            category: TweakCategory.AdsBloat,
+            name: "Disable advertising ID",
+            description: "Schakelt de per-user tracking-ID uit die apps gebruiken voor personalized ads.",
+            useCase: "Voorkomt dat apps je activity cross-referencen voor advertising profiling.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = advertisingInfo,
+                    ValueName = "Enabled",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Ads.HideFileExplorerSyncAds",
+            category: TweakCategory.AdsBloat,
+            name: "Hide File Explorer OneDrive ads",
+            description: "Verwijdert 'sync provider notifications' (OneDrive marketing-banners en upgrade-prompts) bovenin Explorer-vensters.",
+            useCase: "Cleaner File Explorer zonder cloud-marketing.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "ShowSyncProviderNotifications",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Ads.DisableScoobePrompt",
+            category: TweakCategory.AdsBloat,
+            name: "Disable 'Finish setting up your device' full-screen prompt",
+            description: "Schakelt de Scoobe-popup uit die je na major updates probeert te overtuigen om Microsoft Account, OneDrive, Edge, Bing etc. te activeren.",
+            useCase: "Geen full-screen marketing meer na elke Windows-upgrade.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = userProfileEngagement,
+                    ValueName = "ScoobeSystemSettingEnabled",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Ads.DisableTailoredExperiences",
+            category: TweakCategory.AdsBloat,
+            name: "Disable Tailored Experiences",
+            description: "Voorkomt dat Microsoft je diagnostic data gebruikt voor personalized tips, ads en aanbevelingen.",
+            useCase: "Diagnostic data wordt nog steeds verzonden (apart te disablen), maar wordt niet meer voor marketing-personalisatie ingezet.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = privacyPath,
+                    ValueName = "TailoredExperiencesWithDiagnosticDataEnabled",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
         return list;
     }
 }

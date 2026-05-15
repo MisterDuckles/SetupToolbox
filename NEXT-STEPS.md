@@ -10,6 +10,21 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.4 — Ads & Tracking + Win11 24H2+ Policies-ACL fix + Partial-state UX
+
+**5 Ads & Tracking tweaks** (category-rename van "Ads & Bloat" — "Bloat" was verwarrend i.c.m. de Debloat-tab; deze categorie gaat puur over marketing/tracking-toggles binnen Windows). Allemaal HKCU, geen UAC:
+- **Mega-bundle "Disable all suggested & sponsored content"** — 18 HKCU keys in 1 toggle: lock-screen tips, Start menu suggesties, Settings-ads (3 ID's), Welcome experience, "Finish setting up" popup, auto-install OEM/Store apps, generic content delivery, Tailored Experiences, notification suggestions. Mirror van xM4ddy/OFGB. Partial-state in pill als user al subset handmatig had
+- **Disable advertising ID** — `AdvertisingInfo\Enabled=0`
+- **Hide File Explorer OneDrive ads** — `ShowSyncProviderNotifications=0`
+- **Disable 'Finish setting up your device' popup** — `ScoobeSystemSettingEnabled=0`
+- **Disable Tailored Experiences** — `TailoredExperiencesWithDiagnosticDataEnabled=0`
+
+HKLM CloudContent policies geparkeerd voor latere iteratie (Pro/Edu only, vereisen UAC).
+
+**Win11 24H2+ Policies-ACL fix**: `HKCU\Software\Policies\Microsoft\Windows\Explorer` is op 24H2+ ACL-hardened — user-token heeft ReadKey only, alleen `BUILTIN\Administrators` heeft FullControl. In-process `Microsoft.Win32.Registry` writes faalden met "Access to the registry key is denied". Surfaced doordat user de DisableBingSearch tweak probeerde te applyen → de diagnostic ResultBar liet `Disable web search in Start → Explorer\DisableSearchBoxSuggestions: Access to the registry key '...\Explorer' is denied. (20 writes wel succesvol)` zien. Fix: `RequiresElevation=true` op de policy-ops (HideRecommendedSection + DisableSearchBoxSuggestions). Routet via bestaande elevated reg.exe batch — admin-token passeert de ACL via de Administrators-ACE. Eén UAC-prompt per Apply-batch.
+
+**IsThreeState CheckBox voor Partial-state UX**: pre-fix kon user een Partial-state tweak niet "completen" via de checkbox. Partial telde als IsToggleOn → checkbox visueel checked → klikken = unchecken = pending revert (niet apply) → Apply button bleef grayed-out. Nu: `IsThreeState=true` op CheckBox, Partial maps naar indeterminate vierkant. Klik op indeterminate → checked → pending=apply → Apply activeert. Cycle false→null→true→false; voor Disabled state vangt CheckBox_Toggled de null-intermediate op en springt door naar true zodat 1 klik = apply blijft (anders waren 2 klikken nodig om de cycle door te lopen).
+
 ### v0.9.3 — Start Menu category + collapsible categories + multi-path detection
 
 **Multi-path detection** opgelost (kern-architectuur fix, niet in initiële scope): single-path detection miste de actual state als user de tweak via een ander mechanisme had geactiveerd. Voorbeelden uit user-feedback: "Disable web search in Start" en "Hide Recommended section" stonden bij de user al aan via Settings/manual regedit maar onze UI toonde 'm als off (checkbox ongekruist) — gevolg: user dacht dat-ie 'm nog moest applyen terwijl 'ie al actief was.

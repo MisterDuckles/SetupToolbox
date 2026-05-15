@@ -265,7 +265,7 @@ public static class TweakCategoryExtensions
         TweakCategory.Explorer => "Explorer",
         TweakCategory.Taskbar => "Taskbar",
         TweakCategory.StartMenu => "Start Menu",
-        TweakCategory.AdsBloat => "Ads & Bloat",
+        TweakCategory.AdsBloat => "Ads & Tracking",
         TweakCategory.AiCopilot => "AI / Copilot",
         TweakCategory.Privacy => "Privacy",
         TweakCategory.UiTheme => "UI / Theme",

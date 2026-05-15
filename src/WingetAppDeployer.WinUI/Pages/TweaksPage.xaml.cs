@@ -203,15 +203,27 @@ public sealed partial class TweaksPage : Page
         }
         else
         {
+            // IsThreeState=true zodat Partial visueel als indeterminate (vierkant
+            // ipv vinkje) wordt getoond, en de cycle false→null→true beschikbaar
+            // is. Vanuit Partial klikt user direct naar true (= apply); vanuit
+            // Disabled vangt CheckBox_Toggled de null-intermediate op en springt
+            // door naar true zodat 1 klik = apply blijft.
             var checkbox = new CheckBox
             {
-                IsChecked = tweak.IsToggleOn,
+                IsThreeState = true,
+                IsChecked = tweak.State switch
+                {
+                    TweakState.Enabled => true,
+                    TweakState.Partial => (bool?)null,
+                    _ => false
+                },
                 VerticalAlignment = VerticalAlignment.Center,
                 MinWidth = 0,
                 Content = string.Empty
             };
             checkbox.Checked += CheckBox_Toggled;
             checkbox.Unchecked += CheckBox_Toggled;
+            checkbox.Indeterminate += CheckBox_Toggled;
             _checkboxTweaks[checkbox] = tweak;
             rightControl = checkbox;
         }
@@ -262,13 +274,51 @@ public sealed partial class TweaksPage : Page
     {
         if (sender is not CheckBox cb) return;
         if (!_checkboxTweaks.TryGetValue(cb, out var tweak)) return;
-        var desired = cb.IsChecked == true;
-        // Vergelijk met current system-state: alleen pending als anders.
-        // tweak.IsToggleOn = (State == Enabled || Partial). Bij Partial-state
-        // de checkbox staat visueel checked, dus desired==true matcht initial
-        // → niet pending; user moet bewust uitvinken om in pending te komen.
-        if (desired == tweak.IsToggleOn) _pendingChanges.Remove(tweak);
-        else _pendingChanges[tweak] = desired;
+
+        var newChecked = cb.IsChecked;  // bool? — null = indeterminate
+        // "Natural" cb-waarde voor de huidige tweak state — wat de checkbox toont
+        // als user nog niets gewijzigd heeft.
+        bool? natural = tweak.State switch
+        {
+            TweakState.Enabled => true,
+            TweakState.Partial => (bool?)null,
+            _ => false  // Disabled of Unknown
+        };
+
+        // Skip de null-intermediate van de IsThreeState cycle wanneer user
+        // vanaf Disabled (false) één klik doet — default WinUI cycle gaat dan
+        // false→null, maar user wil naar true (apply). Forceer door naar true.
+        // Voor Enabled (true) is de cycle true→false→null, dus null bereikt
+        // user pas na 2 klikken — daar is null een legit "no change" intent.
+        if (newChecked == null && natural == false)
+        {
+            cb.IsChecked = true;  // triggert Checked event → re-entry hier
+            return;
+        }
+
+        if (newChecked == natural)
+        {
+            // User terug op natural state → niets pending.
+            _pendingChanges.Remove(tweak);
+        }
+        else if (newChecked == true)
+        {
+            // Apply intent: alle ops naar EnabledValue. Voor Partial state
+            // betekent dit "complete it tot fully Active".
+            _pendingChanges[tweak] = true;
+        }
+        else if (newChecked == false)
+        {
+            // Revert intent: alle ops naar DisabledValue.
+            _pendingChanges[tweak] = false;
+        }
+        else
+        {
+            // newChecked == null en natural != null (= Enabled). User klikte
+            // 2x van Enabled, zit nu op indeterminate → "geen change" intent.
+            _pendingChanges.Remove(tweak);
+        }
+
         UpdateApplyButton();
     }
 
