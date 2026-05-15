@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -13,20 +12,28 @@ using WingetAppDeployer_WinUI.Services;
 
 namespace WingetAppDeployer_WinUI.Pages;
 
-// Tweaks tab — live state-detection + apply/revert per Windows tweak. Tweaks
-// zijn geregistreerd in TweakService.BuildAll() (data-driven) en gerenderd hier
-// als per-categorie cards. Per tweak een ToggleSwitch met:
-//   - State binding op Tweak.IsToggleOn
-//   - Visual indicators voor restart-requirement + admin/UAC
-//   - Apply/revert via TweakService bij toggle-change
+// Tweaks tab — checkbox-based pending-changes flow met Apply-batch knop.
+// User vinkt aan/uit, app schrijft niets tot 'Apply' geklikt wordt. Voorkomt
+// race-condities, rapid-fire writes, en geeft user predictable batch-effect
+// (1x explorer-restart aan einde i.p.v. per-toggle restart-overhead).
 //
-// Geen "Apply all" knop hier — elke toggle is immediate (zelfde patroon als
-// Windows Settings zelf). User ziet meteen het resultaat in de StateLabel.
+// Flow:
+//   1. OnNavigatedTo → DetectStatesAsync vult Tweak.State + SelectedChoiceIndex
+//   2. BuildCategoryCards rendert CheckBox per toggle-tweak, ComboBox per choice-tweak
+//   3. User changes → _pendingChanges tracker krijgt entry met desired state
+//   4. ApplyButton wordt enabled met count "Apply (N)"
+//   5. User klikt Apply → ApplyAllAsync schrijft alle changes + side-effects + 1x explorer-restart
+//   6. State re-detect, UI rebuild, pending cleared
 public sealed partial class TweaksPage : Page
 {
-    // Map elke ToggleSwitch → Tweak zodat we bij Toggled event weten welke
-    // tweak en wat te doen. Niet via x:Bind want we genereren cards in code.
-    private readonly Dictionary<ToggleSwitch, Tweak> _switchTweaks = new();
+    // Map elke CheckBox/ComboBox → Tweak voor reverse-lookup bij events.
+    private readonly Dictionary<CheckBox, Tweak> _checkboxTweaks = new();
+    private readonly Dictionary<ComboBox, Tweak> _comboTweaks = new();
+
+    // Pending changes — value is bool (toggle desired state) of int (choice index).
+    // Een tweak zit alleen in deze dict als de user iets gewijzigd heeft t.o.v.
+    // de huidige systeem-state. Bij terug-naar-original → uit dict halen.
+    private readonly Dictionary<Tweak, object> _pendingChanges = new();
 
     public TweaksPage()
     {
@@ -36,10 +43,12 @@ public sealed partial class TweaksPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        await LoadStateAndRender("Reading Windows state...");
+    }
 
-        // Initial state-detection — eerst overlay tonen, dan registry walken,
-        // dan cards renderen met live state. Async zodat de UI-thread niet
-        // blokkeert op de registry IO.
+    private async Task LoadStateAndRender(string overlayText)
+    {
+        LoadingOverlayText.Text = overlayText;
         LoadingOverlay.Visibility = Visibility.Visible;
         try
         {
@@ -48,23 +57,22 @@ public sealed partial class TweaksPage : Page
         catch
         {
             // State-read mislukt globaal — cards komen met "Unknown" state.
-            // Bewust geen blocking error.
         }
+        _pendingChanges.Clear();
         BuildCategoryCards();
+        UpdateApplyButton();
         LoadingOverlay.Visibility = Visibility.Collapsed;
     }
 
-    private void ScrollView_ScrollAnimationStarting(ScrollView sender, Microsoft.UI.Xaml.Controls.ScrollingScrollAnimationStartingEventArgs args) =>
+    private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
         ScrollViewSpeedup.OnStarting(sender, args);
 
     private void BuildCategoryCards()
     {
         CategoriesContainer.Children.Clear();
-        _switchTweaks.Clear();
+        _checkboxTweaks.Clear();
+        _comboTweaks.Clear();
 
-        // Group tweaks per category, alleen categorieën met geregistreerde
-        // items worden getoond — v0.9.1 heeft alleen Explorer, latere versies
-        // vullen de rest aan zonder dat de page hier iets aan hoeft te doen.
         var grouped = App.Tweaks.All
             .GroupBy(t => t.Category)
             .OrderBy(g => (int)g.Key);
@@ -78,7 +86,6 @@ public sealed partial class TweaksPage : Page
                 Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
                 Margin = new Thickness(0, 0, 0, 4)
             });
-
             foreach (var tweak in group.OrderBy(t => t.Name))
             {
                 section.Children.Add(BuildTweakCard(tweak));
@@ -89,9 +96,6 @@ public sealed partial class TweaksPage : Page
 
     private FrameworkElement BuildTweakCard(Tweak tweak)
     {
-        // Card-layout: links titel + omschrijving + use-case, rechts de glyphs
-        // (admin/restart) en de ToggleSwitch. Layout-mirror van DeepCleanDialog
-        // BuildItemCard zodat de visual taal consistent is over de app.
         var border = new Border
         {
             Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
@@ -115,8 +119,6 @@ public sealed partial class TweaksPage : Page
             Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
             VerticalAlignment = VerticalAlignment.Center
         });
-        // Status-pill: Active / Default / Partial / Unknown — zodat user de
-        // huidige state in een glance ziet, niet alleen via de toggle-stand.
         titleRow.Children.Add(BuildStatePill(tweak));
         content.Children.Add(titleRow);
         content.Children.Add(new TextBlock
@@ -140,8 +142,7 @@ public sealed partial class TweaksPage : Page
         Grid.SetColumn(content, 0);
         grid.Children.Add(content);
 
-        // Alleen admin/UAC indicator — restart-icoon weggehaald in v0.9.1
-        // (de info komt via de InfoBar na toggle, dat is contextueel duidelijker).
+        // Admin/UAC lock-icoon (alleen bij HKLM-tweaks).
         var glyphStack = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -154,22 +155,37 @@ public sealed partial class TweaksPage : Page
         Grid.SetColumn(glyphStack, 1);
         grid.Children.Add(glyphStack);
 
-        // Toggle-switch — IsOn reflecteert de live registry-state. Toggle event
-        // triggert Apply/Revert via TweakService.
-        var toggle = new ToggleSwitch
+        // Choice-tweak → ComboBox; toggle-tweak → CheckBox.
+        FrameworkElement rightControl;
+        if (tweak.IsChoice && tweak.Choices != null)
         {
-            IsOn = tweak.IsToggleOn,
-            OffContent = string.Empty,
-            OnContent = string.Empty,
-            VerticalAlignment = VerticalAlignment.Center,
-            MinWidth = 0
-        };
-        // Toggled fires bij user-input. Sla SetIsOn vanuit code-paden over door
-        // tag-check (zie ToggleSwitch_Toggled).
-        toggle.Toggled += ToggleSwitch_Toggled;
-        _switchTweaks[toggle] = tweak;
-        Grid.SetColumn(toggle, 2);
-        grid.Children.Add(toggle);
+            var combo = new ComboBox
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 180,
+                ItemsSource = tweak.Choices.Select(c => c.Label).ToList(),
+                SelectedIndex = tweak.SelectedChoiceIndex
+            };
+            combo.SelectionChanged += ComboBox_SelectionChanged;
+            _comboTweaks[combo] = tweak;
+            rightControl = combo;
+        }
+        else
+        {
+            var checkbox = new CheckBox
+            {
+                IsChecked = tweak.IsToggleOn,
+                VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 0,
+                Content = string.Empty
+            };
+            checkbox.Checked += CheckBox_Toggled;
+            checkbox.Unchecked += CheckBox_Toggled;
+            _checkboxTweaks[checkbox] = tweak;
+            rightControl = checkbox;
+        }
+        Grid.SetColumn(rightControl, 2);
+        grid.Children.Add(rightControl);
 
         border.Child = grid;
         return border;
@@ -190,8 +206,6 @@ public sealed partial class TweaksPage : Page
 
     private static FrameworkElement BuildStatePill(Tweak tweak)
     {
-        // Kleur op basis van state: groen=Enabled, neutraal=Disabled,
-        // geel=Partial, grijs=Unknown.
         var bg = tweak.State switch
         {
             TweakState.Enabled => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorSuccessBackgroundBrush"],
@@ -213,89 +227,164 @@ public sealed partial class TweaksPage : Page
         };
     }
 
-    private async void ToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    private void CheckBox_Toggled(object sender, RoutedEventArgs e)
     {
-        if (sender is not ToggleSwitch toggle) return;
-        if (!_switchTweaks.TryGetValue(toggle, out var tweak)) return;
+        if (sender is not CheckBox cb) return;
+        if (!_checkboxTweaks.TryGetValue(cb, out var tweak)) return;
+        var desired = cb.IsChecked == true;
+        // Vergelijk met current system-state: alleen pending als anders.
+        // tweak.IsToggleOn = (State == Enabled || Partial). Bij Partial-state
+        // de checkbox staat visueel checked, dus desired==true matcht initial
+        // → niet pending; user moet bewust uitvinken om in pending te komen.
+        if (desired == tweak.IsToggleOn) _pendingChanges.Remove(tweak);
+        else _pendingChanges[tweak] = desired;
+        UpdateApplyButton();
+    }
 
-        // Tag-flag voorkomt loop: bij re-render zetten we IsOn programmatisch
-        // op de nieuwe state. We willen dan geen 2e Apply triggeren.
-        if (toggle.Tag is bool isProgrammatic && isProgrammatic)
-        {
-            toggle.Tag = false;
-            return;
-        }
+    private void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox combo) return;
+        if (!_comboTweaks.TryGetValue(combo, out var tweak)) return;
+        var idx = combo.SelectedIndex;
+        if (idx < 0 || tweak.Choices == null || idx >= tweak.Choices.Count) return;
+        // Pending alleen als andere index dan huidige detected state.
+        if (idx == tweak.SelectedChoiceIndex) _pendingChanges.Remove(tweak);
+        else _pendingChanges[tweak] = idx;
+        UpdateApplyButton();
+    }
 
-        var apply = toggle.IsOn;
-        toggle.IsEnabled = false;
+    private void UpdateApplyButton()
+    {
+        var count = _pendingChanges.Count;
+        ApplyButton.IsEnabled = count > 0;
+        ApplyButtonText.Text = count > 0 ? $"Apply ({count})" : "Apply";
+        DiscardButton.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void ApplyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingChanges.Count == 0) return;
+
+        var snapshot = _pendingChanges.ToList();
+        ApplyButton.IsEnabled = false;
+        DiscardButton.IsEnabled = false;
+        RestartExplorerButton.IsEnabled = false;
+        LoadingOverlayText.Text = $"Applying {snapshot.Count} change{(snapshot.Count == 1 ? "" : "s")}...";
+        LoadingOverlay.Visibility = Visibility.Visible;
+
+        var totalSuccess = 0;
+        var totalFailed = 0;
+        var cancelled = false;
+        var anyExplorerRestartTweak = false;
+
         try
         {
-            var result = await App.Tweaks.ApplyAsync(new[] { tweak }, apply);
-            ShowResult(tweak, apply, result);
-
-            // Re-bind toggle naar de nieuwe state (kan partial blijven als één
-            // van de ops faalde, of unchanged blijven bij UAC-denial).
-            toggle.Tag = true;
-            toggle.IsOn = tweak.IsToggleOn;
-
-            // Voor ExplorerRestart-tweaks: bied user direct optie aan om
-            // Explorer te restarten voor zichtbaarheid. Niet auto-do — sommige
-            // users hebben unsaved Explorer-state (open dialogs).
-            if (result.SuccessCount > 0 && tweak.Restart == RestartRequirement.ExplorerRestart)
+            foreach (var (tweak, desiredState) in snapshot)
             {
-                _ = PromptExplorerRestart();
+                TweakApplyResult result;
+                if (tweak.IsChoice && desiredState is int idx)
+                {
+                    result = await App.Tweaks.ApplyChoiceAsync(tweak, idx);
+                }
+                else if (desiredState is bool apply)
+                {
+                    result = await App.Tweaks.ApplyAsync(new[] { tweak }, apply);
+                }
+                else
+                {
+                    continue;
+                }
+                totalSuccess += result.SuccessCount;
+                totalFailed += result.FailedCount;
+                if (result.Cancelled) cancelled = true;
+                if (tweak.Restart == RestartRequirement.ExplorerRestart) anyExplorerRestartTweak = true;
             }
+
+            // Eén explorer-restart aan het einde voor shell-cached tweaks
+            // (TaskbarAl / NeverCombine / ShowSeconds / ClassicContextMenu).
+            // Andere apply-side-effects (WM_SETTINGCHANGE broadcast +
+            // SearchHost-restart voor taskbar-rebind) zijn al per-tweak
+            // gedaan door ApplyAsync / ApplyChoiceAsync.
+            if (anyExplorerRestartTweak)
+            {
+                // Wacht even zodat de SearchHost-respawn settled — anders kunnen
+                // de twee restarts elkaars timing verstoren.
+                await Task.Delay(250);
+                ShellRefresh.RestartExplorerSilent();
+            }
+
+            // Re-detect alle states zodat de nieuwe waardes correct gerender'd worden.
+            await App.Tweaks.DetectStatesAsync();
+            _pendingChanges.Clear();
+            BuildCategoryCards();
+            UpdateApplyButton();
+
+            // Resultaat-feedback in InfoBar.
+            if (cancelled)
+            {
+                ResultBar.Severity = InfoBarSeverity.Warning;
+                ResultBar.Title = "Apply cancelled";
+                ResultBar.Message = "UAC prompt was declined — partial changes may have been written.";
+            }
+            else if (totalFailed == 0)
+            {
+                ResultBar.Severity = InfoBarSeverity.Success;
+                ResultBar.Title = $"Applied {snapshot.Count} change{(snapshot.Count == 1 ? "" : "s")}";
+                ResultBar.Message = anyExplorerRestartTweak
+                    ? "Explorer herstart — wacht ~1s tot de taskbar terug is."
+                    : "Done.";
+            }
+            else
+            {
+                ResultBar.Severity = InfoBarSeverity.Error;
+                ResultBar.Title = $"{totalFailed} change(s) failed";
+                ResultBar.Message = $"{totalSuccess} succeeded. Check tweak state per item.";
+            }
+            ResultBar.IsOpen = true;
         }
         finally
         {
-            toggle.IsEnabled = true;
+            ApplyButton.IsEnabled = _pendingChanges.Count > 0;
+            DiscardButton.IsEnabled = true;
+            RestartExplorerButton.IsEnabled = true;
+            LoadingOverlay.Visibility = Visibility.Collapsed;
         }
     }
 
-    private void ShowResult(Tweak tweak, bool apply, TweakApplyResult result)
+    private async void DiscardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (result.Cancelled)
-        {
-            ResultBar.Severity = InfoBarSeverity.Warning;
-            ResultBar.Title = $"{tweak.Name}: cancelled";
-            ResultBar.Message = "UAC prompt was declined — no changes were made.";
-        }
-        else if (result.FailedCount == 0)
-        {
-            ResultBar.Severity = InfoBarSeverity.Success;
-            ResultBar.Title = apply ? $"{tweak.Name}: applied" : $"{tweak.Name}: reverted";
-            ResultBar.Message = tweak.Restart switch
-            {
-                RestartRequirement.ExplorerRestart => "Restart Explorer to see the effect.",
-                RestartRequirement.SignOut => "Sign out and back in to see the effect.",
-                RestartRequirement.Reboot => "Reboot required for the change to take effect.",
-                _ => "Change is active."
-            };
-        }
-        else
-        {
-            ResultBar.Severity = InfoBarSeverity.Error;
-            ResultBar.Title = $"{tweak.Name}: partially applied";
-            ResultBar.Message = $"{result.FailedCount} of {result.SuccessCount + result.FailedCount} ops failed. Check tweak state.";
-        }
-        ResultBar.IsOpen = true;
+        // Reset alle checkboxes/comboboxes terug naar de detected systeem-state.
+        // Simplest implementation: re-detect + rebuild (zelfde als initial load).
+        await LoadStateAndRender("Discarding pending changes...");
     }
 
-    private async Task PromptExplorerRestart()
+    private async void RestartExplorerButton_Click(object sender, RoutedEventArgs e)
     {
+        // Manual escape voor zeldzame gevallen waar Apply niet voldoende was.
         var dialog = new ContentDialog
         {
             Title = "Restart Explorer?",
-            Content = "Restart Windows Explorer nu om de tweak direct zichtbaar te maken? Open Explorer-vensters worden gesloten (Documenten / Downloads etc. blijven veilig op disk).",
+            Content = "Sluit alle open Explorer-vensters en herstart de shell zodat tweaks die geen live-update doen direct zichtbaar worden. Documenten / Downloads etc. blijven veilig op disk.",
             PrimaryButtonText = "Restart Explorer",
-            CloseButtonText = "Later",
+            CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot
         };
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            await TweakService.RestartExplorerAsync();
+            RestartExplorerButton.IsEnabled = false;
+            try
+            {
+                ShellRefresh.RestartExplorerSilent();
+                // State re-detect na restart om eventuele veranderingen op te pikken.
+                await Task.Delay(1500);
+                await LoadStateAndRender("Re-reading state...");
+            }
+            finally
+            {
+                RestartExplorerButton.IsEnabled = true;
+            }
         }
     }
 }

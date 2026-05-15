@@ -10,6 +10,54 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.2 — Taskbar category + Search ComboBox + checkbox-batch UX
+
+**UX herontwerp na user-feedback** (per-toggle apply gaf race-condities + breekbaarheid op shell-cached tweaks zoals TaskbarAl). Nieuwe flow:
+- **CheckBoxes ipv ToggleSwitches** voor toggle-tweaks; ComboBoxes blijven voor multi-choice (Search-mode)
+- **"Apply (N)" knop top-right** — pending changes worden gestaged, niets schrijft tot user klikt. Disabled wanneer N=0, accent-styled met count erop
+- **"Discard" knop top-right** (alleen zichtbaar als N>0) — reset alle pending changes terug naar systeem-state via re-detect
+- **Apply All flow**: schrijft alle changes sequentieel (Choice via ApplyChoiceAsync, Toggle via ApplyAsync). Per tweak doet WM_SETTINGCHANGE broadcast + SearchHost-restart (voor taskbar). Aan einde één enkele `RestartExplorerSilent()` als minstens één pending tweak `Restart=ExplorerRestart` had. Daarna re-detect + cards rebuild + pending clear
+- **`Process.Start("explorer.exe")` weggehaald uit `RestartExplorerSilent`** — opende een File Explorer venster (Documenten / Home). Windows Shell Watchdog respawnt explorer.exe binnen ~1s zonder window. Geen Process.Start fallback meer — als watchdog ooit faalt, user opent Task Manager → Run new task → explorer
+- **Manual "Restart Explorer" knop** blijft als laatste escape
+
+**Taskbar tweaks (7)** in TweakService.BuildAll():
+- **Hide buttons**: Search box (multi-choice met 4 modes), Task View, Widgets, Copilot
+- **Behavior**: End task in right-click menu (`TaskbarEndTask` onder `TaskbarDeveloperSettings` subkey), Never combine taskbar buttons (`TaskbarGlomLevel=2` + multi-monitor companion `MMTaskbarGlomLevel=2`)
+- **Display**: Show seconds in tray clock (`ShowSecondsInSystemClock=1`)
+- Verwijderd: Chat/MeetNow (deprecated in 23H2+), Battery % (`EstimatedTimeText` is Win10-only)
+
+**Search-tweak als multi-choice ComboBox** (mirror Windows Settings > Personalization > Taskbar):
+- 4 modes: Hide / Search icon only / Search box / Search icon and label
+- Schrijft 4 keys per mode (legacy `\Search\SearchboxTaskbarMode` + `Cache` + nieuwe `\Advanced\ShowSearchBox` + `BingSearchEnabled`) zodat zowel oude als nieuwe Win11 taskbar code 't pickt
+- Auto-restart SearchHost.exe + StartMenuExperienceHost.exe na de write (functioneel equivalent met wat Settings intern via private `TaskbarSettingsHelper` WinRT API doet — die API is niet redistributable, dus process-restart is de pragmatische aanpak die ook winutil / Winaero gebruiken)
+
+**Multi-choice support in het model**:
+- Nieuwe `TweakChoice` + `TweakChoiceValue` records — een tweak heeft óf `Operations` (toggle) óf `Choices` (ComboBox), nooit beide
+- Tweak constructor variant voor choices, `IsChoice` discriminator, `SelectedChoiceIndex` (INPC) voor live binding
+- `TweakService.ApplyChoiceAsync(tweak, choiceIndex)` parallel met bestaande `ApplyAsync(tweaks, apply)` — zelfde local/elevated split + broadcast
+- State-detect zoekt eerste choice waar alle Values matchen — bij geen match SelectedChoiceIndex=-1 (custom state)
+- TweaksPage rendert automatisch ComboBox voor `tweak.IsChoice` items, CheckBox voor de rest
+
+**Lag fix (kritiek)**: WM_SETTINGCHANGE broadcast deed 5× synchroon `SendMessageTimeout` met 100ms = tot 500ms UI-thread blokkade per toggle. Nu fire-and-forget via `Task.Run(ShellRefresh.NotifySettingsChanged)` na registry-write + state-redetect
+
+**ShellRefresh helper** (per Windows best-practice research):
+- `null` lParam toegevoegd vóór de specifieke categorieën — legacy listeners filteren alleen op NULL
+- `ShellState` lParam toegevoegd — voor hidden files / show extensions tweaks die nu correct live-refreshen
+- `WindowsSearchSettingChanged` + `SearchSettingsChanged` lParams (nieuw in 24H2/25H2)
+- `SMTO_NOTIMEOUTIFNOTHUNG` flag erbij — well-behaved windows krijgen onbeperkte tijd, alleen hung windows worden geskipped
+- Nieuwe `NotifyAssociationsChanged()` helper (SHChangeNotify SHCNE_ASSOCCHANGED) — automatisch aangeroepen na tweaks die `\Classes\` paden raken (Classic context menu CLSID)
+- `RestartSearchHost()` helper — kill SearchHost.exe + StartMenuExperienceHost.exe voor search + taskbar-rebind
+- `RestartExplorerSilent()` helper — alleen kill, geen Process.Start fallback (anders File Explorer venster opent)
+
+**Per-tweak RestartRequirement metadata** (None / ExplorerRestart / SignOut / Reboot) wordt gebruikt om te bepalen of de Apply-batch een single explorer-restart triggert aan het einde (zodat alleen wanneer een shell-cached tweak in de pending zit, de flicker plaatsvindt)
+
+**Research bronnen** (mei 2026):
+- Win11 22H2+ search-UI gebruikt nieuwe `\Advanced\ShowSearchBox` naast legacy `\Search\Mode` — beide schrijven nodig
+- `SearchboxTaskbarModeCache` companion key — Windows valideert Mode tegen Cache bij login en reset Mode als ze niet matchen
+- `BingSearchEnabled` als safety net — op 25H2 wordt SearchHost suspended als Bing uitstaat
+- TaskbarAl + andere shell-cached tweaks vereisen op 25H2 een explorer-restart (Settings.exe doet 't via private WinRT API niet beschikbaar voor third-party); SearchHost-restart triggert Start menu re-read maar NIET taskbar re-render
+- Microsoft heeft Copilot in 25H2 omgebouwd naar pinned Appx app — `ShowCopilotButton` is daar no-op
+
 ### v0.9.1 — Tweaks tab foundation + Explorer category
 
 - **Architectuur**: nieuwe `Models/Tweak.cs` met `TweakCategory` enum (12 buckets — Explorer / Taskbar / StartMenu / AdsBloat / AiCopilot / Privacy / UiTheme / Performance / ContextMenu / NotificationsLock / Updates / Gaming), `TweakOperation` record met `EnabledValue` + `DisabledValue` voor full reversibility, `RestartRequirement` enum (None/ExplorerRestart/SignOut/Reboot), `TweakState` enum (Disabled/Enabled/Partial/Unknown), `Tweak` class met INPC voor state-binding. Multi-op support: één tweak kan meerdere registry-ops bundelen (bv OFGB later met 22 keys). Special `DeleteKeyOnAbsent` flag voor tweaks die een hele key-tree aanmaken bij apply (classic context menu CLSID-subkey)
@@ -361,10 +409,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.1 — Foundation + Explorer (vertical slice)**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.2 — Taskbar**
-- Hide buttons: search box, task view, widgets, Copilot, Chat/MeetNow
-- End-task in right-click menu, never combine taskbar buttons
-- Show seconds in tray clock, show battery percentage
+~~**v0.9.2 — Taskbar**~~ — gedaan (zie Voltooide versies)
 
 **v0.9.3 — Start Menu**
 - Layout: More Pins, hide Recommended section, hide MRU apps/files
@@ -444,6 +489,172 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 **v0.9.0 — Milestone release**
 - Versie-bump naar v0.9.0 → release op GitHub met exe-artifacts (na Inno installer in v1.0)
+
+### Tweaks parking-lot extension — Michael-Matta UWT lijst (mei 2026)
+
+Bron: [Michael-Matta1/windows-utilities-tweaks](https://github.com/Michael-Matta1/windows-utilities-tweaks) — open-source Win-tweaker met ~200 toggles. Hieronder gecategoriseerd naar **onze** category-buckets, met dubbelen tegenover onze huidige roadmap weggefilterd. **Verifieer per item voor implementatie** — UWT is een legacy WinUI tool, sommige tweaks zijn Win7/8/10-era en mogelijk deprecated op Win11 24H2/25H2.
+
+**Caveat**: items die je security verlagen (Disable Defender / Disable UAC / Disable Registry Editor / Disable Task Manager) zijn IT-admin lockdown tooling — out-of-scope voor onze user-quality-of-life focus. Niet implementeren tenzij user expliciet vraagt.
+
+**Explorer** (boven onze huidige 5 tweaks):
+- Show Windows version on Desktop (paint.exe-trick of DWM)
+- Tweak Drive Letters / Remove duplicate drive letter entry
+- Remove shortcut arrows from icons
+- Remove "-Shortcut" suffix for new shortcuts
+- Enable check boxes to select items
+- Enable auto-complete + auto-suggest in address bar
+- Show User Folder in nav pane
+- Choose which folder File Explorer opens on (Home / This PC / custom) — al gepland v0.9.1 als LaunchTo, mogelijk uitbreiden met custom path
+- Disable Aero Peek / Aero Shake / Aero Snap
+- Show status bar in File Explorer
+- Launch folders in a separate process
+- Disable info tips for shortcuts
+- Disable full row select items
+- Hide preview pane (default off?)
+- Always show icons never thumbnails / Display file icons on thumbnails
+- Hide protected OS files / Show drive letters
+- Show encrypted/compressed NTFS files in color
+- Use sharing wizard
+- Disable Windows startup sound
+- Increase System Restore Points frequency
+- Enable automatic registry backups
+- Don't show low-disk-space warnings
+
+**Taskbar** (boven onze huidige 9 tweaks):
+- Use small taskbar icons (Win10-style — werkt mogelijk niet meer op 11)
+- Hide inactive icons from notification area
+- Remove individual systray icons: volume / network / action center / clock / battery / notification area
+- Customization of taskbar buttons grouping (overlap met onze TaskbarGlomLevel)
+- Customization of taskbar thumbnail size + delay
+- Make taskbar button switch to last active window
+- Show Windows Defender icon in tray
+- Customization of taskbar content alignment (= onze TaskbarAl)
+- Taskbar size customization
+
+**Start Menu** (boven onze v0.9.3 plan):
+- Lock start screen tiles so they can't be rearranged
+- Disable taskbar + start jumplists (privacy: app-history wegfilteren)
+- Increase jump list items displayed
+- Enable accent color for Start menu + taskbar
+- Enable / disable Stickers feature
+- Disable Bing web search in Start (al gepland)
+
+**Ads & Bloat** (boven onze v0.9.4 OFGB):
+- Remove Windows Spotlight "Learn more" desktop icon
+- Disable "Look for an app in the store" prompt
+- Disable "You have new apps that can open this type of file" notification
+- Disable Cortana entirely (al gepland v0.9.3)
+- Disable handwriting data sharing
+- Disable Wi-Fi Sense
+
+**AI / Copilot** (boven onze v0.9.5):
+- (UWT heeft hier niet veel — onze v0.9.5 plan is al uitgebreider)
+
+**Privacy** (boven onze v0.9.6):
+- Disable application telemetry
+- Disable inventory collector
+- Disable steps recorder
+- Disable biometrics
+- Disable password reveal button
+- Disable Windows update sharing (P2P upload)
+- Disable Windows feedback requests (al deels in onze plan)
+- Disable synchronization of settings (cross-device sync uit)
+- Disable App access to: location / calendar / messages / microphone / camera / user account info
+
+**UI / Theme** (boven onze v0.9.7):
+- Disable login screen blur (al gepland)
+- Disable lock screen / disable changing lock screen image
+- Enable + customize lock screen slideshow
+- Enable / disable first sign-in animation
+- Toggle apps / system light/dark theme (al gepland)
+- Increased taskbar transparency
+- Change inactive title bar color
+- Customize blinking cursor width + time
+- Customize scroll bar width
+- Disable transparency effects globally (al gepland)
+- Disable / enable transparency selectively
+- Show / hide power button options (Lock / Sleep / Hibernate / Sign Out)
+- Enable verbose logon messages (al gepland)
+- Customize logon message (custom-text vóór login screen)
+
+**Performance** (boven onze v0.9.8):
+- Waiting times tweakable: kill apps timeout / end services / non-responsive apps
+- Auto-end non-responsive programs
+- Restart shell automatically after error
+- Always unload DLLs to free memory
+- Disable automatic folder-view discovery (al gepland)
+- Turn off Search Indexer
+- Increase IRQ8 priority
+- Disable smooth scrolling
+- Disable Windows Time service
+- Disable Tablet Input service
+- Disable Windows Security Center service
+- Disable Prefetch / Superfetch service (gevaarlijk op SSD/HDD verschil)
+- Disable Printer Spooler (security tweak ook)
+- Disable Edge/tab preloading
+- Disable all background apps (al gepland)
+- Delete pagefile at shutdown
+
+**Context Menu** (boven onze v0.9.9):
+- Remove "Open in Windows Terminal" from Desktop context (counterintuitive — meeste users willen 'm juist)
+- Add over 15 modern UWP apps to desktop context (Edge / OneNote / Store / Music / Mail)
+- Add Take ownership / Copy to / Move to / Open with (al gepland)
+- Remove "Cast to Device" / "Edit with Paint 3D" / "Scan with Windows Defender" / "3D Print with 3D Builder"
+- Toggle Quick Access menu items
+- Add "Phone" / "Gaming Settings" / "Character Map" / "Control Panel" / "Windows Update" to context menu
+- Add Windows Defender quick-actions (Open / Quick Scan / Full Scan / Settings / Update) to context
+
+**Notifications & Lock Screen** (boven onze v0.9.10):
+- Disable toast notifications globally (al gepland)
+- Set notifications display time (Win-specific timeout per toast)
+- Disable Action Center quick-action buttons
+- Enable / disable Edge "Do you want to close all tabs?" prompt
+
+**Updates** (boven onze v0.9.11):
+- Disable Windows Update service entirely (al gepland deels)
+
+**Browsers / Edge**:
+- Change Edge default download location
+- Adjust tab preview show/hide delay
+- Disable Edge tab preview entirely
+- Enable Edge "close all tabs?" prompt (= een non-default warning toggle)
+
+**Out-of-scope (security-lockdown — IT-admin tools, niet user QoL)**:
+- Disable Registry Editor / Control Panel / Task Manager / CMD / WinKey shortcuts
+- Disable folder options menu / display personalization
+- Disable shutdown / log off ability
+- Disable encrypting file system
+- Disable Defender / Windows Store / Mobility Center / Media Center / Update Service
+- Disable system restore / MMC snap-ins
+- Disable color & appearance settings
+- Disable internet communication
+- Restrict access to taskbar + start menu properties
+- Disable explorer's context menu / taskbar context menu
+- Disable changing wallpaper
+- Disable user tracking
+- Hide entire network / prevent network auto-discovery / disable admin shares
+- Disable NTLM 2 / set global network offline
+- Disable Anonymous Connections access
+- Disable Print Spooler (security-relevant)
+
+**Out-of-scope (UWT-app-specific tweaks die niet ons doel zijn)**:
+- Option to add UWT to startup / Integrate UWT with desktop context menu
+- Export / import tweaks (we hebben SelectionImportExportService voor app-selecties; tweak-import voor v0.9.13 presets)
+- Edit OEM Information (registered owner / organization) — niche
+- Customize "New" menu in context — power-user-only
+
+**Mogelijk-interessant maar verifieer-bij-implementatie**:
+- Customize UAC settings (security implication — onze v0.9.x parking-lot heeft al "Security caution-tier")
+- Enable Admin Approval Mode for built-in Administrator
+- Disable switching to Secure Desktop while elevating
+- Enable virtualize File and Registry write failures (per-user redirect)
+- Display Last Logon Information on logon screen
+- Make user enter username while logging on (security)
+- Require Ctrl+Alt+Del to logon (security)
+- Show Windows Photo Viewer (klassieke viewer terug — al gepland v0.9.7)
+- Reset Live Tile cache
+- Enable Stickers feature (decoratie op desktop)
+- Restore last opened folders at startup
 
 ### Tweaks parking-lot (uit research, niet ingepland — voor v1.x feature pack)
 

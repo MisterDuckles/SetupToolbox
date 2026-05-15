@@ -75,9 +75,48 @@ public sealed record TweakOperation
     public bool RequiresElevation { get; init; }
 }
 
+// Een registry-set die hoort bij één gekozen optie in een multi-state tweak.
+// Voorbeeld: bij Search-mode "Icon only" hoort Mode=1, Cache=1, ShowSearchBox=1.
+// Value == null betekent "delete deze value" (Windows fallback default).
+public sealed record TweakChoiceValue
+{
+    public string Path { get; init; } = string.Empty;
+    public string ValueName { get; init; } = string.Empty;
+    public RegistryValueKind Kind { get; init; } = RegistryValueKind.DWord;
+    public object? Value { get; init; }
+    public bool RequiresElevation { get; init; }
+}
+
+// Een keuze in een multi-state tweak. Bijv. Search heeft 4 modes (Hide /
+// Icon only / Search box / Icon + label) — elk een TweakChoice met een set
+// (Path, ValueName, Value) writes die gezamenlijk die mode realiseren.
+public sealed class TweakChoice
+{
+    public string Label { get; }            // displayed in ComboBox
+    public string? Description { get; }     // optional caption onder de label
+    public IReadOnlyList<TweakChoiceValue> Values { get; }
+
+    public TweakChoice(string label, IReadOnlyList<TweakChoiceValue> values, string? description = null)
+    {
+        Label = label;
+        Description = description;
+        Values = values;
+    }
+}
+
 // Een toggle-able item in de Tweaks tab. Definitions worden statisch in
 // TweakService.BuildAll() geregistreerd - apps.json-stijl data-driven, geen
 // per-tweak UI-code.
+//
+// Twee varianten:
+//   1. Toggle (default): Operations met EnabledValue/DisabledValue.
+//      TweaksPage rendert een ToggleSwitch.
+//   2. Multi-choice: Choices met een TweakChoice per optie. TweaksPage
+//      rendert een ComboBox die mirror't wat Windows Settings doet voor
+//      multi-state opties (Search mode, Light/Dark, etc.).
+// Een Tweak is óf toggle (Operations.Count > 0, Choices == null) óf choice
+// (Operations is empty, Choices != null). Beide hebben dezelfde live state-
+// detect + restart-handling lifecycle.
 public sealed class Tweak : INotifyPropertyChanged
 {
     public string Id { get; }                          // stable ID voor presets/profiles later
@@ -86,9 +125,28 @@ public sealed class Tweak : INotifyPropertyChanged
     public string Description { get; }                 // wat doet 't kort (1 zin)
     public string? UseCase { get; }                    // waarom willen power-users dit (optional)
     public IReadOnlyList<TweakOperation> Operations { get; }
+    public IReadOnlyList<TweakChoice>? Choices { get; }
     public RestartRequirement Restart { get; }
 
-    public bool RequiresElevation => Operations.Any(o => o.RequiresElevation);
+    public bool IsChoice => Choices != null;
+    public bool RequiresElevation =>
+        Operations.Any(o => o.RequiresElevation) ||
+        (Choices?.SelectMany(c => c.Values).Any(v => v.RequiresElevation) ?? false);
+
+    // Voor choice-tweaks: de huidige geselecteerde index. -1 = "geen match"
+    // (= user heeft een waarde die niet bij één van onze choices hoort —
+    //  typisch direct na install of na een handmatige regedit-tweak).
+    private int _selectedChoiceIndex = -1;
+    public int SelectedChoiceIndex
+    {
+        get => _selectedChoiceIndex;
+        set
+        {
+            if (_selectedChoiceIndex == value) return;
+            _selectedChoiceIndex = value;
+            OnChanged();
+        }
+    }
 
     // Backing voor live state - TweakService schrijft hier bij page-load.
     private TweakState _state = TweakState.Unknown;
@@ -122,6 +180,7 @@ public sealed class Tweak : INotifyPropertyChanged
     public string AdminGlyph => RequiresElevation ? "" : string.Empty;  // Lock
     public string AdminTooltip => RequiresElevation ? "Vereist administrator (UAC)" : string.Empty;
 
+    // Constructor voor toggle-tweaks (Operations met EnabledValue/DisabledValue).
     public Tweak(
         string id,
         TweakCategory category,
@@ -137,6 +196,29 @@ public sealed class Tweak : INotifyPropertyChanged
         Description = description;
         UseCase = useCase;
         Operations = operations;
+        Choices = null;
+        Restart = restart;
+    }
+
+    // Constructor voor multi-choice tweaks (ComboBox in UI, mirror van Windows
+    // Settings options). Operations blijft leeg; alle writes komen uit de
+    // geselecteerde Choice.Values.
+    public Tweak(
+        string id,
+        TweakCategory category,
+        string name,
+        string description,
+        IReadOnlyList<TweakChoice> choices,
+        RestartRequirement restart = RestartRequirement.None,
+        string? useCase = null)
+    {
+        Id = id;
+        Category = category;
+        Name = name;
+        Description = description;
+        UseCase = useCase;
+        Operations = Array.Empty<TweakOperation>();
+        Choices = choices;
         Restart = restart;
     }
 

@@ -16,22 +16,63 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Text="Tweaks"
-                   Style="{StaticResource TitleTextBlockStyle}"
-                   Margin="0,0,0,8" />
+        <Grid Grid.Row="0" Margin="0,0,0,8" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Tweaks"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       VerticalAlignment="Center" />
+
+            <!-- Discard pending changes — alleen zichtbaar als er pending changes zijn. -->
+            <Button Grid.Column="1"
+                    x:Name="DiscardButton"
+                    Click="DiscardButton_Click"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed"
+                    Content="Discard" />
+
+            <!-- Apply alle pending changes in 1 batch + één explorer-restart aan het einde. -->
+            <Button Grid.Column="2"
+                    x:Name="ApplyButton"
+                    Click="ApplyButton_Click"
+                    Style="{StaticResource AccentButtonStyle}"
+                    VerticalAlignment="Center"
+                    IsEnabled="False">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE73E;" FontSize="14" />
+                    <TextBlock x:Name="ApplyButtonText" Text="Apply" />
+                </StackPanel>
+            </Button>
+
+            <!-- Manual escape — kill explorer.exe los van Apply, voor zeldzame edge cases. -->
+            <Button Grid.Column="3"
+                    x:Name="RestartExplorerButton"
+                    Click="RestartExplorerButton_Click"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Restart de Windows shell handmatig — gebruik dit als een tweak na Apply nog niet zichtbaar is.">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    <TextBlock Text="Restart Explorer" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
         <InfoBar Grid.Row="1"
                  Severity="Informational"
-                 Title="Quick Windows tweaks"
-                 Message="Toggle veelgebruikte Windows-instellingen direct hier — geen Settings-app, geen regedit. Status reflecteert je huidige systeem. Iconen rechts tonen of een Explorer-restart, sign-out of reboot nodig is voor zichtbaarheid."
+                 Title="Stage your changes, apply in batch"
+                 Message="Vink wat je wil aan/uit en klik dan 'Apply' bovenaan. Onze app schrijft alles in 1 keer en herstart de shell — voorspelbaar, geen race-condities. Tweaks die direct effect hebben (file extensions / hidden files) updaten zonder restart."
                  IsOpen="True"
                  IsClosable="True"
                  MaxWidth="780"
                  HorizontalAlignment="Left"
                  Margin="0,0,0,12" />
 
-        <!-- Resultaat-bar voor apply/revert feedback. -->
+        <!-- Resultaat-bar voor apply feedback. -->
         <InfoBar x:Name="ResultBar"
                  Grid.Row="2"
                  Severity="Success"
@@ -48,7 +89,7 @@
             <StackPanel x:Name="CategoriesContainer" Spacing="20" />
         </ScrollView>
 
-        <!-- Loading-overlay tijdens initial state-detection. -->
+        <!-- Loading-overlay tijdens initial state-detection en tijdens Apply-batch. -->
         <Grid x:Name="LoadingOverlay"
               Grid.RowSpan="4"
               Background="{ThemeResource SmokeFillColorDefaultBrush}"
@@ -57,7 +98,8 @@
                         VerticalAlignment="Center"
                         Spacing="12">
                 <ProgressRing Width="40" Height="40" IsIndeterminate="True" />
-                <TextBlock Text="Reading Windows state..."
+                <TextBlock x:Name="LoadingOverlayText"
+                           Text="Reading Windows state..."
                            Style="{StaticResource BodyTextBlockStyle}"
                            HorizontalAlignment="Center" />
             </StackPanel>

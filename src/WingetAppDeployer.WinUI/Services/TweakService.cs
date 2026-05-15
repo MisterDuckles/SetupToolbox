@@ -62,6 +62,17 @@ public sealed class TweakService
 
     private static TweakState DetectStateInternal(Tweak tweak)
     {
+        // Choice-tweak: zoek de eerste choice waarvan ALLE Values matchen de
+        // huidige registry-state. Geen match → SelectedChoiceIndex = -1 (custom).
+        if (tweak.IsChoice)
+        {
+            tweak.SelectedChoiceIndex = FindMatchingChoiceIndex(tweak);
+            // State-label voor choice-tweaks: Enabled wanneer een choice matcht,
+            // anders Unknown (user heeft een waarde die niet bij onze opties hoort).
+            return tweak.SelectedChoiceIndex >= 0 ? TweakState.Enabled : TweakState.Unknown;
+        }
+
+        // Toggle-tweak: bestaande aggregate-logica over alle Operations.
         int enabledOps = 0, disabledOps = 0, unknownOps = 0;
         foreach (var op in tweak.Operations)
         {
@@ -74,6 +85,43 @@ public sealed class TweakService
         if (enabledOps == tweak.Operations.Count) return TweakState.Enabled;
         if (disabledOps == tweak.Operations.Count) return TweakState.Disabled;
         return TweakState.Partial;
+    }
+
+    /// <summary>
+    /// Voor een choice-tweak: walk alle Choices en return de index waar ALLE
+    /// Values matchen de actuele registry-state. -1 als geen choice 100% matcht.
+    /// </summary>
+    private static int FindMatchingChoiceIndex(Tweak tweak)
+    {
+        if (tweak.Choices == null) return -1;
+        for (int i = 0; i < tweak.Choices.Count; i++)
+        {
+            var choice = tweak.Choices[i];
+            bool allMatch = true;
+            foreach (var v in choice.Values)
+            {
+                var actual = TryReadValue(new TweakOperation
+                {
+                    Path = v.Path,
+                    ValueName = v.ValueName,
+                    Kind = v.Kind
+                });
+                var actualIsAbsent = !actual.exists;
+                var expectedIsAbsent = v.Value == null;
+
+                if (expectedIsAbsent)
+                {
+                    if (!actualIsAbsent) { allMatch = false; break; }
+                }
+                else
+                {
+                    if (actualIsAbsent) { allMatch = false; break; }
+                    if (!ValuesEqual(actual.value!, v.Value!)) { allMatch = false; break; }
+                }
+            }
+            if (allMatch) return i;
+        }
+        return -1;
     }
 
     private static TweakState MatchOpState(TweakOperation op)
@@ -196,15 +244,131 @@ public sealed class TweakService
             foreach (var kv in batchResults) results[kv.Key] = kv.Value;
         }
 
-        // 3) Refresh detected state voor de getoggle-de tweaks.
+        // 3) Refresh detected state voor de getoggle-de tweaks (fast — registry reads).
+        // Doe dit VOOR de broadcast zodat de UI direct na await terug kan vallen
+        // op de nieuwe state. State-read leest gewoon wat we net schreven.
         foreach (var t in tweaks)
         {
             try { t.State = DetectStateInternal(t); }
             catch { t.State = TweakState.Unknown; }
         }
 
+        // 4) Broadcast WM_SETTINGCHANGE async / fire-and-forget zodat de UI niet
+        // blokkeert op de SendMessageTimeout calls. De toggle update immediate;
+        // de shell pickt de nieuwe waardes op in de achtergrond. Plus
+        // SHChangeNotify wanneer een tweak file-associations / CLSID-handlers
+        // raakt (zoals ClassicContextMenu) — dat is een aparte refresh-flow.
+        var touchedClassesOrAssoc = tweaks
+            .SelectMany(t => t.Operations)
+            .Any(o => o.Path.Contains(@"\Classes\", StringComparison.OrdinalIgnoreCase));
+        // SearchHost-restart triggert een full taskbar-rebind: de Win11 25H2
+        // XAML-taskbar reageert lui op WM_SETTINGCHANGE voor TaskbarAl /
+        // TaskbarDa / etc., maar wanneer SearchHost respawnt herleest 'ie de
+        // hele config. We doen dit voor elke Taskbar-categorie tweak én voor
+        // tweaks die het \Search\ pad raken. Lichter dan explorer-restart
+        // (~50MB host die in <1s respawnt, geen visible flicker).
+        var needsTaskbarRebind = tweaks.Any(t =>
+            t.Category == TweakCategory.Taskbar ||
+            t.Operations.Any(o => o.Path.Contains(@"\CurrentVersion\Search", StringComparison.OrdinalIgnoreCase)));
+        _ = Task.Run(() =>
+        {
+            ShellRefresh.NotifySettingsChanged();
+            if (touchedClassesOrAssoc) ShellRefresh.NotifyAssociationsChanged();
+            if (needsTaskbarRebind) ShellRefresh.RestartSearchHost();
+        });
+
         var successCount = results.Count(r => r.Value.ok);
         return new TweakApplyResult(successCount, results.Count - successCount, cancelled);
+    }
+
+    /// <summary>
+    /// Apply één gekozen optie van een multi-state choice-tweak. Schrijft alle
+    /// Values uit de geselecteerde TweakChoice naar registry. Volgt dezelfde
+    /// local/elevated split + WM_SETTINGCHANGE broadcast als ApplyAsync.
+    /// </summary>
+    public async Task<TweakApplyResult> ApplyChoiceAsync(Tweak tweak, int choiceIndex)
+    {
+        if (tweak.Choices == null || choiceIndex < 0 || choiceIndex >= tweak.Choices.Count)
+            return new TweakApplyResult(0, 1, false);
+
+        var choice = tweak.Choices[choiceIndex];
+        var results = new Dictionary<string, (bool ok, string msg)>();
+        var localValues = new List<TweakChoiceValue>();
+        var elevatedValues = new List<TweakChoiceValue>();
+        foreach (var v in choice.Values)
+            (v.RequiresElevation ? elevatedValues : localValues).Add(v);
+
+        // 1) Local writes — geen UAC.
+        foreach (var v in localValues)
+        {
+            try
+            {
+                ApplyChoiceValueLocal(v);
+                results[$"{tweak.Id}::{v.Path}::{v.ValueName}"] = (true, "Set");
+            }
+            catch (Exception ex)
+            {
+                results[$"{tweak.Id}::{v.Path}::{v.ValueName}"] = (false, ex.Message);
+            }
+        }
+
+        // 2) Elevated batch — 1 UAC voor de admin-subset. Translate naar
+        // TweakOperation (waarbij EnabledValue = de gekozen Value) zodat we
+        // dezelfde RunElevatedBatchAsync kunnen hergebruiken.
+        var cancelled = false;
+        if (elevatedValues.Count > 0)
+        {
+            var asOps = elevatedValues.Select(v => (
+                tweak,
+                new TweakOperation
+                {
+                    Path = v.Path,
+                    ValueName = v.ValueName,
+                    Kind = v.Kind,
+                    EnabledValue = v.Value,
+                    DisabledValue = v.Value,
+                    RequiresElevation = true
+                }
+            )).ToList();
+            var (batchResults, wasCancelled) = await RunElevatedBatchAsync(asOps, apply: true);
+            cancelled = wasCancelled;
+            foreach (var kv in batchResults) results[kv.Key] = kv.Value;
+        }
+
+        // 3) Re-detect state — vult Tweak.SelectedChoiceIndex met de geactiveerde keuze.
+        try { tweak.State = DetectStateInternal(tweak); }
+        catch { tweak.State = TweakState.Unknown; }
+
+        // 4) Broadcast + side-effects in achtergrond (zelfde patroon als ApplyAsync).
+        var touchedClassesOrAssoc = choice.Values.Any(v => v.Path.Contains(@"\Classes\", StringComparison.OrdinalIgnoreCase));
+        // SearchHost-restart triggert een full taskbar-rebind (zie ApplyAsync
+        // comment). Doe het voor elke Taskbar-categorie tweak.
+        var needsTaskbarRebind = tweak.Category == TweakCategory.Taskbar ||
+            choice.Values.Any(v => v.Path.Contains(@"\CurrentVersion\Search", StringComparison.OrdinalIgnoreCase));
+        _ = Task.Run(() =>
+        {
+            ShellRefresh.NotifySettingsChanged();
+            if (touchedClassesOrAssoc) ShellRefresh.NotifyAssociationsChanged();
+            if (needsTaskbarRebind) ShellRefresh.RestartSearchHost();
+        });
+
+        var successCount = results.Count(r => r.Value.ok);
+        return new TweakApplyResult(successCount, results.Count - successCount, cancelled);
+    }
+
+    private static void ApplyChoiceValueLocal(TweakChoiceValue v)
+    {
+        var (hive, view, subPath) = ParsePath(v.Path);
+        using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+        if (v.Value == null)
+        {
+            using var key = baseKey.OpenSubKey(subPath, writable: true);
+            key?.DeleteValue(v.ValueName, throwOnMissingValue: false);
+            return;
+        }
+        using var writeKey = baseKey.CreateSubKey(subPath, writable: true)
+            ?? throw new InvalidOperationException($"Cannot create/open key: {v.Path}");
+        writeKey.SetValue(v.ValueName, v.Value, v.Kind);
     }
 
     private static void ApplyOpLocal(TweakOperation op, bool apply)
@@ -468,7 +632,7 @@ public sealed class TweakService
             id: "Explorer.TaskbarAlignLeft",
             category: TweakCategory.Explorer,
             name: "Taskbar aligned left (Win10-style)",
-            description: "Lijnt taskbar-iconen links uit i.p.v. gecentreerd.",
+            description: "Lijnt taskbar-iconen links uit i.p.v. gecentreerd. Op Win11 25H2 shell-cached — klik 'Restart Explorer' top-right om live te zien.",
             useCase: "Muis hoeft niet meer naar het midden te bewegen voor Start.",
             restart: RestartRequirement.ExplorerRestart,
             operations: new[]
@@ -521,6 +685,179 @@ public sealed class TweakService
                     DeleteKeyOnAbsent = true      // bij disable: delete hele InprocServer32 subkey
                 }
             }));
+
+        // ── TASKBAR ─────────────────────────────────────────────────
+        // Alle taskbar-tweaks zitten onder dezelfde Explorer\Advanced key + zijn
+        // HKCU (geen UAC). Geen Explorer-restart geforceerd — na elke apply
+        // broadcast TweakService een WM_SETTINGCHANGE, wat voor de meeste
+        // taskbar-keys live picked-up wordt (TaskView / Widgets / Copilot etc.).
+        // Voor tweaks die het niet live kunnen (Show seconds / Never combine /
+        // Classic context menu) is er een manual "Restart Explorer" knop top-right
+        // op de TweaksPage als escape hatch.
+
+        // Search-tweak als MULTI-CHOICE i.p.v. toggle — mirror van Windows
+        // Settings > Personalization > Taskbar. 4 modes (Hide / Icon only /
+        // Search box / Icon and label). Elke mode schrijft 4 keys (legacy
+        // \Search\Mode + Cache + nieuwe \Advanced\ShowSearchBox + BingSearchEnabled)
+        // zodat Win11 22H2+ taskbar de change live picked-up + SearchHost.exe
+        // auto-respawned wordt.
+        const string searchPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Search";
+        const string advancedPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+        TweakChoiceValue[] SearchValuesForMode(int mode) => new TweakChoiceValue[]
+        {
+            new() { Path = searchPath, ValueName = "SearchboxTaskbarMode", Kind = RegistryValueKind.DWord, Value = mode },
+            new() { Path = searchPath, ValueName = "SearchboxTaskbarModeCache", Kind = RegistryValueKind.DWord, Value = mode },
+            new() { Path = advancedPath, ValueName = "ShowSearchBox", Kind = RegistryValueKind.DWord, Value = mode == 0 ? 0 : 1 },
+            new() { Path = searchPath, ValueName = "BingSearchEnabled", Kind = RegistryValueKind.DWord, Value = mode == 0 ? 0 : 1 },
+        };
+
+        list.Add(new Tweak(
+            id: "Taskbar.SearchMode",
+            category: TweakCategory.Taskbar,
+            name: "Taskbar search",
+            description: "Hoe Windows-zoeken op de taskbar verschijnt — mirror van Settings > Personalization > Taskbar.",
+            useCase: "Kies tussen volledige zoekbalk, alleen icoon, of helemaal verbergen — al naar gelang hoeveel ruimte je op de taskbar wilt geven aan search.",
+            restart: RestartRequirement.None,
+            choices: new[]
+            {
+                new TweakChoice("Hide",                  SearchValuesForMode(0)),
+                new TweakChoice("Search icon only",      SearchValuesForMode(1)),
+                new TweakChoice("Search box",            SearchValuesForMode(2)),
+                new TweakChoice("Search icon and label", SearchValuesForMode(3)),
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.HideTaskView",
+            category: TweakCategory.Taskbar,
+            name: "Hide Task View button",
+            description: "Verbergt het multi-desktop icoon op de taskbar.",
+            useCase: "Win+Tab werkt nog steeds — alleen de button verdwijnt.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "ShowTaskViewButton",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.HideWidgets",
+            category: TweakCategory.Taskbar,
+            name: "Hide Widgets button",
+            description: "Verwijdert het Widgets-paneel (weer / nieuws) van de taskbar. Werkt op Win11 23H2-; op 24H2+ blokkeert de nieuwe UCPD service deze HKCU-key silent (Group Policy workaround volgt in latere versie).",
+            useCase: "Voorkomt accidentele hovers + reclame in het paneel.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "TaskbarDa",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.HideCopilot",
+            category: TweakCategory.Taskbar,
+            name: "Hide Copilot button (24H2 only)",
+            description: "Verbergt het Copilot-AI icoon op de taskbar. Werkt op Win11 24H2; op 25H2+ heeft Microsoft de button vervangen door de pinned Copilot-app.",
+            useCase: "Tweak voor users die de Copilot-feature niet gebruiken.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "ShowCopilotButton",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        // TaskbarMn / Chat-button tweak verwijderd — Microsoft heeft Chat
+        // weggehaald uit Win11 23H2+ in de meeste regio's, dus die key bestaat
+        // niet meer op moderne installs. Toggle had geen effect.
+
+        list.Add(new Tweak(
+            id: "Taskbar.EndTaskRightClick",
+            category: TweakCategory.Taskbar,
+            name: "Show 'End task' in right-click menu",
+            description: "Voegt 'End task' toe aan het taskbar right-click menu zodat je apps direct kunt killen zonder Task Manager.",
+            useCase: "Hangende apps razendsnel afsluiten — geen Ctrl+Shift+Esc nodig.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings",
+                    ValueName = "TaskbarEndTask",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.NeverCombineButtons",
+            category: TweakCategory.Taskbar,
+            name: "Never combine taskbar buttons (Win10-style)",
+            description: "Toont aparte button per window i.p.v. gegroepeerd per app.",
+            useCase: "Snel switchen tussen meerdere browsers / explorer-vensters zonder hover-popup.",
+            restart: RestartRequirement.ExplorerRestart,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "TaskbarGlomLevel",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 2,  // 2 = never combine
+                    DisabledValue = 0  // 0 = always combine (Win11 default)
+                },
+                // Multi-monitor companion key — zonder MMTaskbarGlomLevel
+                // werkt de tweak op de primary monitor maar niet op secundaire
+                // taskbars. v0.9.2 fix: beide schrijven voor consistente UX.
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "MMTaskbarGlomLevel",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 2,
+                    DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.ShowSecondsInClock",
+            category: TweakCategory.Taskbar,
+            name: "Show seconds in tray clock",
+            description: "Toont HH:MM:SS in plaats van HH:MM op de taskbar.",
+            useCase: "Handig voor timing, screen-recording, of als je gewoon de seconden wilt zien tikken.",
+            restart: RestartRequirement.ExplorerRestart,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "ShowSecondsInSystemClock",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0
+                }
+            }));
+
+        // Battery % tweak verwijderd — EstimatedTimeText key werkt niet
+        // betrouwbaar op Win11 24H2/25H2. Komt terug zodra we de juiste key
+        // hebben gevonden.
 
         return list;
     }
