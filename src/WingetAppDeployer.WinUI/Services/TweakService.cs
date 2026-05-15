@@ -126,7 +126,29 @@ public sealed class TweakService
 
     private static TweakState MatchOpState(TweakOperation op)
     {
-        // Read raw value (or detect absent). Return -> compare with Enabled/DisabledValue.
+        // 1) Eerst alle AlternateEnabledPaths probereren — als ÉÉN alternate
+        // matcht, is de tweak effectief actief (via een ander mechanisme dan
+        // wat wij schrijven). Voorbeelden: Win11 Home gebruikers die
+        // Start_IrisRecommendations=0 zetten via Settings i.p.v. de
+        // HideRecommendedSection policy; HKLM-policy die HKCU overruled.
+        // Alternates kunnen alleen VOOR Enabled stemmen, nooit voor Disabled —
+        // ze zijn advisory reads, niet authoritative writes.
+        foreach (var alt in op.AlternateEnabledPaths)
+        {
+            var altActual = TryReadValue(new TweakOperation
+            {
+                Path = alt.Path,
+                ValueName = alt.ValueName,
+                Kind = alt.Kind
+            });
+            var altIsAbsent = !altActual.exists;
+            var altExpectedAbsent = alt.EnabledValue == null;
+            if (altExpectedAbsent && altIsAbsent) return TweakState.Enabled;
+            if (!altExpectedAbsent && !altIsAbsent && ValuesEqual(altActual.value!, alt.EnabledValue!))
+                return TweakState.Enabled;
+        }
+
+        // 2) Primary-path read — onze eigen schrijf-target.
         var actual = TryReadValue(op);
         var actualIsAbsent = !actual.exists;
         var enabledIsAbsent = op.EnabledValue == null;
@@ -134,7 +156,7 @@ public sealed class TweakService
 
         if (actualIsAbsent && enabledIsAbsent) return TweakState.Enabled;
         if (actualIsAbsent && disabledIsAbsent) return TweakState.Disabled;
-        if (actualIsAbsent) return TweakState.Disabled; // Windows default = key absent in most cases
+        if (actualIsAbsent) return op.AbsenceMeans;
 
         if (!enabledIsAbsent && ValuesEqual(actual.value!, op.EnabledValue!)) return TweakState.Enabled;
         if (!disabledIsAbsent && ValuesEqual(actual.value!, op.DisabledValue!)) return TweakState.Disabled;
@@ -261,24 +283,46 @@ public sealed class TweakService
         var touchedClassesOrAssoc = tweaks
             .SelectMany(t => t.Operations)
             .Any(o => o.Path.Contains(@"\Classes\", StringComparison.OrdinalIgnoreCase));
-        // SearchHost-restart triggert een full taskbar-rebind: de Win11 25H2
-        // XAML-taskbar reageert lui op WM_SETTINGCHANGE voor TaskbarAl /
-        // TaskbarDa / etc., maar wanneer SearchHost respawnt herleest 'ie de
-        // hele config. We doen dit voor elke Taskbar-categorie tweak én voor
-        // tweaks die het \Search\ pad raken. Lichter dan explorer-restart
-        // (~50MB host die in <1s respawnt, geen visible flicker).
-        var needsTaskbarRebind = tweaks.Any(t =>
+        // SearchHost-restart triggert een full taskbar + Start-rebind: de Win11
+        // 25H2 XAML-taskbar reageert lui op WM_SETTINGCHANGE voor TaskbarAl /
+        // TaskbarDa / Start_Layout / etc., maar wanneer SearchHost en
+        // StartMenuExperienceHost respawnen herlezen ze de hele config. We doen
+        // dit voor elke Taskbar- of StartMenu-categorie tweak én voor tweaks die
+        // het \Search\ of \SearchSettings\ pad raken. Lichter dan explorer-
+        // restart (~50MB host die in <1s respawnt, geen visible flicker).
+        var needsShellHostRestart = tweaks.Any(t =>
             t.Category == TweakCategory.Taskbar ||
-            t.Operations.Any(o => o.Path.Contains(@"\CurrentVersion\Search", StringComparison.OrdinalIgnoreCase)));
+            t.Category == TweakCategory.StartMenu ||
+            t.Operations.Any(o =>
+                o.Path.Contains(@"\CurrentVersion\Search", StringComparison.OrdinalIgnoreCase) ||
+                o.Path.Contains(@"\Policies\Microsoft\Windows\Explorer", StringComparison.OrdinalIgnoreCase)));
         _ = Task.Run(() =>
         {
             ShellRefresh.NotifySettingsChanged();
             if (touchedClassesOrAssoc) ShellRefresh.NotifyAssociationsChanged();
-            if (needsTaskbarRebind) ShellRefresh.RestartSearchHost();
+            if (needsShellHostRestart) ShellRefresh.RestartSearchHost();
         });
 
         var successCount = results.Count(r => r.Value.ok);
-        return new TweakApplyResult(successCount, results.Count - successCount, cancelled);
+        var failures = results.Where(r => !r.Value.ok)
+            .Select(r => $"{ShortenKey(r.Key)}: {r.Value.msg}")
+            .ToList();
+        return new TweakApplyResult(successCount, results.Count - successCount, cancelled, failures);
+    }
+
+    /// <summary>
+    /// Verkort de result-key (tweakId::path::valueName) naar iets dat in de UI
+    /// past — gebruikt alleen het laatste segment van Path + valueName.
+    /// </summary>
+    private static string ShortenKey(string key)
+    {
+        var parts = key.Split("::", 3);
+        if (parts.Length < 3) return key;
+        var path = parts[1];
+        var valueName = parts[2];
+        var lastSlash = path.LastIndexOf('\\');
+        var pathTail = lastSlash >= 0 ? path.Substring(lastSlash + 1) : path;
+        return string.IsNullOrEmpty(valueName) ? pathTail : $"{pathTail}\\{valueName}";
     }
 
     /// <summary>
@@ -289,7 +333,7 @@ public sealed class TweakService
     public async Task<TweakApplyResult> ApplyChoiceAsync(Tweak tweak, int choiceIndex)
     {
         if (tweak.Choices == null || choiceIndex < 0 || choiceIndex >= tweak.Choices.Count)
-            return new TweakApplyResult(0, 1, false);
+            return new TweakApplyResult(0, 1, false, new[] { "Invalid choice index" });
 
         var choice = tweak.Choices[choiceIndex];
         var results = new Dictionary<string, (bool ok, string msg)>();
@@ -341,19 +385,27 @@ public sealed class TweakService
 
         // 4) Broadcast + side-effects in achtergrond (zelfde patroon als ApplyAsync).
         var touchedClassesOrAssoc = choice.Values.Any(v => v.Path.Contains(@"\Classes\", StringComparison.OrdinalIgnoreCase));
-        // SearchHost-restart triggert een full taskbar-rebind (zie ApplyAsync
-        // comment). Doe het voor elke Taskbar-categorie tweak.
-        var needsTaskbarRebind = tweak.Category == TweakCategory.Taskbar ||
-            choice.Values.Any(v => v.Path.Contains(@"\CurrentVersion\Search", StringComparison.OrdinalIgnoreCase));
+        // SearchHost-restart triggert een full taskbar + Start-rebind (zie
+        // ApplyAsync-comment voor toelichting). Doe het voor Taskbar- en
+        // StartMenu-categorie tweaks én voor tweaks die het \Search\ pad of
+        // de Explorer-policies raken.
+        var needsShellHostRestart = tweak.Category == TweakCategory.Taskbar ||
+            tweak.Category == TweakCategory.StartMenu ||
+            choice.Values.Any(v =>
+                v.Path.Contains(@"\CurrentVersion\Search", StringComparison.OrdinalIgnoreCase) ||
+                v.Path.Contains(@"\Policies\Microsoft\Windows\Explorer", StringComparison.OrdinalIgnoreCase));
         _ = Task.Run(() =>
         {
             ShellRefresh.NotifySettingsChanged();
             if (touchedClassesOrAssoc) ShellRefresh.NotifyAssociationsChanged();
-            if (needsTaskbarRebind) ShellRefresh.RestartSearchHost();
+            if (needsShellHostRestart) ShellRefresh.RestartSearchHost();
         });
 
         var successCount = results.Count(r => r.Value.ok);
-        return new TweakApplyResult(successCount, results.Count - successCount, cancelled);
+        var failures = results.Where(r => !r.Value.ok)
+            .Select(r => $"{ShortenKey(r.Key)}: {r.Value.msg}")
+            .ToList();
+        return new TweakApplyResult(successCount, results.Count - successCount, cancelled, failures);
     }
 
     private static void ApplyChoiceValueLocal(TweakChoiceValue v)
@@ -760,7 +812,16 @@ public sealed class TweakService
                     ValueName = "TaskbarDa",
                     Kind = RegistryValueKind.DWord,
                     EnabledValue = 0,
-                    DisabledValue = 1
+                    DisabledValue = 1,
+                    // HKLM AllowNewsAndInterests=0 (Dsh policy of MDM PolicyManager)
+                    // verbergt het Widgets-paneel system-wide; user heeft 'm dan
+                    // al uit ongeacht TaskbarDa. Detection-only — we schrijven
+                    // alleen TaskbarDa zelf.
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", ValueName = "AllowNewsAndInterests", EnabledValue = 0 },
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Microsoft\PolicyManager\default\NewsAndInterests\AllowNewsAndInterests", ValueName = "value", EnabledValue = 0 }
+                    }
                 }
             }));
 
@@ -779,7 +840,15 @@ public sealed class TweakService
                     ValueName = "ShowCopilotButton",
                     Kind = RegistryValueKind.DWord,
                     EnabledValue = 0,
-                    DisabledValue = 1
+                    DisabledValue = 1,
+                    // TurnOffWindowsCopilot policy verbergt Copilot system-wide
+                    // (vooral Enterprise/Education honored op 24H2+, soms ook
+                    // Pro). User heeft 'm dan al uit ongeacht ShowCopilotButton.
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = @"HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot", ValueName = "TurnOffWindowsCopilot", EnabledValue = 1 },
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot", ValueName = "TurnOffWindowsCopilot", EnabledValue = 1 }
+                    }
                 }
             }));
 
@@ -859,8 +928,226 @@ public sealed class TweakService
         // betrouwbaar op Win11 24H2/25H2. Komt terug zodra we de juiste key
         // hebben gevonden.
 
+        // ── START MENU ──────────────────────────────────────────────
+        // Alle Start menu tweaks zitten in HKCU (geen UAC) behalve AllowCortana
+        // (HKLM policy). Layout / TrackProgs / TrackDocs delen dezelfde
+        // Explorer\Advanced key als Explorer + Taskbar. HideRecommendedSection
+        // en DisableSearchBoxSuggestions zijn group-policy keys onder
+        // \Software\Policies\Microsoft\Windows\Explorer — werken op Win11 22H2+
+        // ook voor Home (de policy-engine is decoupled van de Pro-only UI).
+        const string explorerPolicies = @"HKCU\Software\Policies\Microsoft\Windows\Explorer";
+        const string searchSettings = @"HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings";
+
+        // Layout-tweak als MULTI-CHOICE — mirror van Settings > Personalization
+        // > Start > Layout. Start_Layout DWORD: 0=Default, 1=More pins,
+        // 2=More recommendations. Picked up door StartMenuExperienceHost na
+        // SearchHost-restart (zie ApplyAsync onderaan).
+        list.Add(new Tweak(
+            id: "StartMenu.Layout",
+            category: TweakCategory.StartMenu,
+            name: "Start menu layout",
+            description: "Verdeling tussen pinned apps en aanbevolen items — mirror van Settings > Personalization > Start > Layout.",
+            useCase: "Meer pins als je veel apps vastgepind hebt, of meer recommendations als je MRU-files in beeld wil.",
+            restart: RestartRequirement.None,
+            choices: new[]
+            {
+                new TweakChoice("Default", new TweakChoiceValue[]
+                {
+                    new() { Path = explorerAdvanced, ValueName = "Start_Layout", Kind = RegistryValueKind.DWord, Value = 0 }
+                }),
+                new TweakChoice("More pins", new TweakChoiceValue[]
+                {
+                    new() { Path = explorerAdvanced, ValueName = "Start_Layout", Kind = RegistryValueKind.DWord, Value = 1 }
+                }),
+                new TweakChoice("More recommendations", new TweakChoiceValue[]
+                {
+                    new() { Path = explorerAdvanced, ValueName = "Start_Layout", Kind = RegistryValueKind.DWord, Value = 2 }
+                }),
+            }));
+
+        list.Add(new Tweak(
+            id: "StartMenu.HideRecommendedSection",
+            category: TweakCategory.StartMenu,
+            name: "Hide Recommended section",
+            description: "Verbergt de 'Recommended' sectie onderaan Start. Policy-key — werkt op Win11 22H2+ ook op Home. Detectie pikt ook de HKLM-policy + de Win11 Home Settings-toggle Start_IrisRecommendations + MDM PolicyManager op.",
+            useCase: "Strakker Start menu zonder MRU-files en cloud-tips.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerPolicies,
+                    ValueName = "HideRecommendedSection",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    // Detectie voor alternatieve mechanismen:
+                    //  - HKLM policy (gpedit Pro/Enterprise schrijft hier)
+                    //  - MDM/Intune via PolicyManager
+                    //  - Start_IrisRecommendations: de Win11 Home 24H2+ Settings-
+                    //    toggle "Show recommendations for tips, shortcuts, new
+                    //    apps" — als die UIT staat heeft user al een groot deel
+                    //    van Recommended onzichtbaar gemaakt zonder onze policy
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer", ValueName = "HideRecommendedSection", EnabledValue = 1 },
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Microsoft\PolicyManager\current\device\Start", ValueName = "HideRecommendedSection", EnabledValue = 1 },
+                        new TweakAlternateSignal { Path = explorerAdvanced, ValueName = "Start_IrisRecommendations", EnabledValue = 0 }
+                    }
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "StartMenu.HideMostUsedApps",
+            category: TweakCategory.StartMenu,
+            name: "Hide most-used apps",
+            description: "Zet 'Show most used apps' uit — Start toont alleen pinned items, geen automatische top-rij. Detectie pikt ook de ShowOrHideMostUsedApps key + de NoInstrumentation policy op.",
+            useCase: "Voorkomt dat je Start-layout verspringt op basis van wat je vandaag toevallig opende.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "Start_TrackProgs",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1,
+                    // Sommige third-party tweakers schrijven ShowOrHideMostUsedApps=2
+                    // i.p.v. Start_TrackProgs=0. NoInstrumentation is de gpedit-
+                    // policy die het Start-menu instrumentation volledig uitzet.
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = explorerAdvanced, ValueName = "ShowOrHideMostUsedApps", EnabledValue = 2 },
+                        new TweakAlternateSignal { Path = explorerPolicies, ValueName = "NoInstrumentation", EnabledValue = 1 }
+                    }
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "StartMenu.HideRecentFiles",
+            category: TweakCategory.StartMenu,
+            name: "Hide recently opened items",
+            description: "Verbergt MRU-files in de Recommended sectie EN in taskbar/Start jump-lists.",
+            useCase: "Privacy: collega's of demos zien geen lijst van bestanden die je net open had.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced,
+                    ValueName = "Start_TrackDocs",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "StartMenu.DisableBingSearch",
+            category: TweakCategory.StartMenu,
+            name: "Disable web search in Start",
+            description: "Schakelt Bing-resultaten en web-suggesties in het Start zoek-veld uit. Schrijft 3 keys (Explorer-policy + Bing toggle + Cortana consent) voor consistent gedrag op Win11 22H2 t/m 25H2 — verschillende builds honoreren verschillende keys.",
+            useCase: "Geen browser-opens meer als je per ongeluk een typo maakt in Start — lokale resultaten only.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerPolicies,
+                    ValueName = "DisableSearchBoxSuggestions",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    // Alternates: HKLM-policy van gpedit Pro/Ent + ConnectedSearchUseWeb
+                    // (de "Don't search the web or display web results" policy)
+                    // + Win11 25H2 nieuwere variant. Detection-only — we schrijven
+                    // alleen onze eigen 3 HKCU keys.
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer", ValueName = "DisableSearchBoxSuggestions", EnabledValue = 1 },
+                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search", ValueName = "ConnectedSearchUseWeb", EnabledValue = 0 },
+                        new TweakAlternateSignal { Path = @"HKCU\Software\Policies\Microsoft\Windows\Windows Search", ValueName = "ConnectedSearchUseWeb", EnabledValue = 0 }
+                    }
+                },
+                // BingSearchEnabled=0 is een legacy key die op 22H2/23H2 wel
+                // honored wordt; op 24H2+ heeft Microsoft 'm grotendeels
+                // genegeerd, maar 't schrijven schaadt niet en pikt sub-builds
+                // op die 'm nog wel checken.
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Search",
+                    ValueName = "BingSearchEnabled",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                },
+                // CortanaConsent=0 was Win10-era companion. Niet meer
+                // dwingend nodig op moderne Win11, maar blokkeert eventuele
+                // resterende Cortana-search code paths.
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Search",
+                    ValueName = "CortanaConsent",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "StartMenu.DisableSearchHighlights",
+            category: TweakCategory.StartMenu,
+            name: "Disable Search Highlights",
+            description: "Verwijdert de roterende 'today in history' / Bing trending content uit het zoekveld. Schrijft 2 keys (Feeds\\DSB legacy + SearchSettings modern).",
+            useCase: "Zoekveld wordt sneller en minder vol — geen marketing-prompts in je workflow.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Feeds\DSB",
+                    ValueName = "ShowDynamicContent",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = searchSettings,
+                    ValueName = "IsDynamicSearchBoxEnabled",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "StartMenu.DisableCortana",
+            category: TweakCategory.StartMenu,
+            name: "Disable Cortana",
+            description: "Disable Cortana via group policy (HKLM). Op Win11 24H2+ is Cortana al naar een aparte Appx geknipt; deze policy zorgt dat de search-hook 'm niet meer triggert.",
+            useCase: "Voor users die Cortana volledig willen blokkeren, niet alleen de UI verbergen.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search",
+                    ValueName = "AllowCortana",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 0,
+                    DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }
 
-public sealed record TweakApplyResult(int SuccessCount, int FailedCount, bool Cancelled);
+public sealed record TweakApplyResult(
+    int SuccessCount,
+    int FailedCount,
+    bool Cancelled,
+    IReadOnlyList<string> FailureMessages);

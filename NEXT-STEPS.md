@@ -10,6 +10,46 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.3 — Start Menu category + collapsible categories + multi-path detection
+
+**Multi-path detection** opgelost (kern-architectuur fix, niet in initiële scope): single-path detection miste de actual state als user de tweak via een ander mechanisme had geactiveerd. Voorbeelden uit user-feedback: "Disable web search in Start" en "Hide Recommended section" stonden bij de user al aan via Settings/manual regedit maar onze UI toonde 'm als off (checkbox ongekruist) — gevolg: user dacht dat-ie 'm nog moest applyen terwijl 'ie al actief was.
+
+Architectuur:
+- Nieuwe `TweakAlternateSignal` record (Path / ValueName / Kind / EnabledValue) — read-only signalen die ALLEEN voor state-detectie gebruikt worden. Schrijf-logica blijft single-path (alleen `TweakOperation.Path`)
+- `TweakOperation` extended met `AlternateEnabledPaths` (default empty) en `AbsenceMeans` (default Disabled, voor zeldzame tweaks waar Windows-default exact onze EnabledValue is)
+- `MatchOpState` in TweakService: walk eerst alle alternates — als ÉÉN matcht → return Enabled direct. Anders fall-through naar bestaande primary-comparison met `AbsenceMeans` ipv hardcoded Disabled. Alternates kunnen alleen voor Enabled stemmen, nooit voor Disabled (advisory reads, niet authoritative writes)
+- Backward-compatible: bestaande 14 Explorer/Taskbar tweaks compileren ongewijzigd
+
+Alternates gewired voor de problematische tweaks (research-driven, niet hardcoded):
+- **HideRecommendedSection**: HKLM-policy (gpedit Pro/Ent), PolicyManager (MDM/Intune), Start_IrisRecommendations=0 (Win11 Home Settings-toggle die hetzelfde visuele effect heeft)
+- **DisableBingSearch**: HKLM DisableSearchBoxSuggestions + ConnectedSearchUseWeb=0 (HKLM én HKCU policy). BingSearchEnabled bewust GEEN alternate — research wijst uit dat 'ie onbetrouwbaar werkt op 24H2+
+- **HideMostUsedApps (Start_TrackProgs)**: ShowOrHideMostUsedApps=2 (alternative tweaker-key), NoInstrumentation policy
+- **HideCopilot (ShowCopilotButton)**: HKCU + HKLM TurnOffWindowsCopilot=1 (vooral Enterprise/Education-honored op 24H2+)
+- **HideWidgets (TaskbarDa)**: HKLM Dsh\AllowNewsAndInterests=0 + MDM PolicyManager equivalent
+
+Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum threads, Winaero / WindowsLatest writeups voor Win11 24H2/25H2-specifieke gedragsveranderingen — zie commit-log voor link-lijst.
+
+**7 Start Menu tweaks** in TweakService.BuildAll():
+- **Layout** (multi-choice ComboBox: Default / More pins / More recommendations) — mirror van Settings > Personalization > Start > Layout. Schrijft `Start_Layout` DWORD 0/1/2 onder Explorer\Advanced
+- **Hide Recommended section** — policy `HKCU\Software\Policies\Microsoft\Windows\Explorer\HideRecommendedSection=1`. Verbergt de hele Recommended sectie onderaan Start (MRU + tips). Werkt op Win11 22H2+ ook op Home (policy-engine is decoupled van Pro-only UI)
+- **Hide most-used apps** — `Start_TrackProgs=0`. Start toont alleen pinned items, geen automatische top-rij meer
+- **Hide recently opened items** — `Start_TrackDocs=0`. MRU-files verdwijnen uit Recommended + uit taskbar/Start jump-lists
+- **Disable web search in Start** — schrijft 3 HKCU keys in 1 toggle: `Policies\...\Explorer\DisableSearchBoxSuggestions=1` (modern policy) + `Search\BingSearchEnabled=0` (legacy, sub-builds 22H2/23H2) + `Search\CortanaConsent=0` (Win10 companion). Verschillende Win11 builds honoreren verschillende keys; alle drie schrijven dekt 22H2 t/m 25H2. Aggregate-detection toont Partial als user maar 1 van de 3 keys had gezet
+- **Disable Search Highlights** — `Feeds\DSB\ShowDynamicContent=0` + `SearchSettings\IsDynamicSearchBoxEnabled=0` (legacy + modern key in 1 toggle). Verwijdert de roterende 'today in history' / Bing trending content
+- **Disable Cortana** — HKLM `Policies\...\Windows Search\AllowCortana=0`. Vereist UAC. SignOut-requirement zodat user weet dat dit niet live live update
+
+**Shell-host restart logica uitgebreid** in ApplyAsync + ApplyChoiceAsync:
+- Was: `needsTaskbarRebind` — restart SearchHost.exe + StartMenuExperienceHost.exe alleen voor Taskbar-categorie of `\Search\` paden
+- Nu: `needsShellHostRestart` — ook voor StartMenu-categorie én voor tweaks die het `\Policies\Microsoft\Windows\Explorer` pad raken (HideRecommendedSection / DisableSearchBoxSuggestions). Anders zou een Start-tweak een F5 in Settings nodig hebben om te tonen
+
+**Categories collapsed by default** voor overzicht — was: per-categorie een TextBlock-header met cards eronder direct in beeld; nu: Expander per categorie, default `IsExpanded=false`. Header toont category-naam + "N/M active" count (Enabled + Partial geteld) zodat user direct ziet welke categorieën al deels actief zijn zonder open te klikken. `HorizontalContentAlignment=Stretch` op de Expander zodat cards de volle width pakken
+
+**Diagnostic failure-messages** in `TweakApplyResult` + ResultBar — was: "1 change(s) failed" + "Check tweak state per item" (geen info wat). Nu: `TweakApplyResult.FailureMessages` lijst met per-op `<key>: <reason>` strings. InfoBar toont tot 4 regels met `<tweak.Name> → <key>: <reason>` formaat; bij meer failures: "…en N meer". Helpt diagnose wanneer een specifieke key op een edge-case build niet writable is (UCPD / ACL / type-mismatch / etc.)
+
+**Disable web search in Start: multi-op write** — was: alleen `DisableSearchBoxSuggestions=1` (policy-key, niet consistent gehonoreerd op 24H2+). Nu: 3 HKCU ops in 1 toggle — Explorer-policy + `Search\BingSearchEnabled=0` + `Search\CortanaConsent=0`. Geen UAC (allemaal HKCU). Aggregate-detectie toont nu Partial als user maar 1 van de 3 keys eerder had gezet → zichtbaar dat de tweak alleen deels gedraaid is
+
+**Diagnostic failure-messages** in `TweakApplyResult` + ResultBar — was: "1 change(s) failed" + "Check tweak state per item" (geen info wat). Nu: `TweakApplyResult.FailureMessages` lijst met per-op `<key>: <reason>` strings; InfoBar toont tot 4 regels met `<tweak.Name> → <key>: <reason>`. Bij meer failures: "...en N meer". Help diagnose wanneer een specifieke key op een edge-case build niet writable is (UCPD / ACL / type-mismatch / etc.)
+
 ### v0.9.2 — Taskbar category + Search ComboBox + checkbox-batch UX
 
 **UX herontwerp na user-feedback** (per-toggle apply gaf race-condities + breekbaarheid op shell-cached tweaks zoals TaskbarAl). Nieuwe flow:
@@ -411,19 +451,9 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.2 — Taskbar**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.3 — Start Menu**
-- Layout: More Pins, hide Recommended section, hide MRU apps/files
-- Disable Bing/web search in Start, disable Search Highlights
-- Disable Cortana
+~~**v0.9.3 — Start Menu**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.4 — Ads & Bloat (OFGB-equivalent)**
-- 22 keys onder `ContentDeliveryManager` als 1 bundle-toggle "Disable all suggested/sponsored content"
-- File Explorer OneDrive sync ads (`ShowSyncProviderNotifications`)
-- Lock-screen tips/tricks/facts, Welcome experience after updates
-- Settings app ads (3 keys: 338393 / 353694 / 353696)
-- "Finish setting up your device" full-screen popup (`ScoobeSystemSettingEnabled`)
-- Auto-install OEM/Store apps (`PreInstalledAppsEnabled`, `SilentInstalledAppsEnabled`, `OemPreInstalledAppsEnabled`)
-- Optioneel: HKLM CloudContent policies (Pro/Edu only — Home grayed out met tooltip)
+~~**v0.9.4 — Ads & Bloat (OFGB-equivalent)**~~ — gedaan (zie Voltooide versies)
 
 **v0.9.5 — AI / Copilot (Win11 24H2+)**
 - Disable Copilot (Win+C key), hide Copilot button op taskbar (al in v0.9.2)

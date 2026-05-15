@@ -51,6 +51,23 @@ public enum TweakState
     Unknown
 }
 
+// Read-only alternatief signaal dat ALLEEN voor state-detectie wordt gebruikt
+// (nooit voor write/apply). Sommige tweaks kunnen via meerdere registry-paden
+// effectief actief gemaakt worden — bv. Win11 Home heeft geen Settings UI
+// voor HideRecommendedSection policy, maar wel een Start_IrisRecommendations
+// toggle die hetzelfde visuele effect heeft. Als ÉÉN AlternateEnabledPath
+// matcht → tweak telt als Enabled. Per-tweak research-driven (zie commit-log
+// v0.9.4 "Multi-path detection" voor de bronnen).
+//
+// Value == null betekent "value MOET absent zijn voor deze signal-hit".
+public sealed record TweakAlternateSignal
+{
+    public string Path { get; init; } = string.Empty;
+    public string ValueName { get; init; } = string.Empty;
+    public RegistryValueKind Kind { get; init; } = RegistryValueKind.DWord;
+    public object? EnabledValue { get; init; }
+}
+
 // Een registry-operatie binnen een tweak. Een tweak heeft 1..N ops; allemaal
 // moeten in EnabledValue-state staan voor "tweak actief".
 //
@@ -63,6 +80,16 @@ public enum TweakState
 // (DeleteSubKeyTree) i.p.v. alleen de value. Nodig voor tweaks zoals classic
 // context menu - daar maken we een hele CLSID-subkey aan om de tweak te
 // activeren, en bij revert willen we die parent-key opruimen.
+//
+// AlternateEnabledPaths: read-only signalen die ÓÓK als "tweak actief"
+// gerekend worden. Zie TweakAlternateSignal. Schrijf-logica gebruikt nooit
+// deze paden — alleen Path/ValueName.
+//
+// AbsenceMeans: wat moet detectie returnen als de primary value absent is en
+// noch EnabledValue noch DisabledValue null is? Default Disabled (= de tweak
+// is niet door ons aangezet en Windows zit in default-gedrag). Voor zeldzame
+// tweaks waar Windows-default exact ONZE EnabledValue is, zet je dit op
+// Enabled.
 public sealed record TweakOperation
 {
     public string Path { get; init; } = string.Empty;       // "HKCU\\Software\\..." of "HKLM\\..."
@@ -73,6 +100,9 @@ public sealed record TweakOperation
     public bool DeleteKeyOnAbsent { get; init; }
     // True wanneer HKLM (machine-scope) - moet via elevated batch.
     public bool RequiresElevation { get; init; }
+    public IReadOnlyList<TweakAlternateSignal> AlternateEnabledPaths { get; init; }
+        = Array.Empty<TweakAlternateSignal>();
+    public TweakState AbsenceMeans { get; init; } = TweakState.Disabled;
 }
 
 // Een registry-set die hoort bij één gekozen optie in een multi-state tweak.

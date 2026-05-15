@@ -79,18 +79,49 @@ public sealed partial class TweaksPage : Page
 
         foreach (var group in grouped)
         {
-            var section = new StackPanel { Spacing = 8 };
-            section.Children.Add(new TextBlock
+            // Header met categorie-naam + "N active / M total" count zodat
+            // user direct kan zien welke categorie tweaks bevat die al actief
+            // staan zonder de Expander open te klikken.
+            var tweaksInGroup = group.OrderBy(t => t.Name).ToList();
+            var activeCount = tweaksInGroup.Count(t => t.State == TweakState.Enabled || t.State == TweakState.Partial);
+            var header = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            header.Children.Add(new TextBlock
             {
                 Text = group.Key.DisplayName(),
-                Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
-                Margin = new Thickness(0, 0, 0, 4)
+                Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+                VerticalAlignment = VerticalAlignment.Center
             });
-            foreach (var tweak in group.OrderBy(t => t.Name))
+            header.Children.Add(new TextBlock
             {
-                section.Children.Add(BuildTweakCard(tweak));
-            }
-            CategoriesContainer.Children.Add(section);
+                Text = $"{activeCount}/{tweaksInGroup.Count} active",
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            // Content stack — alle tweak-cards van deze categorie onder elkaar.
+            var cards = new StackPanel { Spacing = 8, Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var tweak in tweaksInGroup)
+                cards.Children.Add(BuildTweakCard(tweak));
+
+            // Default collapsed voor overzicht — user opent per categorie wat 'ie
+            // wil zien. HorizontalAlignment.Stretch + HorizontalContentAlignment
+            // zorgen dat het content-panel de volle breedte krijgt zodat cards
+            // niet inkrimpen naar Expander's natuurlijke content-width.
+            var expander = new Expander
+            {
+                Header = header,
+                Content = cards,
+                IsExpanded = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch
+            };
+            CategoriesContainer.Children.Add(expander);
         }
     }
 
@@ -276,6 +307,10 @@ public sealed partial class TweaksPage : Page
         var totalFailed = 0;
         var cancelled = false;
         var anyExplorerRestartTweak = false;
+        // Per-tweak failure-tracking voor de InfoBar — laat user precies zien
+        // welke tweak faalde + de exception/reg.exe-error string. Anders blijft
+        // het bij een nietszeggende "1 change(s) failed" message.
+        var failureLines = new List<string>();
 
         try
         {
@@ -298,6 +333,8 @@ public sealed partial class TweaksPage : Page
                 totalFailed += result.FailedCount;
                 if (result.Cancelled) cancelled = true;
                 if (tweak.Restart == RestartRequirement.ExplorerRestart) anyExplorerRestartTweak = true;
+                foreach (var msg in result.FailureMessages)
+                    failureLines.Add($"{tweak.Name} → {msg}");
             }
 
             // Eén explorer-restart aan het einde voor shell-cached tweaks
@@ -338,7 +375,17 @@ public sealed partial class TweaksPage : Page
             {
                 ResultBar.Severity = InfoBarSeverity.Error;
                 ResultBar.Title = $"{totalFailed} change(s) failed";
-                ResultBar.Message = $"{totalSuccess} succeeded. Check tweak state per item.";
+                // Toon de eerste paar failure-lijnen direct in de message zodat
+                // user kan zien WELKE tweak/key faalde en de exacte reason. Bij
+                // veel failures cappen we op 4 + "..." om de InfoBar leesbaar te
+                // houden; de rest blijft te vinden via de tweak-state (Disabled
+                // pill = niet doorgekomen).
+                var preview = failureLines.Take(4).ToList();
+                var more = failureLines.Count - preview.Count;
+                var body = string.Join("\n", preview);
+                if (more > 0) body += $"\n…en {more} meer.";
+                if (totalSuccess > 0) body += $"\n({totalSuccess} writes wel succesvol)";
+                ResultBar.Message = body;
             }
             ResultBar.IsOpen = true;
         }
