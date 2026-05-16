@@ -23,6 +23,11 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0"
@@ -266,6 +271,201 @@
 
             <InfoBar x:Name="SelectionResultBar"
                      Grid.Row="10"
+                     Severity="Informational"
+                     IsOpen="False"
+                     IsClosable="True"
+                     Margin="0,12,0,0" />
+
+            <!-- ── BACKUP & HERSTEL (Tweaks snapshots) ── -->
+            <TextBlock Grid.Row="11"
+                       Text="Backup &amp; herstel"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,28,0,12" />
+
+            <Border Grid.Row="12"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xE7B8;"
+                              FontSize="20"
+                              VerticalAlignment="Top"
+                              Margin="0,6,0,0"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock Text="Backup voor Tweaks Apply"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Wij maken een snapshot van alle registry-waardes die door je Tweaks-keuzes geraakt worden, vóór de Apply. De knop 'Vorige staat herstellen' op de Tweaks tab zet alles dan exact terug." />
+
+                        <RadioButtons x:Name="BackupModeRadios"
+                                      SelectionChanged="BackupModeRadios_SelectionChanged"
+                                      Margin="0,8,0,0">
+                            <RadioButton Content="Vraag elke keer (aanbevolen)" Tag="Ask" />
+                            <RadioButton Content="Altijd automatisch backup" Tag="Always" />
+                            <RadioButton Content="Nooit backup maken" Tag="Never" />
+                        </RadioButtons>
+                    </StackPanel>
+
+                    <Button Grid.Column="2"
+                            x:Name="BrowseSnapshotsButton"
+                            Click="BrowseSnapshotsButton_Click"
+                            VerticalAlignment="Top">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                            <TextBlock x:Name="BrowseSnapshotsText" Text="Bekijk snapshots..." />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- ── SYSTEM RESTORE POINTS (Deep Clean + Debloat) ── -->
+            <TextBlock Grid.Row="13"
+                       Text="System Restore Points"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,28,0,12" />
+
+            <Border Grid.Row="14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="12">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xE777;"
+                                  FontSize="20"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Restore point voor Deep Clean"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Name="DeepCleanRestorePointStatus"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Voor elke delete-batch een Windows System Restore Point maken. Eén UAC-prompt voor het hele scenario (checkpoint + delete samen)." />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center">
+                            <FontIcon x:Name="DeepCleanWarningGlyph"
+                                      Glyph="&#xE7BA;"
+                                      FontSize="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                      Visibility="Collapsed"
+                                      ToolTipService.ToolTip="" />
+                            <ToggleSwitch x:Name="DeepCleanRestoreToggle"
+                                          Toggled="DeepCleanRestoreToggle_Toggled" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xE777;"
+                                  FontSize="20"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Restore point voor Debloat"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Name="DebloatRestorePointStatus"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Voor elke uninstall-batch een Windows System Restore Point maken. Vangt OEM-driver of Windows-feature regressies op." />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center">
+                            <FontIcon x:Name="DebloatWarningGlyph"
+                                      Glyph="&#xE7BA;"
+                                      FontSize="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                      Visibility="Collapsed"
+                                      ToolTipService.ToolTip="" />
+                            <ToggleSwitch x:Name="DebloatRestoreToggle"
+                                          Toggled="DebloatRestoreToggle_Toggled" />
+                        </StackPanel>
+                    </Grid>
+
+                    <InfoBar x:Name="RestorePointGlobalStatus"
+                             Severity="Informational"
+                             IsOpen="False"
+                             IsClosable="False" />
+
+                    <!-- Restore points beheren: opent de Windows System Restore
+                         wizard (rstrui.exe). Vanuit daar kan user een eerder
+                         restore point selecteren en het systeem terugzetten —
+                         dat zelf doen via PowerShell vereist reboot + admin en
+                         is geen UX-winst tegenover de native wizard. -->
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xE7A7;"
+                                  FontSize="20"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Restore points beheren / terugzetten"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Opent de Windows System Restore wizard waar je een eerder restore point kunt selecteren om je systeem terug te zetten. Reboot is vereist voor de daadwerkelijke restore." />
+                        </StackPanel>
+                        <Button Grid.Column="2"
+                                x:Name="OpenSystemRestoreButton"
+                                Click="OpenSystemRestoreButton_Click"
+                                VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8A7;" FontSize="14" />
+                                <TextBlock Text="Open wizard" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <InfoBar x:Name="BackupResultBar"
+                     Grid.Row="15"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"

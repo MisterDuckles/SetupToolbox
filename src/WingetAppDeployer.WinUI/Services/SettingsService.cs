@@ -5,6 +5,20 @@ using System.Text.Json.Serialization;
 
 namespace WingetAppDeployer_WinUI.Services;
 
+// Wanneer wordt voor een Tweaks Apply een registry-snapshot gemaakt?
+//   Ask    = elke keer dialoog tonen met optie "ja met optionele naam" / "nee" /
+//            checkbox "vraag dit niet meer" (zet mode op Always/Never)
+//   Always = altijd silent een snapshot maken zonder te vragen
+//   Never  = nooit snapshots maken; "Vorige staat herstellen" knop blijft
+//            werken op eerder gemaakte snapshots maar nieuwe Apply's voegen
+//            niets toe aan de geschiedenis
+public enum BackupBeforeApplyMode
+{
+    Ask = 0,
+    Always = 1,
+    Never = 2
+}
+
 // JSON-backed settings store voor unpackaged WinUI app. Leeft in
 // %LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json. Singleton via App.Settings.
 // Save() schrijft synchroon — settings zijn klein (paar kb max) dus geen async nodig.
@@ -109,6 +123,76 @@ public sealed class SettingsService
         }
     }
 
+    // Backup-policy voor Tweaks Apply-batches. Default Ask zodat nieuwe users
+    // bewust een keuze maken bij hun eerste Apply; power-users kunnen 't naar
+    // Always of Never zetten in Settings. Bij Ask toont TweaksPage een
+    // BackupPromptDialog voor elke Apply.
+    public BackupBeforeApplyMode BackupBeforeApply
+    {
+        get => _data.BackupBeforeApply;
+        set
+        {
+            if (_data.BackupBeforeApply == value) return;
+            _data.BackupBeforeApply = value;
+            Save();
+        }
+    }
+
+    // Maakt een Windows System Restore Point voor de elevated delete-batch van
+    // Deep Clean draait. Standaard ON na first-run config (zie FirstRun-flag).
+    // 24h rate-limit: Windows skipt nieuwe checkpoints binnen 24u sinds laatste —
+    // niet onze keuze, geen workaround zonder system-level reg-tweak die we
+    // niet stiekem willen doen.
+    public bool RestorePointBeforeDeepClean
+    {
+        get => _data.RestorePointBeforeDeepClean;
+        set
+        {
+            if (_data.RestorePointBeforeDeepClean == value) return;
+            _data.RestorePointBeforeDeepClean = value;
+            Save();
+        }
+    }
+
+    // Heeft user de first-run "wil je restore points voor Deep Clean?" prompt
+    // al beantwoord? Zo niet, toont DeepCleanPage de prompt voor de eerste
+    // scan/delete operatie en gebruikt de keuze om RestorePointBeforeDeepClean
+    // te zetten + deze flag op true.
+    public bool DeepCleanRestorePointConfigured
+    {
+        get => _data.DeepCleanRestorePointConfigured;
+        set
+        {
+            if (_data.DeepCleanRestorePointConfigured == value) return;
+            _data.DeepCleanRestorePointConfigured = value;
+            Save();
+        }
+    }
+
+    // Idem als RestorePointBeforeDeepClean maar voor de Debloat-tab (uninstalls
+    // + bloatware verwijderingen). Default ON na first-run config.
+    public bool RestorePointBeforeDebloat
+    {
+        get => _data.RestorePointBeforeDebloat;
+        set
+        {
+            if (_data.RestorePointBeforeDebloat == value) return;
+            _data.RestorePointBeforeDebloat = value;
+            Save();
+        }
+    }
+
+    public bool DebloatRestorePointConfigured
+    {
+        get => _data.DebloatRestorePointConfigured;
+        set
+        {
+            if (_data.DebloatRestorePointConfigured == value) return;
+            _data.DebloatRestorePointConfigured = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -155,5 +239,20 @@ public sealed class SettingsService
 
         [JsonPropertyName("scanLeftoversAfterUninstall")]
         public bool ScanLeftoversAfterUninstall { get; set; } = true;
+
+        [JsonPropertyName("backupBeforeApply")]
+        public BackupBeforeApplyMode BackupBeforeApply { get; set; } = BackupBeforeApplyMode.Ask;
+
+        [JsonPropertyName("restorePointBeforeDeepClean")]
+        public bool RestorePointBeforeDeepClean { get; set; } = true;
+
+        [JsonPropertyName("deepCleanRestorePointConfigured")]
+        public bool DeepCleanRestorePointConfigured { get; set; } = false;
+
+        [JsonPropertyName("restorePointBeforeDebloat")]
+        public bool RestorePointBeforeDebloat { get; set; } = true;
+
+        [JsonPropertyName("debloatRestorePointConfigured")]
+        public bool DebloatRestorePointConfigured { get; set; } = false;
     }
 }

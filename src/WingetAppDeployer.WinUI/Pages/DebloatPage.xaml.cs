@@ -510,6 +510,31 @@ public sealed partial class DebloatPage : Page
 
         if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
 
+        // First-run config voor System Restore Points: bij de eerste Debloat-
+        // actie vraag user éénmalig of we restore points willen maken voor
+        // toekomstige uninstall-batches. Setting + flag opgeslagen → volgende
+        // keer komt deze popup niet meer (te wijzigen via Settings).
+        if (!App.Settings.DebloatRestorePointConfigured)
+        {
+            var cfg = new Dialogs.RestorePointConfigDialog
+            {
+                OperationName = "Debloat",
+                XamlRoot = this.XamlRoot
+            };
+            var result = await cfg.ShowAsync();
+            App.Settings.RestorePointBeforeDebloat = (result == ContentDialogResult.Primary);
+            App.Settings.DebloatRestorePointConfigured = true;
+        }
+
+        // Threading van restore-point-description naar bloatware uninstall:
+        // bundle 't met de eerste elevated batch zodat 1 UAC voor checkpoint +
+        // AppX-removal samen. Wanneer er geen bloatware items zijn maar wel
+        // apps, dan vóór de apps-uninstall een aparte CreateAsync. Bij 24h
+        // rate-limit (binnen 24u na vorig point) skipt Windows silent.
+        string? rpDescription = App.Settings.RestorePointBeforeDebloat
+            ? $"WingetAppDeployer Debloat ({totalCount} items)"
+            : null;
+
         // Refs verzamelen voor de gecombineerde leftover-scan na afloop. Per
         // succesvol verwijderd item één UninstalledAppRef.
         var leftoverRefs = new List<UninstalledAppRef>();
@@ -519,8 +544,11 @@ public sealed partial class DebloatPage : Page
         // prompt voor de hele AppX-batch.
         if (bloatwareSelected.Count > 0)
         {
-            var bloatDialog = new BloatwareUninstallDialog(bloatwareSelected, App.Bloatware) { XamlRoot = this.XamlRoot };
+            var bloatDialog = new BloatwareUninstallDialog(bloatwareSelected, App.Bloatware, rpDescription) { XamlRoot = this.XamlRoot };
             await bloatDialog.ShowAsync();
+            // Checkpoint zit nu in de bloatware-batch geconsumed — clear voor de
+            // apps-fase, anders zouden we proberen een tweede te maken.
+            rpDescription = null;
             foreach (var b in bloatDialog.SuccessfulItems)
                 leftoverRefs.Add(new UninstalledAppRef(
                     DisplayName: b.DisplayName,
@@ -536,6 +564,16 @@ public sealed partial class DebloatPage : Page
         // BloatwareService API te herschrijven).
         if (appsSelected.Count > 0)
         {
+            // Wanneer rpDescription nog niet null is (= geen bloatware-batch
+            // gedraaid maar wel apps-batch), upfront een aparte restore point
+            // maken. Extra UAC-prompt, niet ideaal maar acceptabel als 'normal'
+            // safety-net flow. MixedSourceUninstaller threading is voor latere
+            // iteratie.
+            if (rpDescription != null)
+            {
+                _ = await App.RestorePoint.CreateAsync(rpDescription);
+                rpDescription = null;
+            }
             var appsDialog = new AllAppsUninstallDialog(appsSelected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
             await appsDialog.ShowAsync();
             leftoverRefs.AddRange(appsDialog.SuccessfulItems.Select(BuildAppRef));

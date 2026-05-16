@@ -813,7 +813,17 @@ public sealed partial class DeepCleanDialog : ContentDialog
             ToggleAllButton.IsEnabled = false;
             foreach (var cb in EnumerateItemCheckBoxes()) cb.IsEnabled = false;
 
-            DeleteResult = await _service.DeleteAsync(selected);
+            // Optionele Windows System Restore Point vóór de delete. Setting
+            // wordt voorafgaand aan dialog-open geconfigureerd (zie
+            // DeepCleanPage first-run flow). Bij rate-limit (<24u) wordt
+            // 't checkpoint silent overgeslagen in de elevated PS-batch.
+            string? rpDescription = null;
+            if (App.Settings.RestorePointBeforeDeepClean)
+            {
+                rpDescription = $"WingetAppDeployer Deep Clean ({selected.Count} items)";
+            }
+
+            DeleteResult = await _service.DeleteAsync(selected, rpDescription);
 
             args.Cancel = true;
             ProgressBar.IsIndeterminate = false;

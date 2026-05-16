@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="WingetAppDeployer_WinUI.Dialogs.SnapshotBrowserDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Registry snapshots"
+    CloseButtonText="Sluiten"
+    DefaultButton="Close"
+    CornerRadius="8">
+
+    <Grid MinWidth="520" MinHeight="380" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Text="Elke snapshot bevat de registry-waardes zoals ze waren vóór een Tweaks Apply. Klik 'Herstel' om de registry exact terug te zetten naar dat moment. Maximaal 20 snapshots worden bewaard; oudere worden automatisch verwijderd." />
+
+        <ScrollView Grid.Row="1"
+                    VerticalScrollBarVisibility="Auto"
+                    Padding="0,0,12,0">
+            <StackPanel x:Name="SnapshotList" Spacing="8" />
+        </ScrollView>
+
+        <InfoBar x:Name="ResultBar"
+                 Grid.Row="2"
+                 Severity="Informational"
+                 IsOpen="False"
+                 IsClosable="True" />
+
+        <Grid x:Name="EmptyPanel"
+              Grid.Row="1"
+              Visibility="Collapsed">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                <FontIcon Glyph="&#xE7B8;"
+                          FontSize="48"
+                          Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                <TextBlock Text="Nog geen snapshots"
+                           Style="{StaticResource SubtitleTextBlockStyle}"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="Snapshots worden automatisch aangemaakt voor je een Tweaks Apply uitvoert (afhankelijk van je instelling)."
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap"
+                           HorizontalAlignment="Center"
+                           MaxWidth="380"
+                           TextAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</ContentDialog>

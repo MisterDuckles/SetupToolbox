@@ -44,6 +44,8 @@ public partial class App : Application
     public static LeftoverScannerService LeftoverScanner { get; } = new();
     public static DeepCleanService DeepClean { get; } = new();
     public static TweakService Tweaks { get; } = new();
+    public static SnapshotService Snapshots { get; } = new();
+    public static RestorePointService RestorePoint { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code

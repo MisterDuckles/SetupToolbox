@@ -26,11 +26,18 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
     // scanner sturen.
     public IReadOnlyList<BloatwareItem> SuccessfulItems { get; private set; } = new List<BloatwareItem>();
 
-    public BloatwareUninstallDialog(IReadOnlyList<BloatwareItem> items, BloatwareService service)
+    // Optionele restore-point description die we vóór de Remove-AppxPackage
+    // batch willen meeschieten zodat user 1 UAC krijgt voor checkpoint + delete
+    // samen. Null = geen restore point maken (setting uit of al gemaakt door
+    // andere flow-step). Bij 24h rate-limit silent skip in de PS-batch.
+    private readonly string? _restorePointDescription;
+
+    public BloatwareUninstallDialog(IReadOnlyList<BloatwareItem> items, BloatwareService service, string? restorePointDescription = null)
     {
         InitializeComponent();
         _items = items;
         _service = service;
+        _restorePointDescription = restorePointDescription;
 
         foreach (var item in items)
             _entries.Add(new BloatwareUninstallEntry(item.DisplayName));
@@ -47,7 +54,7 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
         ProgressHeader.Text = $"Removing {total} bloatware item{(total == 1 ? "" : "s")}";
 
         var progress = new System.Progress<BloatwareProgress>(OnProgress);
-        var result = await _service.UninstallBatchAsync(_items, progress);
+        var result = await _service.UninstallBatchAsync(_items, progress, _restorePointDescription);
 
         if (result.SuccessCount > 0) HadSuccessfulRemoval = true;
 

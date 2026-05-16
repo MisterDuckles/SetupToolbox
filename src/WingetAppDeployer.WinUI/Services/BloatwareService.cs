@@ -175,7 +175,8 @@ public sealed class BloatwareService
     /// </summary>
     public async Task<BloatwareUninstallResult> UninstallBatchAsync(
         IReadOnlyList<BloatwareItem> items,
-        IProgress<BloatwareProgress>? progress = null)
+        IProgress<BloatwareProgress>? progress = null,
+        string? restorePointDescription = null)
     {
         if (items.Count == 0)
             return new BloatwareUninstallResult(0, 0, new Dictionary<string, (bool, string)>(), Cancelled: false);
@@ -195,6 +196,21 @@ public sealed class BloatwareService
         sb.AppendLine($"$logPath = '{EscapePath(logPath)}'");
         sb.AppendLine("function Log($msg) { Add-Content -Path $logPath -Value $msg }");
         sb.AppendLine("Log \"START|$(Get-Date -Format o)\"");
+
+        // Optionele System Restore Point vóór de Remove-AppxPackage batch.
+        // Bij 24h rate-limit silent skip — exception gevangen zodat de
+        // uninstall-batch hoe dan ook doorgaat.
+        if (!string.IsNullOrEmpty(restorePointDescription))
+        {
+            var escapedDesc = restorePointDescription.Replace("'", "''");
+            sb.AppendLine("Log \"CHECKPOINT|START\"");
+            sb.AppendLine("try {");
+            sb.AppendLine($"    Checkpoint-Computer -Description '{escapedDesc}' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop");
+            sb.AppendLine("    Log \"CHECKPOINT|OK\"");
+            sb.AppendLine("} catch {");
+            sb.AppendLine("    Log \"CHECKPOINT|SKIP|$($_.Exception.Message)\"");
+            sb.AppendLine("}");
+        }
 
         for (int i = 0; i < items.Count; i++)
         {

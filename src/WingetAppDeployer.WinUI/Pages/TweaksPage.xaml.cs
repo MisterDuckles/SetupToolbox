@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
+using WingetAppDeployer_WinUI.Dialogs;
 using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
 using WingetAppDeployer_WinUI.Services;
@@ -61,7 +62,18 @@ public sealed partial class TweaksPage : Page
         _pendingChanges.Clear();
         BuildCategoryCards();
         UpdateApplyButton();
+        UpdateRestoreButton();
         LoadingOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    // "Vorige staat herstellen" knop alleen zichtbaar wanneer er minstens 1
+    // snapshot bestaat. Wordt elke keer ge-re-evalueerd na een Apply (nieuwe
+    // snapshot komt erbij) of een restore (state verandert maar snapshot
+    // blijft, knop blijft zichtbaar).
+    private void UpdateRestoreButton()
+    {
+        var hasSnapshots = App.Snapshots.GetLatest() != null;
+        RestoreButton.Visibility = hasSnapshots ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
@@ -347,11 +359,66 @@ public sealed partial class TweaksPage : Page
         if (_pendingChanges.Count == 0) return;
 
         var snapshot = _pendingChanges.ToList();
+        var pendingTweaks = snapshot.Select(kv => kv.Key).ToList();
+
+        // Backup-flow vóór de daadwerkelijke Apply. Afhankelijk van
+        // SettingsService.BackupBeforeApply:
+        //   Ask    → BackupPromptDialog tonen, user kiest custom naam +
+        //            "ja met backup" / "nee zonder" / "annuleer"
+        //   Always → silent snapshot maken met auto-description
+        //   Never  → niets, direct door naar apply
+        var mode = App.Settings.BackupBeforeApply;
+        var captureSnapshot = false;
+        var snapshotName = string.Empty;
+
+        if (mode == BackupBeforeApplyMode.Ask)
+        {
+            var prompt = new BackupPromptDialog { XamlRoot = this.XamlRoot };
+            var result = await prompt.ShowAsync();
+            if (result == ContentDialogResult.None) return;  // user canceled = abort apply
+
+            captureSnapshot = (result == ContentDialogResult.Primary);
+            snapshotName = prompt.CustomName;
+
+            // "Niet meer vragen" → settings switchen naar Always/Never zodat
+            // dezelfde keuze automatisch hergebruikt wordt.
+            if (prompt.DontAskAgain)
+            {
+                App.Settings.BackupBeforeApply = captureSnapshot
+                    ? BackupBeforeApplyMode.Always
+                    : BackupBeforeApplyMode.Never;
+            }
+        }
+        else if (mode == BackupBeforeApplyMode.Always)
+        {
+            captureSnapshot = true;
+        }
+        // Never → captureSnapshot blijft false
+
         ApplyButton.IsEnabled = false;
         DiscardButton.IsEnabled = false;
         RestartExplorerButton.IsEnabled = false;
-        LoadingOverlayText.Text = $"Applying {snapshot.Count} change{(snapshot.Count == 1 ? "" : "s")}...";
+        LoadingOverlayText.Text = captureSnapshot
+            ? "Snapshot maken..."
+            : $"Applying {snapshot.Count} change{(snapshot.Count == 1 ? "" : "s")}...";
         LoadingOverlay.Visibility = Visibility.Visible;
+
+        // Snapshot voor de écht écht écht eerste write — anders zit de "voor"-
+        // state al gepollueerd door de eerste op-write. CaptureAsync leest
+        // synchroon de registry voor we wat doen.
+        if (captureSnapshot)
+        {
+            try
+            {
+                await App.Snapshots.CaptureAsync(pendingTweaks, snapshotName);
+            }
+            catch
+            {
+                // Snapshot is een vangnet — bij faal niet aborten, door met
+                // apply zoals voorheen.
+            }
+            LoadingOverlayText.Text = $"Applying {snapshot.Count} change{(snapshot.Count == 1 ? "" : "s")}...";
+        }
 
         var totalSuccess = 0;
         var totalFailed = 0;
@@ -405,6 +472,7 @@ public sealed partial class TweaksPage : Page
             _pendingChanges.Clear();
             BuildCategoryCards();
             UpdateApplyButton();
+            UpdateRestoreButton();
 
             // Resultaat-feedback in InfoBar.
             if (cancelled)
@@ -453,6 +521,19 @@ public sealed partial class TweaksPage : Page
         // Reset alle checkboxes/comboboxes terug naar de detected systeem-state.
         // Simplest implementation: re-detect + rebuild (zelfde als initial load).
         await LoadStateAndRender("Discarding pending changes...");
+    }
+
+    // "Vorige staat herstellen" — toont een dialoog die alle snapshots laat
+    // zien zodat user kan kiezen welke staat 'ie terug wil (niet alleen de
+    // laatste). Dialoog handelt zelf de restore-call + confirm-prompt af.
+    private async void RestoreButton_Click(object sender, RoutedEventArgs e)
+    {
+        var browser = new SnapshotBrowserDialog { XamlRoot = this.XamlRoot };
+        await browser.ShowAsync();
+        // Na sluiten: re-detect states want de restore kan registry hebben
+        // gewijzigd. Pending changes blijven niet bestaan (gebruiker heeft
+        // page-state niet aangeraakt tijdens de modal dialog).
+        await LoadStateAndRender("Re-reading state...");
     }
 
     private async void RestartExplorerButton_Click(object sender, RoutedEventArgs e)

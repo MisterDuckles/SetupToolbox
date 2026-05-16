@@ -180,6 +180,23 @@ public sealed partial class DeepCleanPage : Page
         }
         CleanupResultBar.IsOpen = true;
 
+        // First-run config voor System Restore Points: alleen bij de
+        // allereerste Deep Clean scan, vraag user éénmalig of we restore
+        // points willen maken voor de toekomstige delete-batches. Setting
+        // wordt opgeslagen + DeepCleanRestorePointConfigured flag op true,
+        // dus volgende keer komt deze popup niet meer.
+        if (!App.Settings.DeepCleanRestorePointConfigured)
+        {
+            var cfg = new Dialogs.RestorePointConfigDialog
+            {
+                OperationName = "Deep Clean",
+                XamlRoot = this.XamlRoot
+            };
+            var result = await cfg.ShowAsync();
+            App.Settings.RestorePointBeforeDeepClean = (result == ContentDialogResult.Primary);
+            App.Settings.DeepCleanRestorePointConfigured = true;
+        }
+
         var dialog = new DeepCleanDialog(items, App.DeepClean) { XamlRoot = this.XamlRoot };
         await dialog.ShowAsync();
 

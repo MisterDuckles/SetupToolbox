@@ -1970,7 +1970,7 @@ public sealed class DeepCleanService
     /// huidige user is, maar we doen 'm vanuit de elevated batch zodat alle
     /// drives + all-users meegenomen worden).
     /// </summary>
-    public async Task<DeepCleanDeleteResult> DeleteAsync(IReadOnlyList<DeepCleanItem> items)
+    public async Task<DeepCleanDeleteResult> DeleteAsync(IReadOnlyList<DeepCleanItem> items, string? restorePointDescription = null)
     {
         if (items.Count == 0)
             return new DeepCleanDeleteResult(0, 0, 0, new Dictionary<string, (bool, string)>(), Cancelled: false);
@@ -2049,7 +2049,7 @@ public sealed class DeepCleanService
         var cancelled = false;
         if (elevated.Count > 0)
         {
-            var elevatedResult = await RunElevatedBatchAsync(elevated);
+            var elevatedResult = await RunElevatedBatchAsync(elevated, restorePointDescription);
             cancelled = elevatedResult.Cancelled;
             foreach (var kv in elevatedResult.ResultsByPath)
             {
@@ -2151,7 +2151,7 @@ public sealed class DeepCleanService
         }
     }
 
-    private static async Task<ElevatedDeleteResult> RunElevatedBatchAsync(IReadOnlyList<DeepCleanItem> items)
+    private static async Task<ElevatedDeleteResult> RunElevatedBatchAsync(IReadOnlyList<DeepCleanItem> items, string? restorePointDescription = null)
     {
         var logPath = Path.Combine(Path.GetTempPath(),
             $"WingetAppDeployer_deepclean_{DateTime.Now:yyyyMMdd_HHmmss}.log");
@@ -2161,6 +2161,21 @@ public sealed class DeepCleanService
         sb.AppendLine($"$logPath = '{Escape(logPath)}'");
         sb.AppendLine("function Log($msg) { Add-Content -Path $logPath -Value $msg }");
         sb.AppendLine("Log \"START|$(Get-Date -Format o)\"");
+
+        // Optionele Windows System Restore Point vóór de delete-batch. Wordt
+        // alleen meegestuurd als de Settings-toggle aan staat en CanCreate.
+        // Bij 24h rate-limit binnen 24u skipt Windows silent — exception
+        // gevangen zodat de delete-batch hoe dan ook doorgaat.
+        if (!string.IsNullOrEmpty(restorePointDescription))
+        {
+            sb.AppendLine("Log \"CHECKPOINT|START\"");
+            sb.AppendLine("try {");
+            sb.AppendLine($"    Checkpoint-Computer -Description '{Escape(restorePointDescription)}' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop");
+            sb.AppendLine("    Log \"CHECKPOINT|OK\"");
+            sb.AppendLine("} catch {");
+            sb.AppendLine("    Log \"CHECKPOINT|SKIP|$($_.Exception.Message)\"");
+            sb.AppendLine("}");
+        }
 
         for (int i = 0; i < items.Count; i++)
         {

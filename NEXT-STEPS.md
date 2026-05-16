@@ -10,6 +10,52 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.5 — Backup & Restore infrastructuur (Tweaks snapshots + System Restore Points)
+
+User-feedback v0.9.4 → "Zijn alle changes wel veilig en stabiel voor het systeem?". v0.9.5 voegt twee complementaire veiligheidsnetten toe — registry-snapshots voor de lichte registry-mutaties (Tweaks) en Windows System Restore Points voor de zware delete-operaties (Deep Clean + Debloat).
+
+**SnapshotService** (`Services/SnapshotService.cs`) — JSON-snapshots in `%LOCALAPPDATA%\WingetAppDeployer.WinUI\snapshots\`:
+- `CaptureAsync(tweaks, description)` leest vóór elke Apply de actuele registry-state van alle ops die zouden worden geschreven (incl. `WasAbsent` markers) en parkeert die als JSON
+- `RestoreAsync(snapshotId)` zet de exacte staat terug: schrijft `PreviousValue` waar mogelijk, deletet de value als die origineel absent was. Splitst lokale (HKCU non-policy) van elevated (HKLM + HKCU Policies) ops — elevated via 1 UAC reg.exe batch, zelfde patroon als TweakService.ApplyAsync
+- Auto-prune op 20 snapshots; oudere worden silent verwijderd. Per snapshot: id (timestamp + guid-fragment), description (user-defined of auto-gegenereerd uit tweak-namen), createdAt, tweakIds, entries
+
+**Tweaks tab integratie**:
+- Nieuwe **"Vorige staat herstellen"** knop bovenaan (naast Apply/Discard/Restart Explorer) — alleen zichtbaar als er minstens 1 snapshot bestaat. Opent de SnapshotBrowserDialog die alle snapshots toont met description + timestamp + count, met per-snapshot **Herstel** + **Verwijder** knoppen. Confirm-dialog vóór de daadwerkelijke restore zodat een misklik geen schrijfacties triggert
+- **BackupPromptDialog** vóór elke Apply (Nederlandstalig) — bevat tekstveld voor custom snapshot-naam ("Bijv. 'Voor Bing search uit'") + checkbox "Vraag dit niet meer en maak voortaan altijd backup" die de SettingsService-mode aanpast naar Always (bij Primary) of Never (bij Secondary)
+- Apply-flow: respecteert de 3-state `BackupBeforeApplyMode` setting (Ask/Always/Never)
+
+**RestorePointService** (`Services/RestorePointService.cs`) — wrapt `Checkpoint-Computer` + `Get-ComputerRestorePoint`:
+- `CreateAsync(description)` runt Checkpoint-Computer in elevated PS (1 UAC), met RestorePointType=MODIFY_SETTINGS
+- `GetStatusAsync()` returnt (canCreate, hoursSinceLast, blockedReason) — checkt System Protection state + 24h rate-limit
+- `BuildInlineCheckpointScript(description)` is een static helper voor het embedden van de checkpoint-call in een externe elevated PS-batch (zodat 1 UAC dekt voor checkpoint + delete samen)
+
+**Deep Clean integratie**:
+- `DeepCleanService.DeleteAsync(items, restorePointDescription)` accepteert nu optionele description. Wanneer non-null prepend `RunElevatedBatchAsync` een `Checkpoint-Computer` call vóór de delete — 1 UAC, geen extra dialog
+- `DeepCleanDialog` leest `Settings.RestorePointBeforeDeepClean` en stuurt description door naar DeleteAsync
+- `DeepCleanPage` toont **first-run popup** (`RestorePointConfigDialog`) bij allereerste scan: vraagt eenmalig "ja restore point" / "nee skip" en zet `DeepCleanRestorePointConfigured=true`. Volgende keer geen popup — wijzigen kan via Settings
+
+**Debloat integratie**:
+- `BloatwareService.UninstallBatchAsync(..., restorePointDescription)` accepteert nu optionele description met dezelfde prepend-checkpoint logica
+- `BloatwareUninstallDialog` propageert de description door
+- `DebloatPage` doet dezelfde first-run flow als DeepCleanPage. RPdescription wordt bij bloatware-batch verbruikt; wanneer alleen apps-batch volgt (geen bloatware geselecteerd), aparte upfront `App.RestorePoint.CreateAsync` call
+
+**Settings — nieuwe sectie "Backup & herstel"**:
+- 3-state radio buttons voor `BackupBeforeApplyMode`: "Vraag elke keer (aanbevolen)" / "Altijd automatisch backup" / "Nooit backup maken"
+- **"Bekijk snapshots..."** knop (met count) opent SnapshotBrowserDialog
+
+**Settings — nieuwe sectie "System Restore Points"**:
+- 2 toggles: "Restore point voor Deep Clean" + "Restore point voor Debloat". Toggle aanpassen markeert ook automatisch de Configured-flag zodat de first-run popup niet meer triggert
+- ⚠ **Uitroepteken-glyph** naast de toggles wanneer:
+  - System Protection uit staat op systeemschijf — tooltip wijst naar System Properties > System Protection
+  - Laatste restore point < 24u geleden — tooltip legt uit dat Windows nieuwe punten skipt binnen 24u
+- InfoBar onder de toggles voor de System Protection blokkering-melding
+
+**SettingsService extensies** (`SettingsService.cs`):
+- `BackupBeforeApplyMode` enum (Ask/Always/Never) + property (default Ask)
+- `RestorePointBeforeDeepClean` + `DeepCleanRestorePointConfigured` bools
+- `RestorePointBeforeDebloat` + `DebloatRestorePointConfigured` bools
+- JSON-persisted naar `%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json` zoals bestaande settings
+
 ### v0.9.4 — Ads & Tracking + Win11 24H2+ Policies-ACL fix + Partial-state UX
 
 **5 Ads & Tracking tweaks** (category-rename van "Ads & Bloat" — "Bloat" was verwarrend i.c.m. de Debloat-tab; deze categorie gaat puur over marketing/tracking-toggles binnen Windows). Allemaal HKCU, geen UAC:
