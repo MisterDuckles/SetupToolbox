@@ -424,6 +424,7 @@ public sealed partial class TweaksPage : Page
         var totalFailed = 0;
         var cancelled = false;
         var anyExplorerRestartTweak = false;
+        var anySignOutTweak = false;
         // Per-tweak failure-tracking voor de InfoBar — laat user precies zien
         // welke tweak faalde + de exception/reg.exe-error string. Anders blijft
         // het bij een nietszeggende "1 change(s) failed" message.
@@ -431,25 +432,65 @@ public sealed partial class TweaksPage : Page
 
         try
         {
+            // Split pending changes in 3 buckets. Toggle-tweaks worden GEBATCHT
+            // per richting (apply / revert) in één ApplyAsync-call — die
+            // verzamelt zelf alle elevated ops van alle meegegeven tweaks in
+            // ÉÉN RunElevatedBatchAsync = 1 UAC-prompt voor de hele batch.
+            // Eerder werd ApplyAsync per-tweak aangeroepen → 1 UAC per elevated
+            // tweak (4 AI-tweaks aanvinken = 4 prompts). Choice-tweaks blijven
+            // individueel (ApplyChoiceAsync neemt 1 tweak) — die zijn in de
+            // praktijk allemaal HKCU/geen-UAC dus geen prompt-spam.
+            var toggleApply = new List<Tweak>();
+            var toggleRevert = new List<Tweak>();
+            var choiceChanges = new List<(Tweak tweak, int idx)>();
             foreach (var (tweak, desiredState) in snapshot)
             {
-                TweakApplyResult result;
                 if (tweak.IsChoice && desiredState is int idx)
-                {
-                    result = await App.Tweaks.ApplyChoiceAsync(tweak, idx);
-                }
+                    choiceChanges.Add((tweak, idx));
                 else if (desiredState is bool apply)
+                    (apply ? toggleApply : toggleRevert).Add(tweak);
+            }
+
+            // Lokale helper die één ApplyAsync-batch verwerkt + de resultaat-
+            // aggregatie doet (success/fail counts, restart-flags, failures).
+            async Task RunToggleBatch(IReadOnlyList<Tweak> tweaks, bool apply)
+            {
+                if (tweaks.Count == 0) return;
+                var result = await App.Tweaks.ApplyAsync(tweaks, apply);
+                totalSuccess += result.SuccessCount;
+                totalFailed += result.FailedCount;
+                if (result.Cancelled) cancelled = true;
+                foreach (var t in tweaks)
                 {
-                    result = await App.Tweaks.ApplyAsync(new[] { tweak }, apply);
+                    if (t.Restart == RestartRequirement.ExplorerRestart) anyExplorerRestartTweak = true;
+                    // SignOut/Reboot-tweaks (Recall, Click to Do, generative-AI
+                    // policy) hebben pas effect na uitloggen. Alleen markeren
+                    // wanneer er writes slaagden.
+                    if (result.SuccessCount > 0 &&
+                        (t.Restart == RestartRequirement.SignOut || t.Restart == RestartRequirement.Reboot))
+                    {
+                        anySignOutTweak = true;
+                    }
                 }
-                else
-                {
-                    continue;
-                }
+                failureLines.AddRange(result.FailureMessages);
+            }
+
+            await RunToggleBatch(toggleApply, apply: true);
+            await RunToggleBatch(toggleRevert, apply: false);
+
+            // Choice-tweaks individueel — ApplyChoiceAsync neemt 1 tweak.
+            foreach (var (tweak, idx) in choiceChanges)
+            {
+                var result = await App.Tweaks.ApplyChoiceAsync(tweak, idx);
                 totalSuccess += result.SuccessCount;
                 totalFailed += result.FailedCount;
                 if (result.Cancelled) cancelled = true;
                 if (tweak.Restart == RestartRequirement.ExplorerRestart) anyExplorerRestartTweak = true;
+                if (result.SuccessCount > 0 &&
+                    (tweak.Restart == RestartRequirement.SignOut || tweak.Restart == RestartRequirement.Reboot))
+                {
+                    anySignOutTweak = true;
+                }
                 foreach (var msg in result.FailureMessages)
                     failureLines.Add($"{tweak.Name} → {msg}");
             }
@@ -485,9 +526,15 @@ public sealed partial class TweaksPage : Page
             {
                 ResultBar.Severity = InfoBarSeverity.Success;
                 ResultBar.Title = $"Applied {snapshot.Count} change{(snapshot.Count == 1 ? "" : "s")}";
-                ResultBar.Message = anyExplorerRestartTweak
-                    ? "Explorer herstart — wacht ~1s tot de taskbar terug is."
-                    : "Done.";
+                // Prioriteit van de melding: sign-out vereist > explorer-restart
+                // > niets. Sign-out tweaks (AI-policies etc.) hebben pas effect
+                // na uitloggen, dat moet de user weten.
+                if (anySignOutTweak)
+                    ResultBar.Message = "Sommige tweaks (zoals AI-policies) hebben pas effect nadat je uitlogt of de PC herstart.";
+                else if (anyExplorerRestartTweak)
+                    ResultBar.Message = "Explorer herstart — wacht ~1s tot de taskbar terug is.";
+                else
+                    ResultBar.Message = "Done.";
             }
             else
             {

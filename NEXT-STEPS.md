@@ -10,6 +10,22 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.6 — AI / Copilot tweaks (Win11 24H2+)
+
+**5 AI / Copilot tweaks** in de AiCopilot-categorie. Allemaal HKLM group-policy keys → `RequiresElevation=true`, batchen in 1 UAC-prompt. Research mei 2026 via Microsoft Learn Policy CSP (WindowsAI) + Manage Recall / Click to Do / Notepad docs.
+
+- **Disable Recall** — `HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI\DisableAIDataAnalysis=1`. Schakelt de Copilot+ PC screenshot-snapshotting feature uit. SignOut-requirement. Alternates: HKCU user-policy + `AllowRecallEnablement=0` (de policy die Recall als optionele component blokkeert)
+- **Disable Click to Do** — `WindowsAI\DisableClickToDo=1`. Verwijdert de 24H2+ AI-acties uit het right-click menu. SignOut-requirement. Alternate: HKCU user-policy
+- **Disable AI features in Paint** — 3-op tweak: `CurrentVersion\Policies\Paint` met `DisableCocreator` + `DisableGenerativeFill` + `DisableImageCreator` = 1. Restart Paint om effect te zien
+- **Disable AI features in Notepad** — `HKLM\SOFTWARE\Policies\WindowsNotepad\DisableAIFeatures=1` (app-level policy, let op: NIET onder `Policies\Microsoft\Windows`). Kill alle Copilot-features in Notepad. Restart Notepad
+- **Disable generative AI access for apps** — `AppPrivacy\LetAppsAccessGenerativeAI=2` (Force Deny; 0=user-controlled). System-brede AppPrivacy policy die generatieve AI-toegang voor alle apps blokkeert — dekt o.a. Image Creator in de Photos-app. SignOut-requirement
+
+**Bewust niet opgenomen** (research-onderbouwd):
+- **Win+C Copilot hotkey** — `TurnOffWindowsCopilot` is door Microsoft gedeprecateerd en grotendeels inert op 24H2/25H2 (targett de legacy Copilot-pane). De bestaande "Hide Copilot button" (v0.9.2 Taskbar) dekt de zichtbare kant al
+- **Copilot AppX removal** — hoort thuis in de Debloat-tab (AppX uninstall), niet bij de registry-toggles. `Microsoft.Copilot` is een normale Store-app, veilig te verwijderen via Debloat; system-packages (`MicrosoftWindows.Client.CoreAI` / `AIX`) zijn NIET veilig te verwijderen
+
+**SignOut-melding in ResultBar**: post-apply InfoBar meldt nu expliciet "Sommige tweaks (zoals AI-policies) hebben pas effect nadat je uitlogt of de PC herstart" wanneer een toegepaste tweak `RestartRequirement.SignOut` of `Reboot` heeft — voorheen zei 'ie alleen "Done." waardoor user dacht dat er niets gebeurd was.
+
 ### v0.9.5 — Backup & Restore infrastructuur (Tweaks snapshots + System Restore Points)
 
 User-feedback v0.9.4 → "Zijn alle changes wel veilig en stabiel voor het systeem?". v0.9.5 voegt twee complementaire veiligheidsnetten toe — registry-snapshots voor de lichte registry-mutaties (Tweaks) en Windows System Restore Points voor de zware delete-operaties (Deep Clean + Debloat).
@@ -516,12 +532,11 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.4 — Ads & Bloat (OFGB-equivalent)**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.5 — AI / Copilot (Win11 24H2+)**
-- Disable Copilot (Win+C key), hide Copilot button op taskbar (al in v0.9.2)
-- Disable Recall (HKLM + HKCU policy), Click to Do, AI in Paint/Notepad/Photos
-- Remove Copilot app uitvoeren via AppX uninstall (Microsoft.Copilot / MicrosoftWindows.Client.AI)
+~~**v0.9.5 — Backup & Restore infrastructuur**~~ — gedaan (zie Voltooide versies; nieuw item, niet in originele roadmap — daardoor schuift de rest van de v0.9.x nummering 1 op)
 
-**v0.9.6 — Privacy uitbreidingen**
+~~**v0.9.6 — AI / Copilot (Win11 24H2+)**~~ — gedaan (zie Voltooide versies)
+
+**v0.9.7 — Privacy uitbreidingen**
 - Disable Activity History / Timeline, Tailored Experiences with diagnostic data
 - Disable Inking & Typing personalization, Feedback Hub auto-prompts
 - Disable CEIP scheduled tasks (Application Experience / ProgramDataUpdater / Consolidator)
@@ -530,14 +545,14 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 - Disable DiagTrack service (sc.exe)
 - WPBT disable (OEM-vendor-boot blob blocking)
 
-**v0.9.7 — UI / Theme**
+**v0.9.8 — UI / Theme**
 - Dark mode system-wide, accent color override, transparency on/off, animations system-wide off
 - Show seconds in tray clock (al in v0.9.2 — verplaatsen of dupliceren), verbose logon messages
 - Detailed BSoD info (display parameters bij blue screen)
 - Always-on NumLock at boot, disable login-screen acrylic blur
 - Restore classic Photo Viewer voor .jpg/.png
 
-**v0.9.8 — Performance**
+**v0.9.9 — Performance**
 - Disable visual effects (perf-preset combo: VisualFXSetting=2 + UserPreferencesMask binary)
 - Startup apps cleanup
 - Disable hibernation (powercfg /hibernate off — bespaart hiberfil.sys), disable Fast Startup
@@ -548,19 +563,19 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 - Prefer IPv4 over IPv6 (`DisabledComponents=0x20`)
 - Disable Multiplane Overlay (fix screen-tearing op sommige GPUs)
 
-**v0.9.9 — Context Menu uitbreidingen**
+**v0.9.10 — Context Menu uitbreidingen**
 - Add custom verbs: Open PowerShell here, Open Terminal as Admin (Directory\Background\shell)
 - Add Take Ownership (recursive icacls)
 - Add Move to / Copy to flyouts (CLSID handlers `{C2FBB630-...}` + `{C2FBB631-...}`)
 - Remove cluttery handlers: Edit with Photos / Paint 3D / Clipchamp
 
-**v0.9.10 — Notifications & Lock Screen**
+**v0.9.11 — Notifications & Lock Screen**
 - Disable "Suggest ways to finish setup" notifications
 - Disable lock screen entirely (no-lock-screen, ga direct naar login)
 - Disable Action Center / Notification Center (heavy-handed optie)
 - Hide Calendar from systray click (revert to Win10-style tray clock)
 
-**v0.9.11 — Updates uitbreidingen**
+**v0.9.12 — Updates uitbreidingen**
 - Pause N dagen, active hours (al gepland in originele scope)
 - Defer feature updates (max 365 days) + quality updates (max 30 days)
 - Skip driver updates via WU (`ExcludeWUDriversInQualityUpdate=1`)
@@ -568,12 +583,12 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 - Disable "Get latest as soon as available" continuous-innovation opt-in
 - Set Ethernet metered (defers most updates)
 
-**v0.9.12 — Gaming (lagere prio)**
+**v0.9.13 — Gaming (lagere prio)**
 - Disable Game DVR (background recording)
 - Disable Game Bar (Xbox overlay), Game Bar capture features
 - Disable Xbox services (XblAuthManager / XblGameSave / XboxNetApiSvc / XboxGipSvc)
 
-**v0.9.13 — Presets / Profiles**
+**v0.9.14 — Presets / Profiles**
 - `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"
 - Eén klik vinkt een set tweaks aan in de Tweaks tab (user kan nog deselecten voor Apply)
 - Inspiratie: WinUtil's preset-knoppen

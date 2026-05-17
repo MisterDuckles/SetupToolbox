@@ -304,25 +304,26 @@ public sealed class TweakService
         });
 
         var successCount = results.Count(r => r.Value.ok);
+        // Failure-messages krijgen de tweak-naam erbij zodat een gebatchte
+        // ApplyAsync-call (meerdere tweaks tegelijk) de failures nog correct
+        // attribueert in de UI. Id→Name map uit de meegegeven tweaks-lijst.
+        var idToName = tweaks.ToDictionary(t => t.Id, t => t.Name);
         var failures = results.Where(r => !r.Value.ok)
-            .Select(r => $"{ShortenKey(r.Key)}: {r.Value.msg}")
+            .Select(r => $"{FailureLabel(r.Key, idToName)}: {r.Value.msg}")
             .ToList();
         return new TweakApplyResult(successCount, results.Count - successCount, cancelled, failures);
     }
 
     /// <summary>
-    /// Verkort de result-key (tweakId::path::valueName) naar iets dat in de UI
-    /// past — gebruikt alleen het laatste segment van Path + valueName.
+    /// Bouwt een leesbaar failure-label uit de result-key (tweakId::path::
+    /// valueName): "&lt;TweakNaam&gt; → &lt;keyTail&gt;".
     /// </summary>
-    private static string ShortenKey(string key)
+    private static string FailureLabel(string key, IReadOnlyDictionary<string, string> idToName)
     {
         var parts = key.Split("::", 3);
-        if (parts.Length < 3) return key;
-        var path = parts[1];
-        var valueName = parts[2];
-        var lastSlash = path.LastIndexOf('\\');
-        var pathTail = lastSlash >= 0 ? path.Substring(lastSlash + 1) : path;
-        return string.IsNullOrEmpty(valueName) ? pathTail : $"{pathTail}\\{valueName}";
+        if (parts.Length < 1) return key;
+        var tweakName = idToName.TryGetValue(parts[0], out var n) ? n : parts[0];
+        return $"{tweakName} → {KeyTail(key)}";
     }
 
     /// <summary>
@@ -402,10 +403,23 @@ public sealed class TweakService
         });
 
         var successCount = results.Count(r => r.Value.ok);
+        // ApplyChoiceAsync verwerkt 1 tweak — TweaksPage prefixt zelf de
+        // tweak-naam, dus hier alleen de key-tail.
         var failures = results.Where(r => !r.Value.ok)
-            .Select(r => $"{ShortenKey(r.Key)}: {r.Value.msg}")
+            .Select(r => $"{KeyTail(r.Key)}: {r.Value.msg}")
             .ToList();
         return new TweakApplyResult(successCount, results.Count - successCount, cancelled, failures);
+    }
+
+    // keyTail uit een result-key (tweakId::path::valueName) — laatste pad-
+    // segment + value-name, zonder tweak-naam.
+    private static string KeyTail(string key)
+    {
+        var parts = key.Split("::", 3);
+        if (parts.Length < 3) return key;
+        var lastSlash = parts[1].LastIndexOf('\\');
+        var pathTail = lastSlash >= 0 ? parts[1].Substring(lastSlash + 1) : parts[1];
+        return string.IsNullOrEmpty(parts[2]) ? pathTail : $"{pathTail}\\{parts[2]}";
     }
 
     private static void ApplyChoiceValueLocal(TweakChoiceValue v)
@@ -1280,6 +1294,148 @@ public sealed class TweakService
                     DisabledValue = 1
                 }
             }));
+
+        // ── AI / COPILOT (Win11 24H2+) ──────────────────────────────
+        // Alle policies in HKLM (machine-scope) → RequiresElevation, batchen
+        // in 1 UAC. Research mei 2026 (Microsoft Learn Policy CSP WindowsAI,
+        // Manage Recall / Click to Do / Notepad docs). Win+C hotkey-tweak
+        // bewust niet opgenomen — TurnOffWindowsCopilot is door Microsoft
+        // gedeprecateerd en grotendeels inert op 24H2/25H2. Copilot AppX-
+        // removal hoort in de Debloat-tab (AppX uninstall), niet bij de
+        // registry-toggles hier.
+        const string windowsAiPolicy = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI";
+        const string windowsAiPolicyHkcu = @"HKCU\SOFTWARE\Policies\Microsoft\Windows\WindowsAI";
+
+        list.Add(new Tweak(
+            id: "AiCopilot.DisableRecall",
+            category: TweakCategory.AiCopilot,
+            name: "Disable Recall",
+            description: "Schakelt Recall uit — de Copilot+ PC feature die periodiek screenshots maakt van je activiteit voor AI-zoekbaarheid. Policy DisableAIDataAnalysis. Vereist UAC + sign-out.",
+            useCase: "Privacy: geen automatische snapshots van alles wat je op je scherm doet.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = windowsAiPolicy,
+                    ValueName = "DisableAIDataAnalysis",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    RequiresElevation = true,
+                    // Alternates: HKCU user-policy (gpedit User Config) + de
+                    // AllowRecallEnablement=0 policy die Recall als optionele
+                    // component helemaal blokkeert — beide tellen als "Recall uit".
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = windowsAiPolicyHkcu, ValueName = "DisableAIDataAnalysis", EnabledValue = 1 },
+                        new TweakAlternateSignal { Path = windowsAiPolicy, ValueName = "AllowRecallEnablement", EnabledValue = 0 }
+                    }
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "AiCopilot.DisableClickToDo",
+            category: TweakCategory.AiCopilot,
+            name: "Disable Click to Do",
+            description: "Schakelt Click to Do uit — de 24H2+ feature die AI-acties toevoegt aan het right-click menu voor geselecteerde tekst en afbeeldingen. Policy DisableClickToDo. Vereist UAC + sign-out.",
+            useCase: "Strakker context-menu zonder AI-suggesties bij elke selectie.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = windowsAiPolicy,
+                    ValueName = "DisableClickToDo",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    RequiresElevation = true,
+                    AlternateEnabledPaths = new[]
+                    {
+                        new TweakAlternateSignal { Path = windowsAiPolicyHkcu, ValueName = "DisableClickToDo", EnabledValue = 1 }
+                    }
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "AiCopilot.DisablePaintAi",
+            category: TweakCategory.AiCopilot,
+            name: "Disable AI features in Paint",
+            description: "Schakelt Cocreator (text-to-image), Generative Fill en Image Creator uit in de Paint-app. Schrijft 3 policy-keys onder CurrentVersion\\Policies\\Paint. Vereist UAC; herstart Paint om effect te zien.",
+            useCase: "Voor users die Paint puur als simpele bitmap-editor willen, zonder AI-generatie.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint",
+                    ValueName = "DisableCocreator",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    RequiresElevation = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint",
+                    ValueName = "DisableGenerativeFill",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    RequiresElevation = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint",
+                    ValueName = "DisableImageCreator",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "AiCopilot.DisableNotepadAi",
+            category: TweakCategory.AiCopilot,
+            name: "Disable AI features in Notepad",
+            description: "Schakelt alle Copilot-features in Notepad uit (AI Rewrite / Summarize). App-level policy DisableAIFeatures onder Policies\\WindowsNotepad. Vereist UAC; herstart Notepad om effect te zien.",
+            useCase: "Notepad terug naar de simpele text-editor zonder AI-knoppen.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\WindowsNotepad",
+                    ValueName = "DisableAIFeatures",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 1,
+                    DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "AiCopilot.DisableGenerativeAiInApps",
+            category: TweakCategory.AiCopilot,
+            name: "Disable generative AI access for apps",
+            description: "Zet de system-brede AppPrivacy policy LetAppsAccessGenerativeAI op 'Force Deny' (2) — apps mogen geen tekst/beeld-generatie via Windows AI-modellen meer doen. Dekt o.a. Image Creator in de Photos-app. Vereist UAC + sign-out.",
+            useCase: "Eén schakelaar die generatieve AI-toegang voor alle apps blokkeert.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy",
+                    ValueName = "LetAppsAccessGenerativeAI",
+                    Kind = RegistryValueKind.DWord,
+                    EnabledValue = 2,   // 2 = Force Deny
+                    DisabledValue = 0,  // 0 = user-controlled (Windows default)
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }
