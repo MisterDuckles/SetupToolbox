@@ -10,6 +10,19 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.7 — Privacy uitbreidingen
+
+**8 Privacy tweaks** in de Privacy-categorie. Mix van HKLM-policies (RequiresElevation, batchen in 1 UAC dankzij de v0.9.6 batching-fix) en HKCU user-keys (geen UAC). Tailored Experiences is bewust niet gedupliceerd — zit al in Ads & Tracking (v0.9.4).
+
+- **Disable Activity History** — 3-op HKLM policy: `System\EnableActivityFeed` + `PublishUserActivities` + `UploadUserActivities` = 0. Geen Timeline-verzameling van apps/documenten meer. SignOut-requirement
+- **Disable inking & typing personalization** — 4-op HKCU: `InputPersonalization\RestrictImplicitInkCollection` + `RestrictImplicitTextCollection` = 1, `TrainedDataStore\HarvestContacts` = 0, `Personalization\Settings\AcceptedPrivacyPolicy` = 0. Stopt handschrift/typ-data verzameling
+- **Disable Feedback Hub prompts** — `Siuf\Rules\NumberOfSIUFInPeriod` = 0. Geen feedback-popups
+- **Disable CEIP** — HKLM `SQMClient\Windows\CEIPEnable` = 0. Schakelt het Customer Experience Improvement Program uit; de CEIP scheduled tasks blijven bestaan maar zijn inert. (Bewust geen scheduled-task disable — de TweakOperation-model is registry-only; CEIPEnable=0 dekt de telemetrie-zorg functioneel)
+- **Disable Suggested Actions on clipboard** — HKCU `SmartActionPlatform\SmartClipboard\Disabled` = 1. Verwijdert de Win11 22H2+ pop-up bij kopiëren van telefoonnummers/datums
+- **Disable clipboard cloud sync** — HKLM `System\AllowCrossDeviceClipboard` = 0. Clipboard verlaat de PC niet meer; lokale history blijft werken
+- **Disable DiagTrack telemetry service** — HKLM `Services\DiagTrack\Start` = 4 (disabled; 2 = automatic default). De centrale Windows telemetrie-service start niet meer. Reboot-requirement
+- **Disable WPBT** — HKLM `Session Manager\DisableWpbtExecution` = 1. Blokkeert OEM/firmware boot-binary injectie. Reboot-requirement
+
 ### v0.9.6 — AI / Copilot tweaks (Win11 24H2+)
 
 **5 AI / Copilot tweaks** in de AiCopilot-categorie. Allemaal HKLM group-policy keys → `RequiresElevation=true`, batchen in 1 UAC-prompt. Research mei 2026 via Microsoft Learn Policy CSP (WindowsAI) + Manage Recall / Click to Do / Notepad docs.
@@ -536,14 +549,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.6 — AI / Copilot (Win11 24H2+)**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.7 — Privacy uitbreidingen**
-- Disable Activity History / Timeline, Tailored Experiences with diagnostic data
-- Disable Inking & Typing personalization, Feedback Hub auto-prompts
-- Disable CEIP scheduled tasks (Application Experience / ProgramDataUpdater / Consolidator)
-- Disable Suggested Actions on clipboard copy
-- Disable Clipboard cloud-sync (+ optioneel clipboard-history zelf)
-- Disable DiagTrack service (sc.exe)
-- WPBT disable (OEM-vendor-boot blob blocking)
+~~**v0.9.7 — Privacy uitbreidingen**~~ — gedaan (zie Voltooide versies)
 
 **v0.9.8 — UI / Theme**
 - Dark mode system-wide, accent color override, transparency on/off, animations system-wide off

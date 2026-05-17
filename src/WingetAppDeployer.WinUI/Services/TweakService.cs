@@ -1436,6 +1436,173 @@ public sealed class TweakService
                 }
             }));
 
+        // ── PRIVACY ─────────────────────────────────────────────────
+        // Mix van HKLM-policies (RequiresElevation, batchen in 1 UAC) en
+        // HKCU user-keys (geen UAC). Tailored Experiences zit al in de
+        // Ads & Tracking-categorie (v0.9.4) — hier niet gedupliceerd.
+        const string systemPolicy = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\System";
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableActivityHistory",
+            category: TweakCategory.Privacy,
+            name: "Disable Activity History",
+            description: "Schakelt Activity History / Timeline uit — Windows verzamelt geen tijdlijn meer van geopende apps en documenten. Schrijft 3 policy-keys (EnableActivityFeed / PublishUserActivities / UploadUserActivities). Vereist UAC + sign-out.",
+            useCase: "Privacy: geen lokale of cloud-gesynchroniseerde activiteitenlijst.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = systemPolicy, ValueName = "EnableActivityFeed",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                },
+                new TweakOperation
+                {
+                    Path = systemPolicy, ValueName = "PublishUserActivities",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                },
+                new TweakOperation
+                {
+                    Path = systemPolicy, ValueName = "UploadUserActivities",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableInkingTypingPersonalization",
+            category: TweakCategory.Privacy,
+            name: "Disable inking & typing personalization",
+            description: "Stopt het verzamelen van je handschrift- en typgegevens voor personalisatie. Schrijft 4 HKCU-keys (RestrictImplicitInkCollection / RestrictImplicitTextCollection / HarvestContacts / AcceptedPrivacyPolicy). Geen UAC.",
+            useCase: "Privacy: geen lokale taalmodel-training op basis van wat je typt.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\InputPersonalization", ValueName = "RestrictImplicitInkCollection",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\InputPersonalization", ValueName = "RestrictImplicitTextCollection",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\InputPersonalization\TrainedDataStore", ValueName = "HarvestContacts",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Personalization\Settings", ValueName = "AcceptedPrivacyPolicy",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableFeedbackPrompts",
+            category: TweakCategory.Privacy,
+            name: "Disable Feedback Hub prompts",
+            description: "Zet de frequentie waarmee Windows om feedback vraagt op nul (NumberOfSIUFInPeriod=0). Geen UAC.",
+            useCase: "Geen 'hoe waarschijnlijk raad je Windows aan'-popups meer.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Siuf\Rules", ValueName = "NumberOfSIUFInPeriod",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableCeip",
+            category: TweakCategory.Privacy,
+            name: "Disable Customer Experience Improvement Program",
+            description: "Schakelt CEIP uit via de SQMClient-policy (CEIPEnable=0). De CEIP scheduled tasks blijven bestaan maar zijn inert zonder actieve CEIP. Vereist UAC.",
+            useCase: "Geen CEIP-telemetrie meer over hoe je Windows-features gebruikt.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\SQMClient\Windows", ValueName = "CEIPEnable",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableSuggestedActions",
+            category: TweakCategory.Privacy,
+            name: "Disable Suggested Actions on clipboard",
+            description: "Verwijdert de Win11 22H2+ pop-up die acties suggereert (bellen / agenda) wanneer je een telefoonnummer of datum kopieert. SmartClipboard\\Disabled=1. Geen UAC.",
+            useCase: "Geen ongevraagde actie-suggesties bij elke clipboard-copy.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\SmartActionPlatform\SmartClipboard",
+                    ValueName = "Disabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableClipboardCloudSync",
+            category: TweakCategory.Privacy,
+            name: "Disable clipboard cloud sync",
+            description: "Blokkeert het synchroniseren van je clipboard naar andere apparaten via je Microsoft-account (AllowCrossDeviceClipboard=0). Lokale clipboard-history blijft werken. Vereist UAC.",
+            useCase: "Privacy: gekopieerde data verlaat je PC niet richting Microsoft cloud.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = systemPolicy, ValueName = "AllowCrossDeviceClipboard",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableDiagTrackService",
+            category: TweakCategory.Privacy,
+            name: "Disable DiagTrack telemetry service",
+            description: "Zet de 'Connected User Experiences and Telemetry' service (DiagTrack) op Disabled via de service Start-value (4=disabled, 2=automatic). Vereist UAC; neemt effect na reboot.",
+            useCase: "De centrale Windows telemetrie-service draait niet meer op.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Services\DiagTrack", ValueName = "Start",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 4, DisabledValue = 2,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableWpbt",
+            category: TweakCategory.Privacy,
+            name: "Disable WPBT (OEM boot-binary injection)",
+            description: "Blokkeert de Windows Platform Binary Table — een mechanisme waarmee firmware/OEM's bij elke boot een binary in Windows kunnen injecteren. DisableWpbtExecution=1. Vereist UAC; neemt effect na reboot.",
+            useCase: "Voorkomt dat OEM-firmware ongevraagd software herinstalleert na een schone Windows-install.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager", ValueName = "DisableWpbtExecution",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }
