@@ -216,6 +216,10 @@ public sealed class TweakService
         {
             "HKCU" or "HKEY_CURRENT_USER" => RegistryHive.CurrentUser,
             "HKLM" or "HKEY_LOCAL_MACHINE" => RegistryHive.LocalMachine,
+            // HKU\.DEFAULT = het profiel dat het login-scherm gebruikt vóór er
+            // iemand inlogt. Nodig voor o.a. NumLock-at-boot. Writes vereisen
+            // admin (.DEFAULT is SYSTEM-owned) — markeer die ops RequiresElevation.
+            "HKU" or "HKEY_USERS" => RegistryHive.Users,
             _ => throw new ArgumentException($"Unsupported hive: {hiveName}")
         };
         var view = subPath.Contains("WOW6432Node", StringComparison.OrdinalIgnoreCase)
@@ -749,6 +753,39 @@ public sealed class TweakService
                     EnabledValue = string.Empty,  // schrijf "" naar (Default) → trigger Win10-mode
                     DisabledValue = null,         // delete value
                     DeleteKeyOnAbsent = true      // bij disable: delete hele InprocServer32 subkey
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Explorer.CompactMode",
+            category: TweakCategory.Explorer,
+            name: "Compact view in File Explorer",
+            description: "Dichtere rij-spacing in File Explorer (UseCompactMode=1) — meer items zichtbaar zonder scrollen, zoals Win10.",
+            useCase: "Win11's ruime touch-spacing is voor muis-gebruik vaak te luchtig.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "UseCompactMode",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Explorer.FullPathInTitleBar",
+            category: TweakCategory.Explorer,
+            name: "Show full path in File Explorer",
+            description: "Toont het volledige pad in de adresbalk en titelbalk van File Explorer i.p.v. alleen de mapnaam (CabinetState\\FullPath=1).",
+            useCase: "Directer zien waar je zit in de mappenstructuur — handig bij diep geneste paden.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState",
+                    ValueName = "FullPath",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
                 }
             }));
 
@@ -1598,6 +1635,284 @@ public sealed class TweakService
                 new TweakOperation
                 {
                     Path = @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager", ValueName = "DisableWpbtExecution",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        // ── UI / THEME ──────────────────────────────────────────────
+        // Mix HKCU (geen UAC) + HKLM-policy + HKU\.DEFAULT (login-scherm).
+        // Eerste categorie met sub-groepen (Tweak.Group) — TweaksPage rendert
+        // sub-headers binnen de categorie-Expander. Accent-color override en
+        // classic Photo Viewer-restore zijn bewust niet opgenomen: de eerste
+        // vereist een color-picker UI (past niet in toggle/multi-choice), de
+        // tweede ~15 registry-values + werkt fragiel op Win11 24H2+ (UCPD).
+        const string personalize = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+        const string uiThemeColors = "Thema & kleuren";
+        const string uiThemeDesktop = "Desktop & vensters";
+        const string uiThemeBoot = "Boot & login";
+        const string uiThemeSound = "Geluid";
+
+        // System theme als MULTI-CHOICE — mirror van Settings > Personalization
+        // > Colors > "Choose your mode". Light = beide keys 1, Dark = beide 0,
+        // Custom = dark apps + light Windows-shell (de populaire combinatie).
+        TweakChoiceValue[] ThemeValues(int appsLight, int sysLight) => new TweakChoiceValue[]
+        {
+            new() { Path = personalize, ValueName = "AppsUseLightTheme", Kind = RegistryValueKind.DWord, Value = appsLight },
+            new() { Path = personalize, ValueName = "SystemUsesLightTheme", Kind = RegistryValueKind.DWord, Value = sysLight },
+        };
+
+        list.Add(new Tweak(
+            id: "UiTheme.SystemTheme",
+            category: TweakCategory.UiTheme,
+            name: "System theme",
+            description: "Light / Dark / Custom — mirror van Settings > Personalization > Colors. Custom = donkere apps met lichte taskbar & Start.",
+            useCase: "Snel wisselen tussen thema's; Custom geeft de populaire dark-apps + light-shell mix.",
+            restart: RestartRequirement.None,
+            group: uiThemeColors,
+            choices: new[]
+            {
+                new TweakChoice("Light",  ThemeValues(1, 1)),
+                new TweakChoice("Dark",   ThemeValues(0, 0)),
+                new TweakChoice("Custom (dark apps, light shell)", ThemeValues(0, 1)),
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableTransparency",
+            category: TweakCategory.UiTheme,
+            name: "Disable transparency effects",
+            description: "Zet de Mica / acrylic doorzichtigheid uit in taskbar, Start en app-vensters (EnableTransparency=0).",
+            useCase: "Strakker uiterlijk + minimaal lichtere GPU-belasting op zwakke hardware.",
+            restart: RestartRequirement.None,
+            group: uiThemeColors,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = personalize, ValueName = "EnableTransparency",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.AccentOnTitleBars",
+            category: TweakCategory.UiTheme,
+            name: "Accent color on title bars & borders",
+            description: "Kleurt actieve venster-titelbalken en -randen met je accentkleur i.p.v. neutraal grijs/wit. DWM\\ColorPrevalence=1.",
+            useCase: "Direct zien welk venster focus heeft + een vleugje kleur in de UI.",
+            restart: RestartRequirement.None,
+            group: uiThemeColors,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\DWM", ValueName = "ColorPrevalence",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.AccentOnStartTaskbar",
+            category: TweakCategory.UiTheme,
+            name: "Accent color on Start & taskbar",
+            description: "Kleurt de taskbar, Start en Action Center met je accentkleur (Themes\\Personalize\\ColorPrevalence=1). Windows toont dit alleen in Dark mode — in Light mode grijst de optie zichzelf uit.",
+            useCase: "Meer kleur-identiteit in de shell wanneer je Dark mode draait.",
+            restart: RestartRequirement.None,
+            group: uiThemeColors,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = personalize, ValueName = "ColorPrevalence",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableAnimations",
+            category: TweakCategory.UiTheme,
+            name: "Disable window & taskbar animations",
+            description: "Zet venster-minimize/maximize animaties (MinAnimate) en taskbar-animaties uit. Snappier UI zonder de volledige 'adjust for best performance' preset.",
+            useCase: "UI voelt directer; geen wachttijd op fade/slide-animaties.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    // MinAnimate is een REG_SZ ("0"/"1"), geen DWord.
+                    Path = @"HKCU\Control Panel\Desktop\WindowMetrics", ValueName = "MinAnimate",
+                    Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "1"
+                },
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "TaskbarAnimations",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.ClassicDesktopIcons",
+            category: TweakCategory.UiTheme,
+            name: "Show This PC / Network / Control Panel on desktop",
+            description: "Toont de klassieke desktop-iconen (Deze PC, Netwerk, Configuratiescherm) die Win11 standaard verbergt. Schrijft 3 GUID-keys onder HideDesktopIcons\\NewStartPanel. Druk F5 op het bureaublad om te verversen.",
+            useCase: "Snelle toegang tot Deze PC vanaf het bureaublad zonder Explorer te openen.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            operations: new[]
+            {
+                // 0 = tonen, 1 = verbergen. Win11-default = verborgen (key absent
+                // of 1). This PC / Network / Control Panel GUIDs.
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
+                    ValueName = "{20D04FE0-3AEA-1069-A2D8-08002B30309D}",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
+                    ValueName = "{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
+                    ValueName = "{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableSnapAssist",
+            category: TweakCategory.UiTheme,
+            name: "Disable Snap Assist suggestions",
+            description: "Schakelt de flyout uit die andere vensters voorstelt om de lege schermhelft te vullen nadat je een venster snapt. Schrijft EnableSnapAssistFlyout + SnapAssist = 0.",
+            useCase: "Snappen zonder dat er een venster-keuzemenu opduikt.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "EnableSnapAssistFlyout",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "SnapAssist",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableAeroShake",
+            category: TweakCategory.UiTheme,
+            name: "Disable Aero Shake (title bar window shake)",
+            description: "Voorkomt dat het schudden van een venster-titelbalk alle andere vensters minimaliseert (DisallowShaking=1).",
+            useCase: "Geen vensters die per ongeluk verdwijnen bij een snelle muisbeweging.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "DisallowShaking",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.VerboseLogonMessages",
+            category: TweakCategory.UiTheme,
+            name: "Verbose logon / shutdown messages",
+            description: "Toont gedetailleerde status-meldingen tijdens opstarten, in-/uitloggen en afsluiten i.p.v. de generieke 'Even geduld'. Policy verbosestatus=1. Vereist UAC.",
+            useCase: "Zien wélke stap traag is bij een lange boot of shutdown.",
+            restart: RestartRequirement.None,
+            group: uiThemeBoot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", ValueName = "verbosestatus",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DetailedBsod",
+            category: TweakCategory.UiTheme,
+            name: "Show detailed Blue Screen info",
+            description: "Toont de technische parameters (stop-code adressen) op het blue screen i.p.v. alleen de QR-code. CrashControl\\DisplayParameters=1. Vereist UAC.",
+            useCase: "Bij een BSoD direct de technische details kunnen aflezen voor diagnose.",
+            restart: RestartRequirement.None,
+            group: uiThemeBoot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\CrashControl", ValueName = "DisplayParameters",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.NumLockAtBoot",
+            category: TweakCategory.UiTheme,
+            name: "NumLock on at boot",
+            description: "Zet NumLock aan op het login-scherm én na inloggen. Schrijft InitialKeyboardIndicators in HKCU (na login) + HKU\\.DEFAULT (login-scherm). De .DEFAULT-key vereist UAC.",
+            useCase: "Numpad werkt meteen — geen NumLock-toets zoeken voor je je pincode/wachtwoord typt.",
+            restart: RestartRequirement.SignOut,
+            group: uiThemeBoot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Control Panel\Keyboard", ValueName = "InitialKeyboardIndicators",
+                    Kind = RegistryValueKind.String, EnabledValue = "2", DisabledValue = "0"
+                },
+                new TweakOperation
+                {
+                    Path = @"HKU\.DEFAULT\Control Panel\Keyboard", ValueName = "InitialKeyboardIndicators",
+                    Kind = RegistryValueKind.String, EnabledValue = "2", DisabledValue = "0",
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableLogonBlur",
+            category: TweakCategory.UiTheme,
+            name: "Disable login screen background blur",
+            description: "Toont de wallpaper scherp op het login-scherm i.p.v. de acrylic-blur. Policy DisableAcrylicBackgroundOnLogon=1. Vereist UAC.",
+            useCase: "Volledige wallpaper zichtbaar bij het inloggen.",
+            restart: RestartRequirement.None,
+            group: uiThemeBoot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = systemPolicy, ValueName = "DisableAcrylicBackgroundOnLogon",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableStartupSound",
+            category: TweakCategory.UiTheme,
+            name: "Disable Windows startup sound",
+            description: "Schakelt het Windows opstart-geluid (de boot-chime) uit. HKLM LogonUI\\BootAnimation\\DisableStartupSound=1. Vereist UAC.",
+            useCase: "Stille boot — handig op gedeelde ruimtes of bij vroege ochtend-opstarts.",
+            restart: RestartRequirement.None,
+            group: uiThemeSound,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation",
+                    ValueName = "DisableStartupSound",
                     Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
                     RequiresElevation = true
                 }

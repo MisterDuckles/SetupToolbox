@@ -1,0 +1,219 @@
+using System;
+using System.Linq;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using WingetAppDeployer_WinUI.Models;
+
+namespace WingetAppDeployer_WinUI.Helpers;
+
+// Gedeelde renderer voor één tweak-card. Sinds de v0.9.8 Tweaks-tab
+// herstructurering (category-grid → detail-pagina) wordt dezelfde card
+// gebruikt op de detail-pagina én in de globale zoekresultaten op de landing.
+// Daarom een centrale factory i.p.v. een per-page methode.
+//
+// De card schrijft z'n CheckBox/ComboBox-mutaties rechtstreeks naar
+// App.TweakPending (de cross-page pending-store). Pages hoeven niets te
+// koppelen — ze abonneren op TweakPendingService.Changed voor hun footer.
+//
+// CheckBox is IsThreeState: Partial → indeterminate vierkant. De cycle
+// false→null→true wordt voor Disabled-state opgevangen zodat 1 klik = apply.
+public static class TweakCardFactory
+{
+    /// <summary>
+    /// Bouwt de Border-card voor één tweak. De control rechts is een ComboBox
+    /// (choice-tweak) of een IsThreeState CheckBox (toggle-tweak), beide
+    /// gekoppeld aan App.TweakPending.
+    /// </summary>
+    public static FrameworkElement Build(Tweak tweak)
+    {
+        var border = new Border
+        {
+            Background = Res<Brush>("CardBackgroundFillColorDefaultBrush"),
+            BorderBrush = Res<Brush>("CardStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(16, 12, 16, 12)
+        };
+
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // Linker content: naam + status-pill, omschrijving, use-case.
+        var content = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        titleRow.Children.Add(new TextBlock
+        {
+            Text = tweak.Name,
+            Style = Res<Style>("BodyStrongTextBlockStyle"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        titleRow.Children.Add(BuildStatePill(tweak));
+        content.Children.Add(titleRow);
+        content.Children.Add(new TextBlock
+        {
+            Text = tweak.Description,
+            Style = Res<Style>("CaptionTextBlockStyle"),
+            Foreground = Res<Brush>("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap
+        });
+        if (!string.IsNullOrEmpty(tweak.UseCase))
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = tweak.UseCase,
+                Style = Res<Style>("CaptionTextBlockStyle"),
+                Foreground = Res<Brush>("TextFillColorTertiaryBrush"),
+                TextWrapping = TextWrapping.Wrap,
+                FontStyle = Windows.UI.Text.FontStyle.Italic
+            });
+        }
+        Grid.SetColumn(content, 0);
+        grid.Children.Add(content);
+
+        // Admin/UAC lock-icoon (alleen bij elevated tweaks).
+        var glyphStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 6
+        };
+        if (tweak.RequiresElevation)
+        {
+            var icon = new FontIcon
+            {
+                Glyph = tweak.AdminGlyph,
+                FontSize = 14,
+                Foreground = Res<Brush>("SystemFillColorCautionBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            if (!string.IsNullOrEmpty(tweak.AdminTooltip))
+                ToolTipService.SetToolTip(icon, tweak.AdminTooltip);
+            glyphStack.Children.Add(icon);
+        }
+        Grid.SetColumn(glyphStack, 1);
+        grid.Children.Add(glyphStack);
+
+        // Rechter control.
+        FrameworkElement rightControl = tweak.IsChoice && tweak.Choices != null
+            ? BuildChoiceCombo(tweak)
+            : BuildToggleCheckBox(tweak);
+        Grid.SetColumn(rightControl, 2);
+        grid.Children.Add(rightControl);
+
+        border.Child = grid;
+        return border;
+    }
+
+    private static ComboBox BuildChoiceCombo(Tweak tweak)
+    {
+        // Initiële selectie: pending desired index als die er is, anders de
+        // gedetecteerde SelectedChoiceIndex.
+        var initialIndex = tweak.SelectedChoiceIndex;
+        if (App.TweakPending.TryGet(tweak, out var pendingVal) && pendingVal is int pendingIdx)
+            initialIndex = pendingIdx;
+
+        var combo = new ComboBox
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 180,
+            ItemsSource = tweak.Choices!.Select(c => c.Label).ToList(),
+            SelectedIndex = initialIndex
+        };
+        combo.SelectionChanged += (s, e) =>
+        {
+            var idx = combo.SelectedIndex;
+            if (idx < 0 || tweak.Choices == null || idx >= tweak.Choices.Count) return;
+            // Pending alleen als de keuze afwijkt van de gedetecteerde state.
+            if (idx == tweak.SelectedChoiceIndex) App.TweakPending.Remove(tweak);
+            else App.TweakPending.Set(tweak, idx);
+        };
+        return combo;
+    }
+
+    private static CheckBox BuildToggleCheckBox(Tweak tweak)
+    {
+        var checkbox = new CheckBox
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 0,
+            Content = string.Empty
+        };
+
+        // Pending desired (bool) als de tweak al in App.TweakPending zit.
+        bool? pendingDesired = null;
+        if (App.TweakPending.TryGet(tweak, out var pv) && pv is bool pb) pendingDesired = pb;
+
+        if (tweak.State == TweakState.Partial)
+        {
+            // Partial-tweak → 3-state checkbox. De minus (indeterminate) is hier
+            // legitiem: de tweak ÍS deels toegepast. Eigen 3-staps cyclus:
+            //   null  = geen wijziging (laat partial zoals 't is)
+            //   true  = compleet maken (apply)
+            //   false = terugdraaien (revert)
+            // We sturen de cyclus via een 'logical' veld onafhankelijk van
+            // WinUI's interne IsThreeState-volgorde, zodat klik 1 = "compleet
+            // maken" is (de gangbare intentie bij een Partial tweak).
+            checkbox.IsThreeState = true;
+            bool? logical = pendingDesired;            // null als geen pending
+            checkbox.IsChecked = logical;
+            var reentry = false;
+            RoutedEventHandler handler = (s, e) =>
+            {
+                if (reentry) return;
+                logical = logical switch { null => true, true => false, _ => (bool?)null };
+                reentry = true;
+                checkbox.IsChecked = logical;          // visual synct met ons model
+                reentry = false;
+                if (logical == null) App.TweakPending.Remove(tweak);
+                else App.TweakPending.Set(tweak, logical == true);
+            };
+            checkbox.Checked += handler;
+            checkbox.Unchecked += handler;
+            checkbox.Indeterminate += handler;
+        }
+        else
+        {
+            // Enabled / Disabled / Unknown → schone 2-state checkbox. Nooit een
+            // verwarrende minus: checked = tweak moet AAN, unchecked = UIT.
+            checkbox.IsThreeState = false;
+            var natural = tweak.State == TweakState.Enabled;
+            checkbox.IsChecked = pendingDesired ?? natural;
+            RoutedEventHandler handler = (s, e) =>
+            {
+                var desired = checkbox.IsChecked == true;
+                if (desired == natural) App.TweakPending.Remove(tweak);  // terug op natural
+                else App.TweakPending.Set(tweak, desired);               // apply / revert
+            };
+            checkbox.Checked += handler;
+            checkbox.Unchecked += handler;
+        }
+        return checkbox;
+    }
+
+    private static FrameworkElement BuildStatePill(Tweak tweak)
+    {
+        var bg = tweak.State switch
+        {
+            TweakState.Enabled => Res<Brush>("SystemFillColorSuccessBackgroundBrush"),
+            TweakState.Partial => Res<Brush>("SystemFillColorCautionBackgroundBrush"),
+            _ => Res<Brush>("ControlAltFillColorSecondaryBrush")
+        };
+        return new Border
+        {
+            Background = bg,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 1, 6, 1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = tweak.StateLabel,
+                Style = Res<Style>("CaptionTextBlockStyle")
+            }
+        };
+    }
+
+    private static T Res<T>(string key) => (T)Application.Current.Resources[key];
+}

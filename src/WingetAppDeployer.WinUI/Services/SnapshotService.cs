@@ -431,6 +431,7 @@ public sealed class SnapshotService
         {
             "HKCU" or "HKEY_CURRENT_USER" => RegistryHive.CurrentUser,
             "HKLM" or "HKEY_LOCAL_MACHINE" => RegistryHive.LocalMachine,
+            "HKU" or "HKEY_USERS" => RegistryHive.Users,
             _ => throw new ArgumentException($"Unsupported hive: {hiveName}")
         };
         var view = subPath.Contains("WOW6432Node", StringComparison.OrdinalIgnoreCase)

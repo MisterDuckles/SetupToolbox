@@ -157,6 +157,11 @@ public sealed class Tweak : INotifyPropertyChanged
     public IReadOnlyList<TweakOperation> Operations { get; }
     public IReadOnlyList<TweakChoice>? Choices { get; }
     public RestartRequirement Restart { get; }
+    // Optionele sub-groep BINNEN een categorie — puur cosmetisch voor de
+    // TweaksPage-rendering (sub-headers in een grote categorie zoals UI/Theme).
+    // null = geen sub-groep, tweak rendert plat. Apply/detect-logica leest dit
+    // veld NOOIT — toevoegen verandert niets aan tweak-gedrag.
+    public string? Group { get; }
 
     public bool IsChoice => Choices != null;
     public bool RequiresElevation =>
@@ -218,7 +223,8 @@ public sealed class Tweak : INotifyPropertyChanged
         string description,
         IReadOnlyList<TweakOperation> operations,
         RestartRequirement restart = RestartRequirement.None,
-        string? useCase = null)
+        string? useCase = null,
+        string? group = null)
     {
         Id = id;
         Category = category;
@@ -228,6 +234,7 @@ public sealed class Tweak : INotifyPropertyChanged
         Operations = operations;
         Choices = null;
         Restart = restart;
+        Group = group;
     }
 
     // Constructor voor multi-choice tweaks (ComboBox in UI, mirror van Windows
@@ -240,7 +247,8 @@ public sealed class Tweak : INotifyPropertyChanged
         string description,
         IReadOnlyList<TweakChoice> choices,
         RestartRequirement restart = RestartRequirement.None,
-        string? useCase = null)
+        string? useCase = null,
+        string? group = null)
     {
         Id = id;
         Category = category;
@@ -250,6 +258,7 @@ public sealed class Tweak : INotifyPropertyChanged
         Operations = Array.Empty<TweakOperation>();
         Choices = choices;
         Restart = restart;
+        Group = group;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -276,4 +285,68 @@ public static class TweakCategoryExtensions
         TweakCategory.Gaming => "Gaming",
         _ => cat.ToString()
     };
+
+    // Emoji-icoon per categorie — gebruikt als tile-icoon op de Tweaks-landing,
+    // consistent met de emoji-iconen van de Apps-tab category-tiles.
+    public static string Icon(this TweakCategory cat) => cat switch
+    {
+        TweakCategory.Explorer => "\U0001F4C1",          // file folder
+        TweakCategory.Taskbar => "\U0001F4CC",           // pushpin
+        TweakCategory.StartMenu => "\U0001FA9F",         // window
+        TweakCategory.AdsBloat => "\U0001F4E2",          // loudspeaker
+        TweakCategory.AiCopilot => "\U0001F916",         // robot
+        TweakCategory.Privacy => "\U0001F512",           // lock
+        TweakCategory.UiTheme => "\U0001F3A8",           // artist palette
+        TweakCategory.Performance => "⚡",           // high voltage
+        TweakCategory.ContextMenu => "\U0001F5B1",       // computer mouse
+        TweakCategory.NotificationsLock => "\U0001F514", // bell
+        TweakCategory.Updates => "\U0001F504",           // counterclockwise arrows
+        TweakCategory.Gaming => "\U0001F3AE",            // video game
+        _ => "⚙"                                    // gear
+    };
+
+    // Korte één-regel omschrijving per categorie voor de landing-tiles.
+    public static string Blurb(this TweakCategory cat) => cat switch
+    {
+        TweakCategory.Explorer => "File Explorer weergave & gedrag",
+        TweakCategory.Taskbar => "Taskbar knoppen, zoekbalk & gedrag",
+        TweakCategory.StartMenu => "Start menu layout & aanbevelingen",
+        TweakCategory.AdsBloat => "Suggesties, ads & tracking-toggles",
+        TweakCategory.AiCopilot => "Recall, Click to Do & AI-features",
+        TweakCategory.Privacy => "Telemetrie, activity history & meer",
+        TweakCategory.UiTheme => "Thema, kleuren, animaties & login",
+        TweakCategory.Performance => "Visuele effecten & systeemsnelheid",
+        TweakCategory.ContextMenu => "Rechtermuisknop-menu aanpassingen",
+        TweakCategory.NotificationsLock => "Meldingen & vergrendelscherm",
+        TweakCategory.Updates => "Windows Update gedrag",
+        TweakCategory.Gaming => "Game DVR, Game Bar & Xbox-services",
+        _ => string.Empty
+    };
+}
+
+// View-model voor één category-tile op de Tweaks-landing. Wordt in code
+// opgebouwd (counts zijn dynamisch — actief / pending) en aan de ItemsRepeater
+// gebonden. x:Bind in de DataTemplate leest deze read-only properties.
+public sealed class TweakCategoryTile
+{
+    public TweakCategory Category { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Icon { get; init; } = string.Empty;
+    public string Blurb { get; init; } = string.Empty;
+    // "3 / 9 actief" — getoond wanneer NIET alles is toegepast.
+    public string CountLabel { get; init; } = string.Empty;
+    // "2 pending" — leeg + collapsed wanneer geen pending changes.
+    public string PendingLabel { get; init; } = string.Empty;
+    public Microsoft.UI.Xaml.Visibility PendingVisible =>
+        string.IsNullOrEmpty(PendingLabel)
+            ? Microsoft.UI.Xaml.Visibility.Collapsed
+            : Microsoft.UI.Xaml.Visibility.Visible;
+
+    // Volledig-toegepast indicator: bij 100% een groene "Volledig actief"-pill,
+    // anders de gewone CountLabel-tekst.
+    public bool IsFullyApplied { get; init; }
+    public Microsoft.UI.Xaml.Visibility FullPillVisible =>
+        IsFullyApplied ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public Microsoft.UI.Xaml.Visibility CountVisible =>
+        IsFullyApplied ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
 }

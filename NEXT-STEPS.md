@@ -10,6 +10,56 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.8 — Tweaks-tab herstructurering (category-grid) + UI / Theme tweaks
+
+Grote UI-herbouw van de Tweaks-tab naar het Apps-tab patroon, plus 13 UI/Theme tweaks en 2 Explorer tweaks. **De apply/detect-logica in TweakService is volledig ongemoeid** — alleen de UI-laag is herbouwd.
+
+**Tweaks-tab herstructurering** (was: één lange pagina met expander-lijst per categorie — user vond dat "lelijk"). Nieuwe structuur, gekozen via user-Q&A:
+- **Category-grid landing** — grote tiles (emoji-icoon + naam + blurb + "N/M actief"), 2-3 per rij, net als de Apps-tab. Klik tile → detail-pagina
+- **`TweakCategoryDetailPage`** (nieuw) — toont de tweaks van één categorie. **Hybride sub-groepen**: geen Group → platte lijst; Group + <8 tweaks → vaste sub-headers; Group + ≥8 → inklapbare Expander per sub-groep (default dicht)
+- **Globale zoekbalk** op de landing — doorzoekt alle tweaks (naam / omschrijving / use-case / categorie), toont platte resultaten met categorie-label
+- **Globale footer** (pending count + Discard + Apply) op zowel de landing als elke detail-pagina
+- **Progress-status per tile**: groene "Volledig actief"-pill bij 100% toegepast, anders "N / M actief"-tekst. Pending-badge wanneer een categorie openstaande wijzigingen heeft
+
+**Nieuwe infra** (UI-laag, geen wijziging aan apply/detect):
+- `TweakPendingService` — cross-page pending-store (App.TweakPending), overleeft navigatie landing ↔ detail
+- `TweakCardFactory` — gedeelde card-renderer voor detail-pagina én zoekresultaten. **Checkbox-fix**: Enabled/Disabled tweaks zijn nu schone 2-state checkboxes (geen verwarrende indeterminate-minus meer bij toggle); alleen tweaks die al Partial zíjn krijgen een 3-state checkbox (daar is de minus legitiem)
+- `TweakApplyRunner` — gedeelde apply-orchestratie (backup-prompt + batching + explorer-restart + re-detect), aangeroepen vanaf beide footers
+- `Tweak.Group` veld (nullable string, puur cosmetisch — apply/detect leest 't nooit)
+
+**Infra — HKU hive support**: `ParsePath` (TweakService + SnapshotService) ondersteunt nu de **HKU / HKEY_USERS** hive, nodig voor `HKU\.DEFAULT` (login-scherm profiel).
+
+**13 UI / Theme tweaks** in 4 sub-groepen:
+
+**Groep "Thema & kleuren":**
+- **System theme** — multi-choice (Light / Dark / Custom). `Themes\Personalize\AppsUseLightTheme` + `SystemUsesLightTheme`. Custom = donkere apps + lichte shell
+- **Disable transparency effects** — `Personalize\EnableTransparency=0`
+- **Accent color on title bars & borders** — `DWM\ColorPrevalence=1` (toggle, geen color-picker)
+- **Accent color on Start & taskbar** — `Themes\Personalize\ColorPrevalence=1` (alleen zichtbaar in Dark mode)
+
+**Groep "Desktop & vensters":**
+- **Disable window & taskbar animations** — 2-op: `WindowMetrics\MinAnimate=0` (REG_SZ) + `TaskbarAnimations=0`
+- **Show This PC / Network / Control Panel on desktop** — 3 GUID-keys onder `HideDesktopIcons\NewStartPanel`
+- **Disable Snap Assist suggestions** — `EnableSnapAssistFlyout` + `SnapAssist` = 0
+- **Disable Aero Shake** — `DisallowShaking=1`
+
+**Groep "Boot & login":**
+- **Verbose logon / shutdown messages** — HKLM `Policies\System\verbosestatus=1`
+- **Show detailed Blue Screen info** — HKLM `CrashControl\DisplayParameters=1`
+- **NumLock on at boot** — 2-op: HKCU + `HKU\.DEFAULT` `Control Panel\Keyboard\InitialKeyboardIndicators=2`. SignOut
+- **Disable login screen background blur** — HKLM `Policies\System\DisableAcrylicBackgroundOnLogon=1`
+
+**Groep "Geluid":**
+- **Disable Windows startup sound** — HKLM `LogonUI\BootAnimation\DisableStartupSound=1`
+
+**+ 2 Explorer tweaks** (Explorer-categorie, geen sub-groepen):
+- **Compact view in File Explorer** — `Explorer\Advanced\UseCompactMode=1`
+- **Show full path in File Explorer** — `Explorer\CabinetState\FullPath=1`
+
+**Bewust niet opgenomen / geparkeerd:**
+- **Accent color override** — vereist een color-picker UI; past niet in het toggle/multi-choice TweakOperation-model. (De accent-*toggles* hierboven zijn wél opgenomen — die zetten alleen aan/uit, kiezen geen kleur)
+- **Restore classic Photo Viewer** — ~15 registry-values onder `Windows Photo Viewer` + `HKLM\SOFTWARE\Classes`; fragiel op Win11 24H2+ (UCPD blokkeert programmatische default-app changes — user zou 't alsnog handmatig als default moeten kiezen)
+
 ### v0.9.7 — Privacy uitbreidingen
 
 **8 Privacy tweaks** in de Privacy-categorie. Mix van HKLM-policies (RequiresElevation, batchen in 1 UAC dankzij de v0.9.6 batching-fix) en HKCU user-keys (geen UAC). Tailored Experiences is bewust niet gedupliceerd — zit al in Ads & Tracking (v0.9.4).
@@ -551,12 +601,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.7 — Privacy uitbreidingen**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.8 — UI / Theme**
-- Dark mode system-wide, accent color override, transparency on/off, animations system-wide off
-- Show seconds in tray clock (al in v0.9.2 — verplaatsen of dupliceren), verbose logon messages
-- Detailed BSoD info (display parameters bij blue screen)
-- Always-on NumLock at boot, disable login-screen acrylic blur
-- Restore classic Photo Viewer voor .jpg/.png
+~~**v0.9.8 — UI / Theme**~~ — gedaan (zie Voltooide versies). Accent-color override + classic Photo Viewer geparkeerd (zie toelichting)
 
 **v0.9.9 — Performance**
 - Disable visual effects (perf-preset combo: VisualFXSetting=2 + UserPreferencesMask binary)

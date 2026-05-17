@@ -46,6 +46,7 @@ public partial class App : Application
     public static TweakService Tweaks { get; } = new();
     public static SnapshotService Snapshots { get; } = new();
     public static RestorePointService RestorePoint { get; } = new();
+    public static TweakPendingService TweakPending { get; } = new();
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
