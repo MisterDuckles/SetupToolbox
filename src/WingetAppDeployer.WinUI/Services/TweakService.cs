@@ -2635,6 +2635,79 @@ public sealed class TweakService
                 }
             }));
 
+        // ── PERFORMANCE (gaming-gerelateerd) ────────────────────────
+        // Game DVR / Game Bar / Xbox-services horen functioneel in de
+        // Performance-categorie: het zijn stuk voor stuk achtergrond-overhead
+        // reducties (continue capture, overlay-hooks, 4 services). Research
+        // mei 2026 (3 web-passes, Win11 24H2/25H2). Game Mode bewust NIET
+        // uitgezet — dat is op moderne Windows juist nuttig.
+        list.Add(new Tweak(
+            id: "Performance.DisableGameDVR",
+            category: TweakCategory.Performance,
+            name: "Disable background game recording (Game DVR)",
+            description: "Schakelt de continue achtergrond-opname uit waarmee Windows steeds de laatste minuten gameplay vasthoudt ('Leg vast wat er net gebeurde'). 2-op HKCU. Handmatig opnemen via de Game Bar blijft mogelijk zolang die niet ook is uitgezet.",
+            useCase: "Verwijdert de constante achtergrond-capture overhead — de meest-genoemde gaming-performance tweak.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\System\GameConfigStore", ValueName = "GameDVR_Enabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR",
+                    ValueName = "AppCaptureEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableXboxGameBar",
+            category: TweakCategory.Performance,
+            name: "Disable Xbox Game Bar overlay",
+            description: "Schakelt de Xbox Game Bar-overlay uit — de Win+G-balk verschijnt niet meer en de Game Bar opstart-tips worden onderdrukt. 2-op HKCU.",
+            useCase: "Geen Game Bar-overlay meer voor wie nooit captures, widgets of de performance-meter gebruikt.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\GameBar", ValueName = "UseNexusForGameBarEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\GameBar", ValueName = "ShowStartupPanel",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        // Xbox-services: Start=4 (Disabled); default is 3 (Manual, trigger-
+        // started). Zelfde patroon als de DiagTrack-service-disable (v0.9.7).
+        TweakOperation XboxService(string name) => new TweakOperation
+        {
+            Path = $@"HKLM\SYSTEM\CurrentControlSet\Services\{name}", ValueName = "Start",
+            Kind = RegistryValueKind.DWord, EnabledValue = 4, DisabledValue = 3,
+            RequiresElevation = true
+        };
+
+        list.Add(new Tweak(
+            id: "Performance.DisableXboxServices",
+            category: TweakCategory.Performance,
+            name: "Disable Xbox services",
+            description: "Schakelt de vier Xbox-achtergrondservices uit (XblAuthManager, XblGameSave, XboxNetApiSvc, XboxGipSvc). LET OP: dit breekt de Xbox-app, Game Pass en Xbox Live-aanmelding. XboxGipSvc beheert Xbox-controller-accessoires — controllers blijven als gewone gamepad werken, maar firmware-updates en knop-remapping via de Xbox Accessories-app niet meer.",
+            useCase: "Voor wie niet via Xbox / Game Pass speelt — geen Xbox-services die op de achtergrond meedraaien.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                XboxService("XblAuthManager"),
+                XboxService("XblGameSave"),
+                XboxService("XboxNetApiSvc"),
+                XboxService("XboxGipSvc"),
+            }));
+
         return list;
     }
 }

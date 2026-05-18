@@ -10,6 +10,21 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.13 — Gaming tweaks (→ Performance-categorie)
+
+**3 tweaks** toegevoegd. Geen aparte Gaming-categorie: een eigen tile voor maar 3 tweaks is mager naast categorieën met 9-13 — de 3 zijn stuk voor stuk achtergrond-overhead reducties en horen functioneel in **Performance**. De `TweakCategory.Gaming` enum-waarde is verwijderd (incl. DisplayName/Icon/Blurb-cases). Research mei 2026 (3 web-passes, Win11 24H2/25H2).
+
+- Disable background game recording (Game DVR) — 2-op HKCU: `System\GameConfigStore\GameDVR_Enabled=0` + `CurrentVersion\GameDVR\AppCaptureEnabled=0`. Stopt de continue achtergrond-capture
+- Disable Xbox Game Bar overlay — 2-op HKCU: `Software\Microsoft\GameBar\UseNexusForGameBarEnabled=0` + `ShowStartupPanel=0`. Win+G-overlay + opstart-tips uit
+- Disable Xbox services — 4-op HKLM (1 UAC, 🔁 reboot): `Services\{XblAuthManager, XblGameSave, XboxNetApiSvc, XboxGipSvc}\Start=4` (default 3). Caveat in omschrijving: breekt Xbox-app / Game Pass / Xbox Live-aanmelding; XboxGipSvc = controller-accessoires
+
+De 3 tweaks staan vlak in Performance (geen sub-groep, zoals de bestaande "schone 9") → Performance telt nu 12 tweaks. Tweak-id's gebruiken het `Performance.`-prefix.
+
+**Bewust niet opgenomen:**
+- **Disable Game Mode** (`GameBar\AllowAutoGameMode=0`) — Game Mode is op moderne Windows juist nuttig (prioriteert de game); uitzetten is geen verbetering
+- **HKLM `AllowGameDVR` system-wide policy** — de HKCU Game DVR-tweak dekt het al zonder UAC
+- **Xbox-services splitsen** (3 Live + GipSvc apart) — user-keuze: één gecombineerde tweak
+
 ### v0.9.12 — Updates uitbreidingen
 
 **6 tweaks** in de Updates-categorie (was leeg), 2 sub-groepen. Research mei 2026 (5 web-passes, Win11 24H2/25H2 geverifieerd). Alles HKLM → batcht in 1 UAC. Side-effect: het Windows Update-scherm toont "Some settings are managed by your organization" — cosmetisch.
@@ -707,10 +722,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.12 — Updates uitbreidingen**~~ — gedaan (zie Voltooide versies). Defer feature/quality updates + NoAutoUpdate + Ethernet-metered + service-disable bewust niet opgenomen (deprecated / fragiel — zie toelichting)
 
-**v0.9.13 — Gaming (lagere prio)**
-- Disable Game DVR (background recording)
-- Disable Game Bar (Xbox overlay), Game Bar capture features
-- Disable Xbox services (XblAuthManager / XblGameSave / XboxNetApiSvc / XboxGipSvc)
+~~**v0.9.13 — Gaming (lagere prio)**~~ — gedaan (zie Voltooide versies). Geen aparte Gaming-categorie — de 3 tweaks zijn in Performance ondergebracht; Game Mode bewust niet uitgezet (nuttig op moderne Windows)
 
 **v0.9.14 — Presets / Profiles**
 - `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"

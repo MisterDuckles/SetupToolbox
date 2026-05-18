@@ -21,8 +21,7 @@ public enum TweakCategory
     Performance,
     ContextMenu,
     NotificationsLock,
-    Updates,
-    Gaming
+    Updates
 }
 
 // Wat moet de user doen na een tweak-apply voor het effect zichtbaar wordt.
@@ -282,7 +281,6 @@ public static class TweakCategoryExtensions
         TweakCategory.ContextMenu => "Context Menu",
         TweakCategory.NotificationsLock => "Notifications & Lock Screen",
         TweakCategory.Updates => "Updates",
-        TweakCategory.Gaming => "Gaming",
         _ => cat.ToString()
     };
 
@@ -301,7 +299,6 @@ public static class TweakCategoryExtensions
         TweakCategory.ContextMenu => "\U0001F5B1",       // computer mouse
         TweakCategory.NotificationsLock => "\U0001F514", // bell
         TweakCategory.Updates => "\U0001F504",           // counterclockwise arrows
-        TweakCategory.Gaming => "\U0001F3AE",            // video game
         _ => "⚙"                                    // gear
     };
 
@@ -319,7 +316,6 @@ public static class TweakCategoryExtensions
         TweakCategory.ContextMenu => "Rechtermuisknop-menu aanpassingen",
         TweakCategory.NotificationsLock => "Meldingen & vergrendelscherm",
         TweakCategory.Updates => "Windows Update gedrag",
-        TweakCategory.Gaming => "Game DVR, Game Bar & Xbox-services",
         _ => string.Empty
     };
 }
