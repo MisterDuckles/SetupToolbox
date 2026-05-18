@@ -2320,6 +2320,171 @@ public sealed class TweakService
                 }
             }));
 
+        // ── NOTIFICATIONS & LOCK SCREEN ─────────────────────────────
+        // Drie sub-groepen: meldingen, notificatiecentrum, vergrendelscherm.
+        // Research mei 2026 (web-geverifieerd, Win11 24H2/25H2). De twee HKLM-
+        // policy-tweaks (NoLockScreen + DisableLogonBackgroundImage) batchen
+        // samen in 1 UAC. Schets-item "Suggest ways to finish setup" is bewust
+        // NIET hier — dat zit al in v0.9.4 (Ads.DisableScoobePrompt + OFGB).
+        const string nlNotifGroup = "Meldingen";
+        const string nlCenterGroup = "Notificatiecentrum";
+        const string nlLockGroup = "Vergrendelscherm";
+
+        const string pushNotifications =
+            @"HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications";
+        const string notificationSettings =
+            @"HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings";
+
+        // ── Meldingen ──
+        list.Add(new Tweak(
+            id: "NotifLock.DisableAllNotifications",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable all notifications",
+            description: "Schakelt alle toast-meldingen van apps en het systeem volledig uit — de master-toggle bovenaan Instellingen > Systeem > Meldingen. Meldingen verschijnen niet meer en worden ook niet meer in het notificatiecentrum verzameld.",
+            useCase: "Volledig meldingsvrij werken; geen onderbrekingen van apps of Windows.",
+            restart: RestartRequirement.SignOut,
+            group: nlNotifGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = pushNotifications, ValueName = "ToastEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "NotifLock.DisableNotificationSounds",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable notification sounds",
+            description: "Dempt het geluid dat bij elke melding speelt. De meldingen zelf blijven visueel verschijnen — alleen het belletje verdwijnt.",
+            useCase: "Meldingen wel zien maar niet horen — rustiger zonder alle meldingen helemaal uit te zetten.",
+            restart: RestartRequirement.None,
+            group: nlNotifGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = notificationSettings, ValueName = "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        // MessageDuration: hoe lang een toast op het scherm blijft. Windows-
+        // default is 5s en de value is dan typisch ABSENT — daarom Value=null
+        // voor de default-choice (detecteert absent + revert deletet). Windows
+        // klemt buiten 5..300, dus alle choices binnen die range.
+        TweakChoiceValue[] DurationValue(int? seconds) => new TweakChoiceValue[]
+        {
+            new()
+            {
+                Path = @"HKCU\Control Panel\Accessibility", ValueName = "MessageDuration",
+                Kind = RegistryValueKind.DWord, Value = seconds
+            }
+        };
+
+        list.Add(new Tweak(
+            id: "NotifLock.NotificationDisplayTime",
+            category: TweakCategory.NotificationsLock,
+            name: "Notification display time",
+            description: "Hoe lang een melding zichtbaar blijft voor hij naar het notificatiecentrum verdwijnt — mirror van Instellingen > Toegankelijkheid > Visuele effecten. Standaard 5 seconden.",
+            useCase: "Langere weergavetijd geeft je meer tijd om op een melding te reageren.",
+            restart: RestartRequirement.SignOut,
+            group: nlNotifGroup,
+            choices: new[]
+            {
+                new TweakChoice("5 seconden (standaard)", DurationValue(null)),
+                new TweakChoice("7 seconden",             DurationValue(7)),
+                new TweakChoice("15 seconden",            DurationValue(15)),
+                new TweakChoice("30 seconden",            DurationValue(30)),
+                new TweakChoice("1 minuut",               DurationValue(60)),
+                new TweakChoice("5 minuten",              DurationValue(300)),
+            }));
+
+        // ── Notificatiecentrum ──
+        // Op Win11 is het notificatiecentrum samengevoegd met de kalender-
+        // flyout: DisableNotificationCenter=1 haalt de bel-icoon weg én zorgt
+        // dat klikken op de klok geen kalender/meldingen-paneel meer opent
+        // (Win10-stijl tray-klok). Eén tweak dekt dus beide schets-items.
+        list.Add(new Tweak(
+            id: "NotifLock.DisableNotificationCenter",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable Notification Center & Calendar flyout",
+            description: "Schakelt het notificatiecentrum volledig uit: de bel-icoon rechts op de taskbar verdwijnt en klikken op de klok opent geen meldingen-/kalender-paneel meer (Win10-stijl tray-klok). LET OP: dit is een grof middel — je verliest hiermee ook de kalender-popup bij de klok.",
+            useCase: "Voor wie het notificatiecentrum nooit gebruikt en een minimale taskbar wil.",
+            restart: RestartRequirement.ExplorerRestart,
+            group: nlCenterGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Policies\Microsoft\Windows\Explorer",
+                    ValueName = "DisableNotificationCenter",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null
+                }
+            }));
+
+        // ── Vergrendelscherm ──
+        list.Add(new Tweak(
+            id: "NotifLock.DisableLockScreen",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable lock screen",
+            description: "Slaat het vergrendelscherm (de achtergrond-foto met klok die je wegklikt) over — je komt direct op het inlogscherm. LET OP: als je systeem 'Veilig aanmelden' (Ctrl+Alt+Del verplicht) gebruikt kan het vergrendelscherm niet 100% overgeslagen worden.",
+            useCase: "Eén klik / toetsaanslag minder voor je bij het wachtwoordveld bent.",
+            restart: RestartRequirement.SignOut,
+            group: nlLockGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization",
+                    ValueName = "NoLockScreen",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "NotifLock.DisableLockScreenNotifications",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable notifications on lock screen",
+            description: "Verbergt app-meldingen op het vergrendelscherm zodat voorbijgangers geen berichten / herinneringen kunnen meelezen. 2-op: zet zowel de PushNotifications-toggle als de above-lock toast-policy uit.",
+            useCase: "Privacy — meldingsinhoud blijft achter het wachtwoord.",
+            restart: RestartRequirement.SignOut,
+            group: nlLockGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = pushNotifications, ValueName = "LockScreenToastEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                },
+                new TweakOperation
+                {
+                    Path = notificationSettings, ValueName = "NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "NotifLock.DisableLogonBackgroundImage",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable lock screen background on sign-in",
+            description: "Vervangt de vergrendelscherm-foto op het inlogscherm door een effen accent-kleur. Het vergrendelscherm zelf (vóór het inlogscherm) houdt z'n foto — alleen het wachtwoord-scherm wordt effen.",
+            useCase: "Sneller, rustiger inlogscherm zonder zware achtergrond-afbeelding.",
+            restart: RestartRequirement.None,
+            group: nlLockGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\System",
+                    ValueName = "DisableLogonBackgroundImage",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }

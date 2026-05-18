@@ -10,6 +10,34 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.11 — Notifications & Lock Screen tweaks
+
+**7 tweaks** in de NotificationsLock-categorie (was leeg), 3 sub-groepen. Research mei 2026 (4 web-passes, Win11 24H2/25H2 geverifieerd). De twee HKLM-policy-tweaks batchen in 1 UAC; de rest is HKCU → geen UAC.
+
+**Schets-correcties uit research:**
+- Schets-item "Disable 'Suggest ways to finish setup' notifications" is bewust NIET opgenomen — `ScoobeSystemSettingEnabled` zit al in v0.9.4 (`Ads.DisableScoobePrompt` + OFGB-bundle). Niet gedupliceerd.
+- Schets-items "Disable Action Center / Notification Center" en "Hide Calendar from systray click" zijn op Win11 dezelfde unified flyout → samengevoegd tot één tweak (`DisableNotificationCenter`).
+
+**Groep "Meldingen"** (3):
+- Disable all notifications — `PushNotifications\ToastEnabled=0`. Master-toggle, alle toasts uit. SignOut
+- Disable notification sounds — `Notifications\Settings\NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND=0`. Toasts blijven visueel, geen geluid
+- Notification display time — multi-choice — `HKCU\Control Panel\Accessibility\MessageDuration` — 5s (standaard, value-absent) / 7s / 15s / 30s / 1min / 5min. SignOut
+
+**Groep "Notificatiecentrum"** (1):
+- Disable Notification Center & Calendar flyout — `HKCU\Software\Policies\...\Explorer\DisableNotificationCenter=1`. Bel-icoon weg + klok opent geen kalender/meldingen-paneel meer (Win10-stijl tray-klok). ExplorerRestart
+
+**Groep "Vergrendelscherm"** (3):
+- Disable lock screen — HKLM `Policies\...\Personalization\NoLockScreen=1`. Direct naar inlogscherm. Caveat in omschrijving: bij Secure Sign-In niet 100% overslaanbaar. SignOut
+- Disable notifications on lock screen — 2-op HKCU: `PushNotifications\LockScreenToastEnabled=0` + `Notifications\Settings\NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK=0`. SignOut
+- Disable lock screen background on sign-in — HKLM `Policies\...\System\DisableLogonBackgroundImage=1`. Effen accent-kleur i.p.v. foto op het wachtwoord-scherm
+
+`DisabledValue=null` bij de policy-tweaks (NoLockScreen / DisableNotificationCenter / DisableLogonBackgroundImage) — de policy-value is absent by default, revert deletet 'm.
+
+**Bewust niet opgenomen:**
+- **Spotlight "fun facts/tips" op lockscreen** — `RotatingLockScreenOverlayEnabled` + `SubscribedContent-338387` zitten al in de OFGB-bundle (v0.9.4). Geen standalone duplicaat (user-keuze).
+- **Focus / Do Not Disturb auto-regels** (full-screen, games) — per-regel registry-structuur onder `Notifications\Settings` is fragiel/ongedocumenteerd, past niet in het toggle-model
+- **Disable Quick Settings panel** — geen betrouwbare losse registry-key op Win11
+
 ### v0.9.10 — Context Menu tweaks
 
 **10 Context Menu tweaks** in de ContextMenu-categorie, 2 sub-groepen (collapsible). Research mei 2026 (3 web-passes) — alle CLSID's geverifieerd. Alles HKCU → geen UAC; `ExplorerRestart` zodat het menu de wijziging direct oppikt.
@@ -651,11 +679,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.10 — Context Menu uitbreidingen**~~ — gedaan (zie Voltooide versies). Clipchamp-removal geskipt (geen betrouwbaar hardcoded CLSID — vereist runtime-discovery)
 
-**v0.9.11 — Notifications & Lock Screen**
-- Disable "Suggest ways to finish setup" notifications
-- Disable lock screen entirely (no-lock-screen, ga direct naar login)
-- Disable Action Center / Notification Center (heavy-handed optie)
-- Hide Calendar from systray click (revert to Win10-style tray clock)
+~~**v0.9.11 — Notifications & Lock Screen**~~ — gedaan (zie Voltooide versies). "Suggest ways to finish setup" niet opgenomen (al in v0.9.4); Action Center + Calendar-systray samengevoegd tot één `DisableNotificationCenter`-tweak
 
 **v0.9.12 — Updates uitbreidingen**
 - Pause N dagen, active hours (al gepland in originele scope)
