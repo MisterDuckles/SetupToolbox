@@ -10,6 +10,30 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.12 — Updates uitbreidingen
+
+**6 tweaks** in de Updates-categorie (was leeg), 2 sub-groepen. Research mei 2026 (5 web-passes, Win11 24H2/25H2 geverifieerd). Alles HKLM → batcht in 1 UAC. Side-effect: het Windows Update-scherm toont "Some settings are managed by your organization" — cosmetisch.
+
+**Eerlijke scope-keuze:** Windows Update tweaken is een mijnenveld — Microsoft faseert update-beleid actief uit. Bewust **alléén de betrouwbaar-werkende set**, geen deprecated rommel.
+
+**Groep "Updates & herstart"** (4):
+- Disable auto-restart while logged on — `WindowsUpdate\AU\NoAutoRebootWithLoggedOnUsers=1`. Geen geforceerde herstart tijdens gebruik
+- Disable update restart notifications — `WindowsUpdate\UX\Settings\RestartNotificationsAllowed2=0`. Geen herstart-nag-meldingen
+- Disable 'Get latest updates as soon as available' — `UX\Settings\IsContinuousInnovationOptedIn=0`. Geen voorrang voor non-security previews
+- Active hours — multi-choice — `UX\Settings\SmartActiveHoursState` + `ActiveHoursStart/End` — Automatisch (alle 3 absent) / 08:00–23:00 / 06:00–middernacht
+
+**Groep "Drivers & netwerk"** (2):
+- Disable driver updates via Windows Update — 3-op: `WindowsUpdate\ExcludeWUDriversInQualityUpdate=1` + `DriverSearching\SearchOrderConfig=0` + `Device Metadata\PreventDeviceMetadataFromNetwork=1`. Sluit alle 3 WU-driver-paden af
+- Disable Delivery Optimization (P2P) — `DeliveryOptimization\DODownloadMode=0`. Geen peer-to-peer update-upload/download
+
+**Bewust niet opgenomen (research-onderbouwd):**
+- **Defer feature / quality updates** — `DeferFeatureUpdatesPeriodInDays` / `DeferQualityUpdatesPeriodInDays`: Microsoft heeft de UI van verse 24H2-installs verwijderd, registry-policy nog maar deels gehonoreerd en niet toekomstvast (user-keuze: niet opnemen)
+- **Disable automatic updates entirely** (`NoAutoUpdate=1`) — heavy-handed, mist makkelijk security-patches (user-keuze: niet opnemen)
+- **Pause updates N dagen** — `PauseUpdatesExpiryTime` is een datum-timestamp, geen toggle
+- **Pin to Windows-versie** (`TargetReleaseVersionInfo`) — vereist runtime versie-string; TweakOperation-model is statisch-data
+- **Ethernet als metered** — `DefaultMediaCost` is TrustedInstaller-protected (ownership-change nodig); te fragiel
+- **Windows Update-service uitschakelen** (`wuauserv Start=4`) — moderne Windows herstelt dit + breekt updates compleet
+
 ### v0.9.11 — Notifications & Lock Screen tweaks
 
 **7 tweaks** in de NotificationsLock-categorie (was leeg), 3 sub-groepen. Research mei 2026 (4 web-passes, Win11 24H2/25H2 geverifieerd). De twee HKLM-policy-tweaks batchen in 1 UAC; de rest is HKCU → geen UAC.
@@ -681,13 +705,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.11 — Notifications & Lock Screen**~~ — gedaan (zie Voltooide versies). "Suggest ways to finish setup" niet opgenomen (al in v0.9.4); Action Center + Calendar-systray samengevoegd tot één `DisableNotificationCenter`-tweak
 
-**v0.9.12 — Updates uitbreidingen**
-- Pause N dagen, active hours (al gepland in originele scope)
-- Defer feature updates (max 365 days) + quality updates (max 30 days)
-- Skip driver updates via WU (`ExcludeWUDriversInQualityUpdate=1`)
-- Disable auto-restart with logged-on users
-- Disable "Get latest as soon as available" continuous-innovation opt-in
-- Set Ethernet metered (defers most updates)
+~~**v0.9.12 — Updates uitbreidingen**~~ — gedaan (zie Voltooide versies). Defer feature/quality updates + NoAutoUpdate + Ethernet-metered + service-disable bewust niet opgenomen (deprecated / fragiel — zie toelichting)
 
 **v0.9.13 — Gaming (lagere prio)**
 - Disable Game DVR (background recording)

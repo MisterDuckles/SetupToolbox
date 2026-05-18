@@ -2485,6 +2485,156 @@ public sealed class TweakService
                 }
             }));
 
+        // ── UPDATES ─────────────────────────────────────────────────
+        // Twee sub-groepen: updates & herstart, drivers & netwerk. Research
+        // mei 2026 (5 web-passes, Win11 24H2/25H2). Alleen de betrouwbaar-
+        // werkende set — Microsoft faseert update-beleid actief uit, dus
+        // bewust GEEN defer-feature/quality-updates (UI verwijderd op verse
+        // 24H2-installs) en GEEN service-disable (herstelt zichzelf). Alles
+        // HKLM → batcht in 1 UAC. Side-effect: het Windows Update-scherm
+        // toont "Some settings are managed by your organization" — cosmetisch.
+        const string upRestartGroup = "Updates & herstart";
+        const string upDriverGroup = "Drivers & netwerk";
+
+        // WindowsUpdate-policy keys + de UX\Settings backing-store (= waar de
+        // Settings-app zelf naar schrijft; geen policy-key).
+        const string auPolicy = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU";
+        const string wuPolicy = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate";
+        const string uxSettings = @"HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings";
+
+        // ── Updates & herstart ──
+        list.Add(new Tweak(
+            id: "Updates.NoAutoRebootWhileLoggedOn",
+            category: TweakCategory.Updates,
+            name: "Disable auto-restart while logged on",
+            description: "Voorkomt dat Windows Update je PC automatisch herstart terwijl je ingelogd bent. Updates worden nog gewoon op de achtergrond gedownload en geïnstalleerd — alleen de geforceerde herstart blijft achterwege tot jij 'm zelf doet.",
+            useCase: "Nooit meer onverwacht werk kwijt door een herstart-tijdens-gebruik.",
+            restart: RestartRequirement.None,
+            group: upRestartGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = auPolicy, ValueName = "NoAutoRebootWithLoggedOnUsers",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Updates.DisableRestartNotifications",
+            category: TweakCategory.Updates,
+            name: "Disable update restart notifications",
+            description: "Onderdrukt de 'Herstart nodig om updates te voltooien'-meldingen die Windows herhaaldelijk toont. De updates zelf worden niet beïnvloed — alleen de nag-meldingen verdwijnen.",
+            useCase: "Rustiger werken zonder herhaalde herstart-herinneringen.",
+            restart: RestartRequirement.None,
+            group: upRestartGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = uxSettings, ValueName = "RestartNotificationsAllowed2",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Updates.DisableContinuousInnovation",
+            category: TweakCategory.Updates,
+            name: "Disable 'Get latest updates as soon as available'",
+            description: "Schakelt de opt-in uit die je PC voorrang geeft op de nieuwste non-security updates en feature-verbeteringen — mirror van de toggle in Instellingen > Windows Update. Je krijgt updates dan op het reguliere schema i.p.v. zo vroeg mogelijk.",
+            useCase: "Wachten tot updates breder uitgerold en stabieler zijn voor je ze krijgt.",
+            restart: RestartRequirement.None,
+            group: upRestartGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = uxSettings, ValueName = "IsContinuousInnovationOptedIn",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
+        // Active hours: het tijdvenster waarin Windows niet automatisch
+        // herstart. SmartActiveHoursState=1 = Windows kiest zelf; =0 = handmatig
+        // venster via ActiveHoursStart/End (uren 0-23, max 18u bereik). De
+        // "Automatisch" choice = alle 3 values absent (= schone Windows-default).
+        TweakChoiceValue[] ActiveHoursValues(int? smart, int? start, int? end) => new TweakChoiceValue[]
+        {
+            new() { Path = uxSettings, ValueName = "SmartActiveHoursState", Kind = RegistryValueKind.DWord, Value = smart, RequiresElevation = true },
+            new() { Path = uxSettings, ValueName = "ActiveHoursStart", Kind = RegistryValueKind.DWord, Value = start, RequiresElevation = true },
+            new() { Path = uxSettings, ValueName = "ActiveHoursEnd", Kind = RegistryValueKind.DWord, Value = end, RequiresElevation = true },
+        };
+
+        list.Add(new Tweak(
+            id: "Updates.ActiveHours",
+            category: TweakCategory.Updates,
+            name: "Active hours",
+            description: "Het tijdvenster waarin Windows nooit automatisch herstart voor updates — mirror van Instellingen > Windows Update > Geavanceerde opties. 'Automatisch' laat Windows het venster zelf bepalen op basis van je activiteit.",
+            useCase: "Een vast venster instellen zodat herstarts altijd buiten je werkuren vallen.",
+            restart: RestartRequirement.None,
+            group: upRestartGroup,
+            choices: new[]
+            {
+                new TweakChoice("Automatisch (standaard)", ActiveHoursValues(null, null, null)),
+                new TweakChoice("08:00 – 23:00",           ActiveHoursValues(0, 8, 23)),
+                new TweakChoice("06:00 – middernacht",     ActiveHoursValues(0, 6, 0)),
+            }));
+
+        // ── Drivers & netwerk ──
+        list.Add(new Tweak(
+            id: "Updates.DisableDriverUpdates",
+            category: TweakCategory.Updates,
+            name: "Disable driver updates via Windows Update",
+            description: "Sluit de 3 paden af waarlangs Windows Update stuurprogramma's pusht: drivers in quality-updates, automatische driver-zoekopdracht bij nieuwe hardware, en het ophalen van device-metadata. Windows overschrijft je eigen OEM- / GPU-vendor-drivers dan niet meer.",
+            useCase: "Zelf de controle houden over driver-versies — geen verrassende WU-drivers die een werkende driver vervangen.",
+            restart: RestartRequirement.None,
+            group: upDriverGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = wuPolicy, ValueName = "ExcludeWUDriversInQualityUpdate",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching",
+                    ValueName = "SearchOrderConfig",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Device Metadata",
+                    ValueName = "PreventDeviceMetadataFromNetwork",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Updates.DisableDeliveryOptimization",
+            category: TweakCategory.Updates,
+            name: "Disable Delivery Optimization (P2P)",
+            description: "Zet de peer-to-peer deling van updates uit (DODownloadMode 0): je PC downloadt updates niet meer van andere PC's en — belangrijker — uploadt ze ook niet meer naar vreemde PC's over het internet. Updates komen rechtstreeks van Microsoft.",
+            useCase: "Bandbreedte besparen en geen update-uploadverkeer naar onbekende PC's.",
+            restart: RestartRequirement.None,
+            group: upDriverGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization",
+                    ValueName = "DODownloadMode",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }
