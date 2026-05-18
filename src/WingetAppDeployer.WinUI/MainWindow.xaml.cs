@@ -55,24 +55,34 @@ public sealed partial class MainWindow : Window
     {
         // ItemInvoked fired ook bij een klik op het ál-geselecteerde item, waar
         // SelectionChanged stil blijft. Dat hebben we nodig voor twee scenarios:
-        //   1. User staat in een CategoryDetailPage — NavView's selectie is nog
-        //      steeds "Apps", dus normale navigatie doet niks. We pakken het hier.
-        //   2. User staat op AppsPage met een actieve search — zelfde verhaal.
+        //   1. User staat in een detail-pagina (CategoryDetailPage of
+        //      TweakCategoryDetailPage) — NavView's selectie is nog steeds de
+        //      parent ("Apps"/"Tweaks"), dus normale navigatie doet niks.
+        //   2. User staat op de landing met een actieve search — zelfde verhaal.
         if (args.IsSettingsInvoked) return;
         if (args.InvokedItemContainer is not NavigationViewItem item) return;
-        if (item.Tag is not string tag || tag != "Apps") return;
+        if (item.Tag is not string tag) return;
 
-        if (ContentFrame.CurrentSourcePageType == typeof(CategoryDetailPage))
+        if (tag == "Apps")
         {
-            // Terug uit detail-page naar de categorie-grid.
-            ContentFrame.Navigate(typeof(AppsPage), null, new EntranceNavigationTransitionInfo());
-            return;
+            if (ContentFrame.CurrentSourcePageType == typeof(CategoryDetailPage))
+            {
+                ContentFrame.Navigate(typeof(AppsPage), null, new EntranceNavigationTransitionInfo());
+                return;
+            }
+            if (ContentFrame.Content is AppsPage apps)
+                apps.ResetToRoot();  // wis search, toon categorie-grid
         }
-
-        if (ContentFrame.Content is AppsPage apps)
+        else if (tag == "Tweaks")
         {
-            // Al op AppsPage: wis de search zodat categorie-grid weer zichtbaar wordt.
-            apps.ResetToRoot();
+            if (ContentFrame.CurrentSourcePageType == typeof(TweakCategoryDetailPage))
+            {
+                // Terug uit een tweak-detail-pagina naar de categorie-grid.
+                ContentFrame.Navigate(typeof(TweaksPage), null, new EntranceNavigationTransitionInfo());
+                return;
+            }
+            if (ContentFrame.Content is TweaksPage tweaks)
+                tweaks.ResetToRoot();  // wis search, toon categorie-grid
         }
     }
 }

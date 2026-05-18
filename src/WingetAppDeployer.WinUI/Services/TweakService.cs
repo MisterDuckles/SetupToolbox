@@ -1918,6 +1918,179 @@ public sealed class TweakService
                 }
             }));
 
+        // ── PERFORMANCE ─────────────────────────────────────────────
+        // "De schone 9" — research-geverifieerde tweaks met meetbaar of
+        // duidelijk effect en veilige revert; geen placebo. powercfg-
+        // afhankelijke tweaks (Ultimate Performance power plan, hibernation
+        // met hiberfil.sys-reclaim) zijn geparkeerd — die passen niet in het
+        // registry-only model. Meeste zijn HKLM → 1 UAC voor de hele batch.
+        // DisabledValue=null bij tweaks waar de Windows-default "value absent"
+        // is — revert deletet de value dan i.p.v. een waarde te forceren.
+
+        list.Add(new Tweak(
+            id: "Performance.DisableFastStartup",
+            category: TweakCategory.Performance,
+            name: "Disable Fast Startup",
+            description: "Schakelt Fast Startup uit (HiberbootEnabled=0) — de hybride-shutdown die soms driver- en update-problemen geeft. Een echte volledige shutdown elke keer. Vereist UAC; effect na reboot.",
+            useCase: "Voorspelbaar afsluiten/opstarten; lost rare post-update glitches op.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power",
+                    ValueName = "HiberbootEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisablePowerThrottling",
+            category: TweakCategory.Performance,
+            name: "Disable power throttling",
+            description: "Zet Windows power throttling uit (PowerThrottlingOff=1) — Windows knijpt anders achtergrond-apps af om energie te besparen. Vereist UAC; effect na reboot. Let op: kan accuverbruik verhogen op laptops.",
+            useCase: "Achtergrondtaken (compiles, conversies) draaien op volle snelheid.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                    ValueName = "PowerThrottlingOff",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableStorageSense",
+            category: TweakCategory.Performance,
+            name: "Disable Storage Sense",
+            description: "Schakelt Storage Sense uit via de policy (AllowStorageSenseGlobal=0) — Windows ruimt dan niet meer automatisch temp-files / Recycle Bin op. Vereist UAC.",
+            useCase: "Volledige controle over wanneer er opgeruimd wordt; geen verrassingen.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\StorageSense",
+                    ValueName = "AllowStorageSenseGlobal",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableBackgroundApps",
+            category: TweakCategory.Performance,
+            name: "Disable background apps (UWP/Store)",
+            description: "Blokkeert dat UWP/Store-apps in de achtergrond draaien (AppPrivacy-policy LetAppsAccessBackground op 'Force Deny'). Raakt alleen Store-apps, geen Win32-processen. Vereist UAC + sign-out.",
+            useCase: "Minder achtergrond-CPU/netwerk van Store-apps die je niet actief gebruikt.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy",
+                    ValueName = "LetAppsRunInBackground",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 2, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.LongPathSupport",
+            category: TweakCategory.Performance,
+            name: "Enable long path support (>260 tekens)",
+            description: "Heft de oude MAX_PATH limiet van 260 tekens op (LongPathsEnabled=1) — handig voor dev-tools, node_modules, diep geneste mappen. Vereist UAC; effect na reboot. Alleen manifested Win32-apps + Store-apps honoreren 't.",
+            useCase: "Geen 'path too long'-fouten meer bij dev-werk.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\FileSystem",
+                    ValueName = "LongPathsEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.PreferIPv4",
+            category: TweakCategory.Performance,
+            name: "Prefer IPv4 over IPv6",
+            description: "Geeft IPv4 voorrang boven IPv6 (DisabledComponents=0x20) — IPv6 blijft volledig functioneel, maar wordt niet meer eerst geprobeerd. Vereist UAC; effect na reboot. Bewust 0x20 — andere waardes kunnen netwerk-services breken.",
+            useCase: "Lost trage DNS / connect-vertraging op netwerken zonder goede IPv6-route op.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters",
+                    ValueName = "DisabledComponents",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0x20, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableMpo",
+            category: TweakCategory.Performance,
+            name: "Disable Multiplane Overlay (MPO)",
+            description: "Zet MPO uit (Dwm\\OverlayTestMode=5) — een veelgebruikte fix voor scherm-flikkering / tearing / zwart knipperen op sommige AMD/NVIDIA-setups. Undocumented debug-waarde, maar werkt en is netjes terug te draaien. Vereist UAC; effect na reboot.",
+            useCase: "Lost flikkerende of knipperende beeldschermen op die met MPO samenhangen.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\Dwm",
+                    ValueName = "OverlayTestMode",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 5, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.RemoveStartupDelay",
+            category: TweakCategory.Performance,
+            name: "Remove startup-app delay",
+            description: "Verwijdert de kunstmatige ~10s vertraging voordat autostart-apps (Run-key) laden na inloggen (StartupDelayInMSec=0). Geen UAC; effect na sign-out.",
+            useCase: "Autostart-apps zijn meteen beschikbaar i.p.v. 10 seconden na de desktop.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize",
+                    ValueName = "StartupDelayInMSec",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableNtfsLastAccess",
+            category: TweakCategory.Performance,
+            name: "Disable NTFS last-access timestamps",
+            description: "Forceert user-managed mode waarin NTFS niet bij elke read een 'last access'-timestamp bijwerkt (NtfsDisableLastAccessUpdate=1). Bescheiden I/O-besparing — modern Windows stelt deze updates standaard al ~1u uit. Vereist UAC; effect na reboot.",
+            useCase: "Iets minder schrijf-I/O bij intensief lezen van veel bestanden.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\FileSystem",
+                    ValueName = "NtfsDisableLastAccessUpdate",
+                    // EnabledValue=1 (user-managed, disabled). DisabledValue=null:
+                    // revert deletet de value zodat Windows weer system-managed
+                    // mode pakt (de moderne default ~0x80000002).
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }

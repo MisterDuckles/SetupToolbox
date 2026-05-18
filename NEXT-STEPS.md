@@ -10,6 +10,30 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.9 — Performance tweaks ("de schone 9") + Tweaks sidebar-nav fix
+
+**9 Performance tweaks** in de Performance-categorie. Research mei 2026 (2 passes via web): de roadmap-schets is uitgewerkt + extra tweaks onderzocht. Eerlijke conclusie: veel "performance-tweaks" zijn placebo of riskant — daarom alléén de geverifieerde solide set ("de schone 9"), geen snake-oil. Meeste HKLM-policies/keys → batchen in 1 UAC.
+
+- **Disable Fast Startup** — `Session Manager\Power\HiberbootEnabled=0`. Reboot
+- **Disable power throttling** — `Power\PowerThrottling\PowerThrottlingOff=1`. Reboot
+- **Disable Storage Sense** — `Policies\...\StorageSense\AllowStorageSenseGlobal=0`
+- **Disable background apps (UWP/Store)** — `Policies\...\AppPrivacy\LetAppsRunInBackground=2` (Force Deny). SignOut
+- **Enable long path support** — `FileSystem\LongPathsEnabled=1`. Reboot
+- **Prefer IPv4 over IPv6** — `Tcpip6\Parameters\DisabledComponents=0x20` (IPv6 blijft functioneel; bewust 0x20, niet 0xFF). Reboot
+- **Disable Multiplane Overlay** — `Dwm\OverlayTestMode=5` (flikker/tearing-fix; undocumented debug-waarde). Reboot
+- **Remove startup-app delay** — HKCU `Explorer\Serialize\StartupDelayInMSec=0` (geen UAC). SignOut
+- **Disable NTFS last-access timestamps** — `FileSystem\NtfsDisableLastAccessUpdate=1`. Reboot
+
+`DisabledValue=null` bij de tweaks waar de Windows-default "value absent" is — revert deletet de value dan i.p.v. een waarde te forceren.
+
+**Bewust niet opgenomen** (research-onderbouwd):
+- **powercfg-afhankelijk** — Ultimate Performance power plan (`powercfg /duplicatescheme`) en hibernation-met-hiberfil.sys-reclaim (`powercfg /hibernate off`) passen niet in het registry-only TweakOperation-model. Geparkeerd; eventueel later een command-tweak model-uitbreiding
+- **Startup-apps cleanup** — vereist enumeratie van Run-keys + StartupApproved + Startup-folders + Task Scheduler; aparte feature, geen flat toggle
+- **Visual-effects 'best performance' preset** — overlapt al met de UI/Theme animaties/transparency tweaks (v0.9.8); de UserPreferencesMask binary is onveilig om blind te schrijven
+- **Placebo/riskant** — WSearch uitzetten (breekt Start-menu search), SysMain/Prefetcher/Win32PrioritySeparation/8.3-names/HwSchMode (verwaarloosbaar of debated op moderne hardware), curated services (al trigger-started → bijna geen idle-kosten). Xbox-services horen in v0.9.13 Gaming
+
+**Tweaks sidebar-nav fix**: klikken op "Tweaks" in de NavigationView terwijl je op een `TweakCategoryDetailPage` staat → terug naar de category-grid landing. Op de landing met actieve search → search gewist (`ResetToRoot`). Spiegelt het bestaande gedrag van de Apps-sidebar.
+
 ### v0.9.8 — Tweaks-tab herstructurering (category-grid) + UI / Theme tweaks
 
 Grote UI-herbouw van de Tweaks-tab naar het Apps-tab patroon, plus 13 UI/Theme tweaks en 2 Explorer tweaks. **De apply/detect-logica in TweakService is volledig ongemoeid** — alleen de UI-laag is herbouwd.
@@ -603,16 +627,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.8 — UI / Theme**~~ — gedaan (zie Voltooide versies). Accent-color override + classic Photo Viewer geparkeerd (zie toelichting)
 
-**v0.9.9 — Performance**
-- Disable visual effects (perf-preset combo: VisualFXSetting=2 + UserPreferencesMask binary)
-- Startup apps cleanup
-- Disable hibernation (powercfg /hibernate off — bespaart hiberfil.sys), disable Fast Startup
-- Enable Ultimate Performance power plan (`powercfg -duplicatescheme e9a42b02-...`)
-- Disable power throttling, Storage Sense, background apps (UWP)
-- Curated services to Manual (DiagTrack + WerSvc + MapsBroker + RetailDemo + Xbox-stack)
-- Long path support (`LongPathsEnabled=1` — voor dev-tools)
-- Prefer IPv4 over IPv6 (`DisabledComponents=0x20`)
-- Disable Multiplane Overlay (fix screen-tearing op sommige GPUs)
+~~**v0.9.9 — Performance**~~ — gedaan (zie Voltooide versies). powercfg-afhankelijke items (Ultimate Performance power plan, hibernation-reclaim) + startup-apps cleanup geparkeerd; placebo-tweaks bewust niet opgenomen
 
 **v0.9.10 — Context Menu uitbreidingen**
 - Add custom verbs: Open PowerShell here, Open Terminal as Admin (Directory\Background\shell)

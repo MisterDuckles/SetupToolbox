@@ -66,6 +66,16 @@ public sealed partial class TweaksPage : Page
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
         ScrollViewSpeedup.OnStarting(sender, args);
 
+    // Aangeroepen door MainWindow wanneer de user op de al-geselecteerde
+    // "Tweaks" sidebar-item klikt terwijl 'ie al op de landing staat: wis de
+    // search zodat de categorie-grid weer in beeld komt.
+    public void ResetToRoot()
+    {
+        SearchBox.Text = string.Empty;
+        CategoryGrid.Visibility = Visibility.Visible;
+        SearchResultsSection.Visibility = Visibility.Collapsed;
+    }
+
     // ---------------------------------------------------------------
     // CATEGORY GRID
     // ---------------------------------------------------------------

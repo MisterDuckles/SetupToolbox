@@ -315,7 +315,7 @@ public static class TweakCategoryExtensions
         TweakCategory.AiCopilot => "Recall, Click to Do & AI-features",
         TweakCategory.Privacy => "Telemetrie, activity history & meer",
         TweakCategory.UiTheme => "Thema, kleuren, animaties & login",
-        TweakCategory.Performance => "Visuele effecten & systeemsnelheid",
+        TweakCategory.Performance => "Opstart, opslag, netwerk & snelheid",
         TweakCategory.ContextMenu => "Rechtermuisknop-menu aanpassingen",
         TweakCategory.NotificationsLock => "Meldingen & vergrendelscherm",
         TweakCategory.Updates => "Windows Update gedrag",
