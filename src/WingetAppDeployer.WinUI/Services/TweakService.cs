@@ -2091,6 +2091,235 @@ public sealed class TweakService
                 }
             }));
 
+        // ── CONTEXT MENU ────────────────────────────────────────────
+        // Twee sub-groepen: items verwijderen (blokkeren) en items toevoegen.
+        // Win11-realiteit: custom shell\-verbs verschijnen alleen onder "Toon
+        // meer opties" TENZIJ de Classic context menu tweak (Explorer-cat) aan
+        // staat — dan staan ze direct in het menu. CLSID's research-geverifieerd
+        // (mei 2026). Alles HKCU → geen UAC. ExplorerRestart zodat het menu
+        // de wijziging direct oppikt.
+        const string cmRemove = "Items verwijderen";
+        const string cmAdd = "Items toevoegen";
+
+        // De Shell Extensions Blocked-lijst: een String-value met de CLSID als
+        // naam (lege data) onderdrukt die shell-extension overal. Werkt voor
+        // klassieke IContextMenu-handlers én IExplorerCommand-handlers.
+        const string blockedKey = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked";
+        Tweak BlockedTweak(string id, string name, string description, string useCase, string clsid) =>
+            new Tweak(
+                id: id,
+                category: TweakCategory.ContextMenu,
+                name: name,
+                description: description,
+                restart: RestartRequirement.ExplorerRestart,
+                useCase: useCase,
+                group: cmRemove,
+                operations: new[]
+                {
+                    new TweakOperation
+                    {
+                        Path = blockedKey,
+                        ValueName = clsid,
+                        Kind = RegistryValueKind.String,
+                        EnabledValue = string.Empty,  // value bestaat (lege data) = geblokkeerd
+                        DisabledValue = null          // revert: value verwijderen = deblokkeerd
+                    }
+                });
+
+        list.Add(BlockedTweak("ContextMenu.RemoveEditWithPhotos",
+            "Remove 'Edit with Photos'",
+            "Verwijdert de 'Edit with Photos' / 'Bewerken met Foto's' optie uit het rechtermuisknop-menu van afbeeldingen. Raakt het hoofdmenu. Blocked-lijst CLSID.",
+            "Schoner afbeeldings-context-menu voor wie Foto's niet als editor gebruikt.",
+            "{BFE0E2A4-C70C-4AD7-AC3D-10D1ECEBB5B4}"));
+
+        list.Add(BlockedTweak("ContextMenu.RemoveEditWithPaint",
+            "Remove 'Edit with Paint'",
+            "Verwijdert de 'Edit with Paint' / 'Bewerken met Paint' optie uit het context-menu van afbeeldingen. Raakt het hoofdmenu.",
+            "Geen Paint-entry meer bij elk plaatje.",
+            "{2430F218-B743-4FD6-97BF-5C76541B4AE9}"));
+
+        list.Add(BlockedTweak("ContextMenu.RemoveScanWithDefender",
+            "Remove 'Scan with Microsoft Defender'",
+            "Verbergt de 'Scan with Microsoft Defender' menu-optie. Defender blijft gewoon scannen — alleen de menu-entry verdwijnt. Blocked-lijst i.p.v. key-delete (Defender zou een verwijderde key herstellen).",
+            "Minder rommel in het context-menu; on-demand scannen kan nog via de Defender-app.",
+            "{09A47860-11B0-4DA5-AFA5-26D86198A780}"));
+
+        list.Add(BlockedTweak("ContextMenu.RemoveRestorePreviousVersions",
+            "Remove 'Restore previous versions'",
+            "Verwijdert de 'Restore previous versions' / 'Vorige versies terugzetten' optie. Shadow-copies / File History blijven werken — alleen de menu-entry verdwijnt.",
+            "Opschonen voor wie geen Volume Shadow Copies gebruikt.",
+            "{596AB062-B4D2-4215-9F74-E9109B0A8153}"));
+
+        list.Add(BlockedTweak("ContextMenu.RemoveCastToDevice",
+            "Remove 'Cast to Device'",
+            "Verwijdert de 'Cast to Device' / 'Naar apparaat casten' (Play To) optie uit het media-context-menu.",
+            "Schoner menu voor wie niet naar DLNA/Miracast-apparaten cast.",
+            "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}"));
+
+        list.Add(BlockedTweak("ContextMenu.RemoveIncludeInLibrary",
+            "Remove 'Include in library'",
+            "Verwijdert de 'Include in library' / 'Opnemen in bibliotheek' submenu-optie van mappen.",
+            "Opschonen voor wie de Windows-bibliotheken niet gebruikt.",
+            "{3dad6c5d-2167-4cae-9914-f99e41c12cfa}"));
+
+        list.Add(BlockedTweak("ContextMenu.RemoveShare",
+            "Remove 'Give access to' / sharing",
+            "Verwijdert de 'Give access to' / 'Toegang verlenen aan' sharing-optie. Bestaande netwerk-shares blijven gewoon werken — alleen de menu-entry verdwijnt.",
+            "Schoner menu voor wie geen lokale netwerk-shares aanmaakt via het context-menu.",
+            "{f81e9010-6ea4-11ce-a7ff-00aa003ca9f6}"));
+
+        // ── Items toevoegen ──
+        // takeown/icacls + wt.exe verbs. Verb-key krijgt DeleteKeyOnAbsent zodat
+        // revert de hele verb-subtree opruimt. HKCU\Software\Classes = per-user.
+
+        const string takeOwnFileCmd =
+            "cmd.exe /c takeown /f \"%1\" && icacls \"%1\" /grant administrators:F";
+        const string takeOwnDirCmd =
+            "cmd.exe /c takeown /f \"%1\" /r /d y && icacls \"%1\" /grant administrators:F /t";
+
+        list.Add(new Tweak(
+            id: "ContextMenu.AddTakeOwnership",
+            category: TweakCategory.ContextMenu,
+            name: "Add 'Take Ownership'",
+            description: "Voegt een 'Take Ownership' optie toe aan het context-menu van bestanden en mappen — neemt in één klik eigenaarschap (takeown) + volledige rechten (icacls). De verb heet 'runas' dus 't auto-elevate't met UAC. LET OP: gebruik dit NOOIT op systeemmappen (C:\\Windows, Program Files) — dat kan Windows-updates / TrustedInstaller-bescherming breken.",
+            useCase: "Snel een vastzittend bestand/map ontgrendelen dat 'Access denied' geeft.",
+            restart: RestartRequirement.ExplorerRestart,
+            group: cmAdd,
+            operations: new[]
+            {
+                // Bestanden — *\shell\runas
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\*\shell\runas", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = "Take Ownership",
+                    DisabledValue = null, DeleteKeyOnAbsent = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\*\shell\runas", ValueName = "HasLUAShield",
+                    Kind = RegistryValueKind.String, EnabledValue = string.Empty, DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\*\shell\runas", ValueName = "NoWorkingDirectory",
+                    Kind = RegistryValueKind.String, EnabledValue = string.Empty, DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\*\shell\runas\command", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = takeOwnFileCmd, DisabledValue = null
+                },
+                // Mappen — Directory\shell\runas
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\runas", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = "Take Ownership",
+                    DisabledValue = null, DeleteKeyOnAbsent = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\runas", ValueName = "HasLUAShield",
+                    Kind = RegistryValueKind.String, EnabledValue = string.Empty, DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\runas", ValueName = "NoWorkingDirectory",
+                    Kind = RegistryValueKind.String, EnabledValue = string.Empty, DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\runas\command", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = takeOwnDirCmd, DisabledValue = null
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "ContextMenu.AddMoveCopyTo",
+            category: TweakCategory.ContextMenu,
+            name: "Add 'Move to folder' / 'Copy to folder'",
+            description: "Voegt de klassieke 'Move to folder...' en 'Copy to folder...' opties toe aan het context-menu van bestanden en mappen — die openen een map-kiezer. Gebruikt de ingebouwde Windows shell-handlers.",
+            useCase: "Bestanden verplaatsen/kopiëren naar een doelmap zonder twee Explorer-vensters.",
+            restart: RestartRequirement.ExplorerRestart,
+            group: cmAdd,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\Move To",
+                    ValueName = "", Kind = RegistryValueKind.String,
+                    EnabledValue = "{C2FBB631-2971-11D1-A18C-00C04FD75D13}",
+                    DisabledValue = null, DeleteKeyOnAbsent = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\Copy To",
+                    ValueName = "", Kind = RegistryValueKind.String,
+                    EnabledValue = "{C2FBB630-2971-11D1-A18C-00C04FD75D13}",
+                    DisabledValue = null, DeleteKeyOnAbsent = true
+                }
+            }));
+
+        // wt.exe elevated via PowerShell Start-Process -Verb RunAs. -ArgumentList
+        // als comma-array zodat een pad met spaties als 1 argument doorkomt.
+        const string terminalAdminCmd =
+            "powershell.exe -NoProfile -WindowStyle Hidden -Command \"Start-Process wt.exe -ArgumentList '-d','%V' -Verb RunAs\"";
+
+        list.Add(new Tweak(
+            id: "ContextMenu.AddOpenTerminalAdmin",
+            category: TweakCategory.ContextMenu,
+            name: "Add 'Open Terminal as Admin'",
+            description: "Voegt 'Open Terminal as Admin' toe aan het context-menu van mappen en de mapachtergrond. Opent Windows Terminal als administrator in de huidige map. (Win11 heeft al een gewone 'Open in Terminal' in het hoofdmenu — dit is de verhoogde variant.)",
+            useCase: "Direct een admin-terminal in de juiste map zonder los te navigeren.",
+            restart: RestartRequirement.ExplorerRestart,
+            group: cmAdd,
+            operations: new[]
+            {
+                // Mapachtergrond — Directory\Background\shell
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\Background\shell\OpenTerminalAdmin", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = "Open Terminal as Admin",
+                    DisabledValue = null, DeleteKeyOnAbsent = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\Background\shell\OpenTerminalAdmin", ValueName = "HasLUAShield",
+                    Kind = RegistryValueKind.String, EnabledValue = string.Empty, DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\Background\shell\OpenTerminalAdmin", ValueName = "Icon",
+                    Kind = RegistryValueKind.String, EnabledValue = "wt.exe", DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\Background\shell\OpenTerminalAdmin\command", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = terminalAdminCmd, DisabledValue = null
+                },
+                // Op een map zelf — Directory\shell
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\OpenTerminalAdmin", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = "Open Terminal as Admin",
+                    DisabledValue = null, DeleteKeyOnAbsent = true
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\OpenTerminalAdmin", ValueName = "HasLUAShield",
+                    Kind = RegistryValueKind.String, EnabledValue = string.Empty, DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\OpenTerminalAdmin", ValueName = "Icon",
+                    Kind = RegistryValueKind.String, EnabledValue = "wt.exe", DisabledValue = null
+                },
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Classes\Directory\shell\OpenTerminalAdmin\command", ValueName = "",
+                    Kind = RegistryValueKind.String, EnabledValue = terminalAdminCmd, DisabledValue = null
+                }
+            }));
+
         return list;
     }
 }

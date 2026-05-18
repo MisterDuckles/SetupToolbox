@@ -10,6 +10,26 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.10 — Context Menu tweaks
+
+**10 Context Menu tweaks** in de ContextMenu-categorie, 2 sub-groepen (collapsible). Research mei 2026 (3 web-passes) — alle CLSID's geverifieerd. Alles HKCU → geen UAC; `ExplorerRestart` zodat het menu de wijziging direct oppikt.
+
+**Win11 context-menu realiteit**: custom `shell\`-verbs verschijnen alleen onder "Toon meer opties" — TENZIJ de Classic context menu tweak (Explorer-categorie, v0.9.1) aanstaat, dan staan ze direct in het menu. De verwijder-tweaks voor Photos/Paint raken het hoofdmenu direct (via de Shell Extensions Blocked-lijst).
+
+**Groep "Items verwijderen"** (7) — onderdrukt shell-extensions via een String-value (CLSID-naam, lege data) in `Shell Extensions\Blocked`. Niet-destructief, reversible:
+- Remove 'Edit with Photos' — `{BFE0E2A4-…}` (hoofdmenu)
+- Remove 'Edit with Paint' — `{2430F218-…}` (hoofdmenu)
+- Remove 'Scan with Microsoft Defender' — `{09A47860-…}` (Blocked-lijst i.p.v. key-delete; Defender herstelt een verwijderde key anders)
+- Remove 'Restore previous versions' — `{596AB062-…}`
+- Remove 'Cast to Device' — `{7AD84985-…}` (Play To)
+- Remove 'Include in library' — `{3dad6c5d-…}`
+- Remove 'Give access to' / sharing — `{f81e9010-…}` (netwerk-shares blijven werken)
+
+**Groep "Items toevoegen"** (3) — multi-op verb-keys onder `HKCU\Software\Classes`; verb-root krijgt `DeleteKeyOnAbsent` zodat revert de subtree opruimt:
+- Add 'Take Ownership' — `runas`-verb (auto-elevate) op bestanden + mappen, takeown + icacls. Beschrijving waarschuwt: nooit op systeemmappen gebruiken
+- Add 'Move to folder' / 'Copy to folder' — klassieke shell-handlers via `ContextMenuHandlers` (CLSID `{C2FBB631-…}` / `{C2FBB630-…}`)
+- Add 'Open Terminal as Admin' — `wt.exe` elevated via PowerShell `Start-Process -Verb RunAs`, op mapachtergrond + mappen
+
 ### v0.9.9 — Performance tweaks ("de schone 9") + Tweaks sidebar-nav fix
 
 **9 Performance tweaks** in de Performance-categorie. Research mei 2026 (2 passes via web): de roadmap-schets is uitgewerkt + extra tweaks onderzocht. Eerlijke conclusie: veel "performance-tweaks" zijn placebo of riskant — daarom alléén de geverifieerde solide set ("de schone 9"), geen snake-oil. Meeste HKLM-policies/keys → batchen in 1 UAC.
@@ -629,11 +649,7 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.9 — Performance**~~ — gedaan (zie Voltooide versies). powercfg-afhankelijke items (Ultimate Performance power plan, hibernation-reclaim) + startup-apps cleanup geparkeerd; placebo-tweaks bewust niet opgenomen
 
-**v0.9.10 — Context Menu uitbreidingen**
-- Add custom verbs: Open PowerShell here, Open Terminal as Admin (Directory\Background\shell)
-- Add Take Ownership (recursive icacls)
-- Add Move to / Copy to flyouts (CLSID handlers `{C2FBB630-...}` + `{C2FBB631-...}`)
-- Remove cluttery handlers: Edit with Photos / Paint 3D / Clipchamp
+~~**v0.9.10 — Context Menu uitbreidingen**~~ — gedaan (zie Voltooide versies). Clipchamp-removal geskipt (geen betrouwbaar hardcoded CLSID — vereist runtime-discovery)
 
 **v0.9.11 — Notifications & Lock Screen**
 - Disable "Suggest ways to finish setup" notifications
