@@ -3077,6 +3077,143 @@ public sealed class TweakService
                 new TweakOperation { Path = @"HKCU\Control Panel\Mouse", ValueName = "MouseThreshold2", Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "10" }
             }));
 
+        // ── v0.9.19 — UI & Performance misc + battery % ─────────────
+        // Gap-analyse ronde 2 (winutil + ShutUp10), gecureerde rest. UI-tweaks
+        // in nieuwe UiTheme-subgroep "Invoer & weergave".
+        const string uiThemeInput = "Invoer & weergave";
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableStickyKeysPrompt",
+            category: TweakCategory.UiTheme,
+            name: "Disable Sticky Keys shortcut",
+            description: "Schakelt de Sticky Keys-sneltoets uit (5× Shift drukken) zodat de pop-up niet meer per ongeluk verschijnt. De functie zelf blijft beschikbaar via Toegankelijkheid.",
+            useCase: "Geen onbedoelde Sticky Keys-prompt meer tijdens typen of gamen.",
+            restart: RestartRequirement.None,
+            group: uiThemeInput,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Control Panel\Accessibility\StickyKeys", ValueName = "Flags",
+                    Kind = RegistryValueKind.String, EnabledValue = "506", DisabledValue = "510"
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.AlwaysShowScrollbars",
+            category: TweakCategory.UiTheme,
+            name: "Always show scrollbars",
+            description: "Houdt de scrollbars in UWP/Store-apps en Instellingen permanent zichtbaar i.p.v. ze te laten weg-animeren.",
+            useCase: "Scrollbar altijd zichtbaar — fijner als referentiepunt en geen layout-shift bij hover.",
+            restart: RestartRequirement.SignOut,
+            group: uiThemeInput,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Control Panel\Accessibility", ValueName = "DynamicScrollbars",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.FasterMenuDelay",
+            category: TweakCategory.UiTheme,
+            name: "Faster menu show delay",
+            description: "Verkort de vertraging voordat menu's en tooltips verschijnen (van 400 ms naar 200 ms) — de hele UI voelt snapper aan.",
+            useCase: "Snellere reactie van rechtsklik-menu's en submenu's.",
+            restart: RestartRequirement.SignOut,
+            group: uiThemeInput,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Control Panel\Desktop", ValueName = "MenuShowDelay",
+                    Kind = RegistryValueKind.String, EnabledValue = "200", DisabledValue = "400"
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableHibernation",
+            category: TweakCategory.Performance,
+            name: "Disable hibernation",
+            description: "Schakelt de hibernation-functie uit. LET OP: dit zet alleen de registry-vlag — het hiberfil.sys-bestand wordt niet automatisch teruggewonnen (dat vereist `powercfg /hibernate off`). Fast Startup gebruikt hibernation, dus die werkt hierna ook niet meer.",
+            useCase: "Geen sluimerstand voor wie 'm niet gebruikt.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\Power", ValueName = "HibernateEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1, RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.DisableFullscreenOptimizations",
+            category: TweakCategory.Performance,
+            name: "Disable Fullscreen Optimizations",
+            description: "Schakelt Fullscreen Optimizations (FSO) globaal uit — fullscreen-games draaien dan in echte exclusieve fullscreen i.p.v. de geoptimaliseerde borderless-modus. 4-op HKCU, geen UAC.",
+            useCase: "Lagere input-latency en minder stutter in fullscreen-games.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation { Path = @"HKCU\System\GameConfigStore", ValueName = "GameDVR_FSEBehaviorMode", Kind = RegistryValueKind.DWord, EnabledValue = 2, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\System\GameConfigStore", ValueName = "GameDVR_HonorUserFSEBehaviorMode", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\System\GameConfigStore", ValueName = "GameDVR_DXGIHonorFSEWindowsCompatible", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\System\GameConfigStore", ValueName = "GameDVR_EFSEFeatureFlags", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.RestorePointFrequency",
+            category: TweakCategory.Performance,
+            name: "Allow frequent restore points",
+            description: "Verwijdert de standaard limiet die maar één System Restore-punt per 24 uur toestaat — je kunt dan vaker (ook achter elkaar) herstelpunten maken.",
+            useCase: "Vlak vóór risicovolle wijzigingen meerdere herstelpunten kunnen maken op één dag.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore",
+                    ValueName = "SystemRestorePointCreationFrequency",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null, RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Performance.EnablePeriodicRegistryBackup",
+            category: TweakCategory.Performance,
+            name: "Enable periodic registry backup",
+            description: "Heractiveert de automatische registry-hive-backups naar `C:\\Windows\\System32\\config\\RegBack` (uitgeschakeld sinds Windows 10 1803). Handig als herstel-vangnet bij een corrupt register.",
+            useCase: "Een extra recovery-optie als het register beschadigd raakt.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Configuration Manager",
+                    ValueName = "EnablePeriodicBackup",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.ShowBatteryPercentage",
+            category: TweakCategory.Taskbar,
+            name: "Show battery percentage in tray",
+            description: "Toont het batterijpercentage als getal bij het accu-icoon in het systeemvak (laptops/tablets).",
+            useCase: "Direct het exacte accupercentage zien zonder te hoeven hoveren.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "IsBatteryPercentageEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
         // ── v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office ─
         // Gap-analyse ronde 2 (winutil + O&O ShutUp10). Aanvulling op de
         // bestaande Privacy-tweaks (DiagTrack/CEIP/AllowTelemetry).

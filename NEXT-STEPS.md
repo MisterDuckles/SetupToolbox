@@ -10,6 +10,24 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.19 — UI & Performance misc + battery %
+
+**8 tweaks** (laatste tweak-uitbreiding vóór Presets). Network-versie geschrapt (user vond 'm niet nuttig).
+
+**UI/Theme** (nieuwe subgroep "Invoer & weergave"):
+- Disable Sticky Keys shortcut — `Accessibility\StickyKeys\Flags=506`
+- Always show scrollbars — `Accessibility\DynamicScrollbars=0`. SignOut
+- Faster menu show delay — `Desktop\MenuShowDelay=200` (van 400). SignOut
+
+**Performance:**
+- Disable hibernation — `Control\Power\HibernateEnabled=0`. Reboot. (Reclaimt hiberfil.sys niet — vereist powercfg)
+- Disable Fullscreen Optimizations — 4-op HKCU `GameConfigStore`: GameDVR_FSEBehaviorMode=2, HonorUserFSEBehaviorMode=1, DXGIHonorFSEWindowsCompatible=1, EFSEFeatureFlags=0
+- Allow frequent restore points — `SystemRestore\SystemRestorePointCreationFrequency=0`
+- Enable periodic registry backup — `Configuration Manager\EnablePeriodicBackup=1`. Reboot
+
+**Taskbar:**
+- Show battery percentage in tray — `Advanced\IsBatteryPercentageEnabled=1`
+
 ### v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office
 
 **7 tweaks** (6 Privacy + 1 NotifLock) uit gap-analyse ronde 2. HKLM-policies batchen in 1 UAC.
@@ -811,16 +829,11 @@ Tweede research-ronde (2 agents) tegen Chris Titus winutil + O&O ShutUp10++. Gec
 
 ~~**v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.19 — Network tweaks** (nieuwe Network-categorie, 4 tweaks)
-- IPv6 volledig uit (`Tcpip6\Parameters\DisabledComponents=255`), Teredo uit (`=1` of policy), LLMNR uit (`DNSClient\EnableMulticast=0`), NetBIOS-over-TCP uit
+~~**v0.9.19 — UI & Performance misc + battery %**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.20 — UI & Performance misc + battery %**
-- UI: Sticky Keys-prompt uit (`Accessibility\StickyKeys\Flags=506`), scrollbars altijd zichtbaar (`Accessibility\DynamicScrollbars=0`), MenuShowDelay sneller
-- Performance: hibernation toggle (`Power\HibernateEnabled` + `ShowHibernateOption`), Fullscreen Optimizations uit (`GameConfigStore\GameDVR_DXGIHonorFSEWindowsCompatible=1`)
-- Security/backup: System Restore-point-frequentie (`SystemRestore\SystemRestorePointCreationFrequency=0`), periodieke registry-backup (`Configuration Manager\EnablePeriodicBackup=1`)
-- Taskbar: battery-% in tray (`Advanced\IsBatteryPercentageEnabled=1`)
+> **Geschrapt — Network tweaks** (IPv6-multichoice / LLMNR / NetBIOS): user vond Network-tweaks niet nuttig. NetBIOS was sowieso geparkeerd (per-adapter). De bestaande `Performance.PreferIPv4` blijft ongemoeid.
 
-**v0.9.21 — Presets / Profiles + import/export**
+**v0.9.20 — Presets / Profiles + import/export**
 - `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"
 - Eén klik vinkt een set tweaks aan in de Tweaks tab (user kan nog deselecten voor Apply)
 - Import/export van een tweak-selectie (mirror van de bestaande app-selectie export/import)
