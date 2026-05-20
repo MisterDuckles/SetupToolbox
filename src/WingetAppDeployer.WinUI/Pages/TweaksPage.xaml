@@ -66,15 +66,18 @@
                             TextChanged="SearchBox_TextChanged" />
         </Grid>
 
-        <!-- Resultaat-bar voor apply feedback. -->
+        <!-- Resultaat-bar voor apply feedback. GEEN onder-marge: een gesloten
+             InfoBar blijft Visible-met-0-hoogte en zou die 12px-marge anders
+             alsnog reserveren → een extra gat boven de cards t.o.v. de Apps-tab.
+             Bij open feedback staat 'ie nu vlak boven de body (prima voor een
+             transient melding). -->
         <InfoBar x:Name="ResultBar"
                  Grid.Row="1"
                  Severity="Success"
                  IsOpen="False"
                  IsClosable="True"
                  MaxWidth="820"
-                 HorizontalAlignment="Left"
-                 Margin="0,0,0,12" />
+                 HorizontalAlignment="Left" />
 
         <Grid Grid.Row="2">
             <!-- Body: category-grid OF zoekresultaten. -->

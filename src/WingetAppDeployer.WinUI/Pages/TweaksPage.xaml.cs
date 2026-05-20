@@ -270,7 +270,11 @@ public sealed partial class TweaksPage : Page
     {
         var profile = App.ProfileMode;
 
+        // Banner: ook Visibility togglen (niet alleen IsOpen). Een gesloten InfoBar
+        // blijft anders Visible-met-0-hoogte → de body-StackPanel (Spacing=16) zou
+        // er dan 16px ruimte boven de cards omheen zetten. Collapsed = uit de layout.
         ProfileBanner.IsOpen = profile;
+        ProfileBanner.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
         ProfileChecklist.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
         NormalFooter.Visibility = profile ? Visibility.Collapsed : Visibility.Visible;
         ProfileFooter.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;

@@ -10,6 +10,19 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.10.0 — Inno Setup installer (per-user) + Tweaks-padding fix
+
+**Inno Setup installer** — naar voren gehaald uit v1.0 omdat het de *enabler* is voor self-update (v0.10.1): een draaiende unpackaged folder-app kan z'n eigen geladen DLL's niet overschrijven, een installer wél (Restart Manager: in-use replace + relaunch).
+
+- `installer/WingetAppDeployer.iss` pakt de self-contained Release-publish (`win-x64.pubxml`, 631 files / ~267 MB) in tot **`WingetAppDeployer-Setup-v{versie}.exe`** (~69 MB, lzma2).
+- **Per-user install** (`{autopf}` + `PrivilegesRequired=lowest` → `%LocalAppData%\Programs\WingetAppDeployer`): GEEN UAC bij install én bij toekomstige self-update. Start Menu-entry + uninstaller + optionele desktop-icon-task.
+- `CloseApplications=yes` + `RestartApplications=yes` → ondersteunt `/SILENT /VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS` (wat self-update straks aanroept).
+- Vast `AppId` (GUID) zodat een update dezelfde install vervangt. Versie via ISCC `/DAppVersion` uit de csproj (single source of truth), of fallback `GetFileVersion` van de exe.
+- `scripts/build-installer.ps1` — one-shot: `dotnet publish` (self-contained, geen single-file) → ISCC-compile. ISCC user-scope geïnstalleerd (`JRSoftware.InnoSetup`). `installer/Output/` is gitignored (setup.exe gaat naar GitHub Releases, niet de repo).
+- **Getest**: silent install (geen UAC) naar LocalAppData, geïnstalleerde app start, silent uninstall ruimt map + Start Menu volledig op.
+
+**Tweaks-tab padding fix**: de afstand tussen het "Tweaks"-kopje en de category-cards stond ruimer dan op de Apps-tab. Twee oorzaken weggehaald: (1) de v0.9.20 profiel-banner stond als eerste body-child en kreeg — hoewel `IsOpen=false` — toch 16px `StackPanel`-spacing omdat een gesloten `InfoBar` Visible-met-0-hoogte blijft → nu `Visibility=Collapsed` in normale modus; (2) de `ResultBar` (rij boven de cards) reserveerde z'n 12px onder-marge ook dicht → marge verwijderd. Nu gelijk aan de Apps-tab.
+
 ### v0.9.20 — Tweak-profielen (export / import)
 
 **Apps-stijl profiel-bouwer** voor de Tweaks-tab. Vooraf-bedachte presets ("Privacy basics" etc.) bewust GESCHRAPT (user-keuze) — in plaats daarvan stel je zélf een set tweaks samen, slaat 'm op naar een bestand, en past 'm later toe (op deze of een andere PC). De apply/detect-logica in TweakService is ongemoeid; dit is een UI- + IO-laag eromheen.
@@ -1039,23 +1052,31 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 - **Disable folder auto-type discovery** (voorkomt dat folders ineens als "pictures" weergegeven worden)
 - **Auto-folder LaunchTo backup** — alternatieve setting voor User Files start-folder
 
-### v0.10.0 — Settings + app self-update
+### v0.10.0 — Inno Setup installer ✓ · self-update → v0.10.1
 
-- `SettingsService` — JSON-backed settings file (`%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json`):
-  - `CheckForUpdatesOnStartup` (default true)
-  - `ShowWelcomeBanner` (default true)
-  - `AutoUpdateEnabled` + `AutoUpdateSchedule` (mirror van TaskScheduler)
-- `GitHubService` — check `api.github.com/repos/.../releases/latest` op startup, vergelijk met assembly version, download + launch nieuwe exe via launcher-pattern
-- Welcome banner op AppsPage (dismissible via X en setting)
-- Update-beschikbaar InfoBar in MainWindow met "Update now" knop
-- Settings UI uitbreiden met ToggleSwitches + "Check for updates now" button
+> **Hervolgorde (user, 20 mei 2026):** de Inno Setup installer (stond op v1.0) is **naar voren gehaald**, want het is de *enabler* voor self-update. Reden: de app is unpackaged + folder-based (self-contained WinAppSDK, geen single-file → [WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Een draaiende folder-app kan z'n eigen geladen DLL's niet overschrijven; een installer kan dat wél (in-use file replace + relaunch). Self-update wordt dan triviaal: download `setup.exe` → `/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`. Een zelfgebouwde PowerShell-folder-swapper vermeden.
+
+~~**Fase 1 — Inno Setup installer**~~ — **gedaan in v0.10.0** (zie Voltooide versies): per-user installer (geen UAC), `setup.exe` via `installer/WingetAppDeployer.iss` + `scripts/build-installer.ps1`, getest op silent install / launch / uninstall.
+
+---
+
+**v0.10.1 — Self-update** (de resterende Fase 2 + 3 van de oorspronkelijke v0.10.0):
+
+**Fase 2 — WPF-releases opruimen (op publish-moment):**
+- GitHub-releases **v1.0.0 + v1.1.0** (WPF) verwijderen zodat `releases/latest` weer de WinUI-app reflecteert (user-oplossing voor de versie-collisie — WPF `releases/latest` v1.1.0 > WinUI 0.9.20 zou anders een valse "update" naar de oude WPF-exe triggeren). WinUI-releases (v0.5.0-alpha, v0.6.3) blijven. WPF-broncode veilig in git-tag `wpf-final-v1.2.1`. Onomkeerbaar/publiek → alleen met expliciete user-OK of door user zelf.
+- Eerste WinUI-installer-release uitbrengen met de `setup.exe` als asset.
+
+**Fase 3 — Self-update-laag:**
+- `GitHubService` — releases ophalen, vergelijken met `AssemblyVersion`, de `setup.exe`-asset van de nieuwste WinUI-release pakken. **Robuust tegen WPF-restjes**: filter op de WinUI-asset-naamconventie (`*-Setup-v*.exe`) i.p.v. blind `releases/latest`, voor het geval er ooit weer een hoger-genummerde non-WinUI release verschijnt.
+- "Update beschikbaar"-InfoBar in MainWindow → "Update now" → download `setup.exe` → run `/SILENT` → installer swapt + herstart.
+- Welcome-banner op AppsPage (dismissible via X + setting).
+- `SettingsService` uitbreiden: `CheckForUpdatesOnStartup` (default true) + `ShowWelcomeBanner` (default true). Settings-UI: toggles + "Check for updates now".
 
 ### Latere milestones
 
 **v1.0.0 — eerste stable release**
-- Self-update via GitHub (v0.10.0) werkt
-- Inno Setup `/SILENT` install dekt de unattended-debloat rol (was eerder gepland als losse v0.7.0 Launcher exe — geschrapt omdat Inno Setup dezelfde rol vervult)
-- **Inno Setup installer** met silent-install support (`/SILENT` + `/VERYSILENT` flags). Reden: ZIP+folder-distributie is OK voor early access maar is ruw — installer geeft proper Start Menu entry, uninstaller, en (cruciaal) **scriptable silent install** voor Windows11-Unattended-Debloat integratie. Inno Setup is gratis, geen licentiekosten. Note: sign-cert blijft buiten scope (kosten); SmartScreen reputation bouwt zich vanzelf op naarmate downloads stijgen
+- Self-update via GitHub + **Inno Setup installer** zijn naar **v0.10.0** gehaald (zie daar) — bij v1.0 moeten ze end-to-end bewezen werken
+- Inno Setup `/SILENT` install dekt de unattended-debloat rol (was eerder gepland als losse v0.7.0 Launcher exe — geschrapt omdat Inno Setup dezelfde rol vervult). Note: sign-cert blijft buiten scope (kosten); SmartScreen reputation bouwt zich vanzelf op naarmate downloads stijgen
 - WinUI 3 single-file publish geprobeerd, faalt met `Microsoft.UI.Xaml.dll` 0xc000027b crash door XAML/WinRT activation lookups die filesystem-paden eisen — niet oplosbaar zonder bootstrap-launcher hack ([WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Daarom installer i.p.v. single-exe
 - Geen P0 bugs
 

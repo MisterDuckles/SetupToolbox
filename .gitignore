@@ -106,3 +106,6 @@ WingetAppDeployer-*.zip
 release-singlefile/
 release/
 
+# Inno Setup compile-output (setup.exe wordt naar GitHub Releases geupload)
+installer/Output/
+
