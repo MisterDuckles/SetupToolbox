@@ -10,6 +10,26 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.16 — Window management + Ads + misc gaps (gap-fill 3/3)
+
+**8 tweaks** uit de gap-analyse over 4 categorieën — laatste gap-fill-ronde.
+
+**Window management** (UiTheme, groep "Desktop & vensters"):
+- Disable Snap Layouts — `Advanced\EnableSnapBar=0`. Layout-grid-flyout uit
+- Disable window snapping entirely — `Control Panel\Desktop\WindowArrangementActive="0"` (REG_SZ). Grof middel — alle snapping uit
+- Alt+Tab browser tabs — multi-choice: `Advanced\MultiTaskingAltTabFilter` — 20 tabs (absent, standaard) / 5 (2) / 3 (1) / alleen vensters (3)
+
+**Ads & Bloat:**
+- Disable Microsoft 365 ads in Settings — HKLM `CloudContent\DisableConsumerAccountStateContent=1`
+- Disable Spotlight desktop background — HKCU `Policies\…\CloudContent\DisableSpotlightCollectionOnDesktop=1` (geen UAC)
+- Hide Settings 'Home' page — HKLM `Policies\Explorer\SettingsPageVisibility="hide:home"` (REG_SZ)
+
+**Misc:**
+- Disable mouse acceleration (Performance) — 3-op REG_SZ: `Control Panel\Mouse` MouseSpeed/Threshold1/Threshold2=0 (revert 1/6/10). SignOut
+- Disable AI service auto-start (AiCopilot) — `Services\WSAIFabricSvc\Start=3` (manual; default 2). Alleen Copilot+ PC's, anders no-op. Reboot
+
+Daarmee zijn alle ~21 gap-tweaks uit de Winhance / Win11Debloat-analyse verwerkt (gap-fill 1+2+3 = v0.9.14/15/16).
+
 ### v0.9.15 — Privacy + Security gaps (gap-fill 2/3)
 
 **6 tweaks** uit de gap-analyse: 5 Privacy + 1 nieuwe **Security**-categorie. De 4 HKLM-policies batchen in 1 UAC.
@@ -763,10 +783,7 @@ Twee research-agents hebben de volledige tweak-inventaris van **Winhance** (mems
 
 ~~**v0.9.15 — Privacy + Security gaps**~~ — gedaan (zie Voltooide versies). Losse Security-categorie aangemaakt (alleen BitLocker; vult later met caution-tier)
 
-**v0.9.16 — Window management + Ads gaps**
-- Window mgmt: Disable Snap Layouts (`Explorer\Advanced\EnableSnapBar=0`), Alt+Tab browser-tab-filter (multi-choice: alleen vensters / +3 / +5 / +20 tabs — `MultiTaskingAltTabFilter` 3/1/2/0), Disable window-snapping volledig (`Control Panel\Desktop\WindowArrangementActive=0`)
-- Ads: Disable Settings 365-ads (HKLM `CloudContent\DisableConsumerAccountStateContent=1`), Disable Desktop Spotlight-collectie (`CloudContent\DisableSpotlightCollectionOnDesktop=1`), Disable Settings "Home"-pagina (HKLM `Policies\Explorer\SettingsPageVisibility="hide:home"`)
-- Misc: Disable muis-acceleratie / Enhance Pointer Precision (`Control Panel\Mouse` MouseSpeed/Threshold1/Threshold2=0, 3-op) → Performance; Disable AI-service auto-start (`Services\WSAIFabricSvc\Start=3`, Copilot+ PC) → AiCopilot
+~~**v0.9.16 — Window management + Ads gaps**~~ — gedaan (zie Voltooide versies). Daarmee alle ~21 gap-tweaks verwerkt
 
 **v0.9.17 — Presets / Profiles**
 - `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"

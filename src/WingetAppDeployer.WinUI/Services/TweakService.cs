@@ -2944,6 +2944,156 @@ public sealed class TweakService
                 }
             }));
 
+        // ── v0.9.16 GAPS — Window management + Ads + misc ───────────
+        // Gap-fill 3/3 (Winhance / Win11Debloat gap-analyse mei 2026). Window-
+        // gedrag → UiTheme-groep "Desktop & vensters" (uiThemeDesktop-const,
+        // hierboven gedefinieerd). Ads → AdsBloat (groeploos). Plus muis-accel
+        // (Performance) en AI-service auto-start (AiCopilot). HKLM-ops batchen.
+
+        // ── Window management (UiTheme / "Desktop & vensters") ──
+        list.Add(new Tweak(
+            id: "UiTheme.DisableSnapLayouts",
+            category: TweakCategory.UiTheme,
+            name: "Disable Snap Layouts",
+            description: "Verbergt de Snap Layouts-raster-flyout die verschijnt bij hover over de maximaliseer-knop of bij slepen naar de bovenrand. Handmatig snappen (Win+pijl, slepen naar de zijkant) blijft werken.",
+            useCase: "Geen layout-grid-popup voor wie vensters liever zelf positioneert.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "EnableSnapBar",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "UiTheme.DisableWindowSnapping",
+            category: TweakCategory.UiTheme,
+            name: "Disable window snapping entirely",
+            description: "Schakelt ALLE venster-snapping volledig uit (zowel Snap Assist als Snap Layouts als slepen-naar-rand). Grof middel — vensters laten zich daarna nergens meer aan vastklikken.",
+            useCase: "Voor wie snapping helemaal niet wil; vensters blijven precies waar je ze loslaat.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Control Panel\Desktop", ValueName = "WindowArrangementActive",
+                    Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "1"
+                }
+            }));
+
+        // Alt+Tab browser-tab-filter (Win11Debloat-waarden): 0 = vensters + 20
+        // tabs (default, absent), 1 = +3, 2 = +5, 3 = alleen vensters.
+        TweakChoiceValue[] AltTabValue(int? mode) => new TweakChoiceValue[]
+        {
+            new() { Path = explorerAdvanced, ValueName = "MultiTaskingAltTabFilter", Kind = RegistryValueKind.DWord, Value = mode }
+        };
+
+        list.Add(new Tweak(
+            id: "UiTheme.AltTabFilter",
+            category: TweakCategory.UiTheme,
+            name: "Alt+Tab browser tabs",
+            description: "Hoeveel Edge-browsertabs er naast je vensters verschijnen in de Alt+Tab-schakelaar.",
+            useCase: "Alleen vensters tonen houdt Alt+Tab overzichtelijk als je veel tabs open hebt.",
+            restart: RestartRequirement.None,
+            group: uiThemeDesktop,
+            choices: new[]
+            {
+                new TweakChoice("Vensters + 20 tabs (standaard)", AltTabValue(null)),
+                new TweakChoice("Vensters + 5 tabs",             AltTabValue(2)),
+                new TweakChoice("Vensters + 3 tabs",             AltTabValue(1)),
+                new TweakChoice("Alleen vensters (geen tabs)",   AltTabValue(3)),
+            }));
+
+        // ── Ads & Bloat ──
+        list.Add(new Tweak(
+            id: "Ads.DisableSettings365Ads",
+            category: TweakCategory.AdsBloat,
+            name: "Disable Microsoft 365 ads in Settings",
+            description: "Verwijdert de Microsoft 365 / account-promotie-banner van de Home-pagina van de Instellingen-app.",
+            useCase: "Schone Instellingen zonder abonnements-reclame.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent",
+                    ValueName = "DisableConsumerAccountStateContent",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Ads.DisableDesktopSpotlight",
+            category: TweakCategory.AdsBloat,
+            name: "Disable Spotlight desktop background",
+            description: "Schakelt de 'Windows Spotlight'-bureaubladachtergrond-collectie uit (de wisselende foto's mét 'Meer informatie'-icoon en advertenties op het bureaublad). HKCU-policy, geen UAC.",
+            useCase: "Geen roterende Spotlight-achtergronden / desktop-ads.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Policies\Microsoft\Windows\CloudContent",
+                    ValueName = "DisableSpotlightCollectionOnDesktop",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Ads.HideSettingsHome",
+            category: TweakCategory.AdsBloat,
+            name: "Hide Settings 'Home' page",
+            description: "Verbergt de 'Home'-pagina van de Instellingen-app (de pagina vol aanbevelingen, account-promoties en Game Pass-banners). Instellingen opent dan direct op 'Systeem'.",
+            useCase: "Recht naar de echte instellingen zonder de promotionele landingspagina.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer",
+                    ValueName = "SettingsPageVisibility",
+                    Kind = RegistryValueKind.String, EnabledValue = "hide:home", DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        // ── Misc ──
+        list.Add(new Tweak(
+            id: "Performance.DisableMouseAcceleration",
+            category: TweakCategory.Performance,
+            name: "Disable mouse acceleration",
+            description: "Schakelt 'Enhance pointer precision' (muis-acceleratie) uit zodat de cursor-afstand exact 1-op-1 met je fysieke muis-beweging meeschaalt — onafhankelijk van hoe snel je beweegt. 3-op (MouseSpeed + 2 thresholds = 0).",
+            useCase: "Consistente, voorspelbare muis-bewegingen — vooral gewenst bij gaming en precisiewerk.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation { Path = @"HKCU\Control Panel\Mouse", ValueName = "MouseSpeed", Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "1" },
+                new TweakOperation { Path = @"HKCU\Control Panel\Mouse", ValueName = "MouseThreshold1", Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "6" },
+                new TweakOperation { Path = @"HKCU\Control Panel\Mouse", ValueName = "MouseThreshold2", Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "10" }
+            }));
+
+        list.Add(new Tweak(
+            id: "AiCopilot.DisableAiServiceAutostart",
+            category: TweakCategory.AiCopilot,
+            name: "Disable AI service auto-start",
+            description: "Zet de Windows AI Fabric-service (`WSAIFabricSvc`) op handmatige start i.p.v. automatisch. Deze service bestaat alleen op Copilot+ PC's — op andere systemen is de tweak een no-op (de service-key is er niet).",
+            useCase: "Geen automatisch draaiende AI-achtergrondservice op Copilot+ hardware.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Services\WSAIFabricSvc", ValueName = "Start",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 3, DisabledValue = 2,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }
