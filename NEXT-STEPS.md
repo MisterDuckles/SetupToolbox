@@ -10,6 +10,18 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office
+
+**7 tweaks** (6 Privacy + 1 NotifLock) uit gap-analyse ronde 2. HKLM-policies batchen in 1 UAC.
+
+- Extra telemetry hardening (bundle, 7-op) — `AppCompat\AITEnable=0` + `DisableInventory=1`, `PolicyManager\…\System\AllowExperimentation=0`, `DataCollection\DisableOneSettingsDownloads=1` + `LimitDiagnosticLogCollection=1`, `dmwappushservice\Start=4`, `AutoLogger-Diagtrack-Listener\Start=0`. Reboot
+- Disable Windows Error Reporting — `Windows Error Reporting\Disabled=1`
+- Disable handwriting data sharing — 2-op: `TabletPC\PreventHandwritingDataSharing=1` + `HandwritingErrorReports\PreventHandwritingErrorReports=1`
+- Disable sending typing info (TIPC) — `Input\TIPC\Enabled=0`
+- Disable settings sync — `SettingSync\SyncPolicy=5`
+- Disable lock screen camera (NotifLock) — `Personalization\NoLockScreenCamera=1`
+- Disable Microsoft Office telemetry & privacy (bundle, 13-op HKCU `Policies\…\Office\16.0`) — ClientTelemetry, QMEnable, LinkedIn, OSM logging/upload/obfuscation, Feedback/surveys, Privacy connected-experiences, Outlook InlineTextPrediction. No-op zonder Office
+
 ### v0.9.17 — Edge-debloat-bundle
 
 **1 OFGB-stijl bundle** in AdsBloat: 19 HKLM `Policies\Microsoft\Edge`-keys onder één toggle, batchend in 1 UAC (`DisabledValue=null` → revert deletet de policy). Bron: O&O ShutUp10 Edge-set + parking-lot Edge-debloat (gap-analyse ronde 2, winutil + ShutUp10).
@@ -797,9 +809,7 @@ Tweede research-ronde (2 agents) tegen Chris Titus winutil + O&O ShutUp10++. Gec
 
 ~~**v0.9.17 — Edge-debloat-bundle**~~ — gedaan (zie Voltooide versies)
 
-**v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office**
-- Privacy: telemetrie-hardening (AITEnable=0, DisableInventory=1, AllowExperimentation=0, DisableOneSettingsDownloads=1, dmwappushservice Start=4 + Diagtrack-AutoLogger=0), Windows Error Reporting (`Disabled=1`), handwriting-data-sharing + error-reports, TIPC typ-info (`Input\TIPC\Enabled=0`), settings-sync uit (`SettingSync\SyncPolicy=5`), lock-screen camera uit (`Personalization\NoLockScreenCamera=1`)
-- Office-bundle (1 multi-op, alleen effect mét Office): ClientTelemetry DisableTelemetry/SendTelemetry, QMEnable=0 (CEIP), LinkedIn=0, OSM Enablelogging/EnableUpload=0 + EnableFileObfuscation=1, Feedback SurveyEnabled/Enabled=0, Privacy UserContentDisabled=2, Outlook InlineTextPrediction
+~~**v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office**~~ — gedaan (zie Voltooide versies)
 
 **v0.9.19 — Network tweaks** (nieuwe Network-categorie, 4 tweaks)
 - IPv6 volledig uit (`Tcpip6\Parameters\DisabledComponents=255`), Teredo uit (`=1` of policy), LLMNR uit (`DNSClient\EnableMulticast=0`), NetBIOS-over-TCP uit

@@ -3077,6 +3077,134 @@ public sealed class TweakService
                 new TweakOperation { Path = @"HKCU\Control Panel\Mouse", ValueName = "MouseThreshold2", Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "10" }
             }));
 
+        // ── v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office ─
+        // Gap-analyse ronde 2 (winutil + O&O ShutUp10). Aanvulling op de
+        // bestaande Privacy-tweaks (DiagTrack/CEIP/AllowTelemetry).
+
+        list.Add(new Tweak(
+            id: "Privacy.TelemetryHardening",
+            category: TweakCategory.Privacy,
+            name: "Extra telemetry hardening (bundle)",
+            description: "Sluit aanvullende telemetrie-kanalen die naast de DiagTrack-service en de telemetrie-policy nog data verzamelen: application-telemetry (AIT), inventory-collector, Windows-experimentatie, OneSettings-downloads, gelimiteerde diagnostische logs, de WAP-push-service en de Diagtrack-AutoLogger ETW-trace. 7-op, batcht in 1 UAC.",
+            useCase: "Maximale telemetrie-reductie bovenop de losse Privacy-toggles.",
+            restart: RestartRequirement.Reboot,
+            operations: new[]
+            {
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\AppCompat", ValueName = "AITEnable", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\AppCompat", ValueName = "DisableInventory", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Microsoft\PolicyManager\current\device\System", ValueName = "AllowExperimentation", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", ValueName = "DisableOneSettingsDownloads", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", ValueName = "LimitDiagnosticLogCollection", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SYSTEM\CurrentControlSet\Services\dmwappushservice", ValueName = "Start", Kind = RegistryValueKind.DWord, EnabledValue = 4, DisabledValue = 3, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\AutoLogger-Diagtrack-Listener", ValueName = "Start", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1, RequiresElevation = true },
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableErrorReporting",
+            category: TweakCategory.Privacy,
+            name: "Disable Windows Error Reporting",
+            description: "Stopt het versturen van crash- en foutrapporten naar Microsoft.",
+            useCase: "Geen automatische crashdumps/foutdata naar Microsoft.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting", ValueName = "Disabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0, RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableHandwritingDataSharing",
+            category: TweakCategory.Privacy,
+            name: "Disable handwriting data sharing",
+            description: "Voorkomt dat handschrift-herkenningsdata en bijbehorende foutrapporten naar Microsoft worden gedeeld. 2-op HKLM-policy.",
+            useCase: "Handschrift-input blijft lokaal.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\TabletPC", ValueName = "PreventHandwritingDataSharing", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true },
+                new TweakOperation { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports", ValueName = "PreventHandwritingErrorReports", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true },
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableTypingInfo",
+            category: TweakCategory.Privacy,
+            name: "Disable sending typing info to Microsoft",
+            description: "Schakelt de TIPC-telemetrie uit die informatie over je typgedrag naar Microsoft stuurt. Apart van de inking/typing-personalisatie-tweak.",
+            useCase: "Geen typ-telemetrie naar Microsoft.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Input\TIPC", ValueName = "Enabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableSettingsSync",
+            category: TweakCategory.Privacy,
+            name: "Disable settings sync",
+            description: "Schakelt de cloud-synchronisatie van Windows-instellingen (thema, wachtwoorden, taal, etc.) tussen je apparaten uit. Op Win11 met Microsoft-account overlapt dit deels met 'Windows-back-up'.",
+            useCase: "Instellingen blijven op dit apparaat; niets roamt naar de cloud.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\SettingSync", ValueName = "SyncPolicy",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 5, DisabledValue = null
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "NotifLock.DisableLockScreenCamera",
+            category: TweakCategory.NotificationsLock,
+            name: "Disable lock screen camera",
+            description: "Voorkomt dat de camera vanaf het vergrendelscherm geopend kan worden (omhoog-vegen voor camera).",
+            useCase: "Geen camera-toegang zonder eerst te ontgrendelen.",
+            restart: RestartRequirement.None,
+            group: nlLockGroup,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization", ValueName = "NoLockScreenCamera",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null, RequiresElevation = true
+                }
+            }));
+
+        // Office-bundle: HKCU\Software\Policies\Microsoft\Office\16.0 (dekt
+        // Office 2016/2019/2021/365). No-op als Office niet geïnstalleerd is.
+        // Geen UAC (HKCU). DisabledValue=null → revert deletet de policy.
+        const string officeCommon = @"HKCU\Software\Policies\Microsoft\Office\16.0\Common";
+        list.Add(new Tweak(
+            id: "Privacy.DisableOfficeTelemetry",
+            category: TweakCategory.Privacy,
+            name: "Disable Microsoft Office telemetry & privacy (bundle)",
+            description: "Schakelt Office-telemetrie, CEIP, LinkedIn-integratie, de Telemetry Agent (logging/upload), feedback/surveys, connected-experiences-content-analyse en Outlook-tekstvoorspelling uit. Alleen effect als Microsoft Office (2016/2019/2021/365) geïnstalleerd is. HKCU, geen UAC.",
+            useCase: "Privacyvriendelijke Office zonder telemetrie of cloud-content-analyse.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation { Path = officeCommon + @"\ClientTelemetry", ValueName = "DisableTelemetry", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null },
+                new TweakOperation { Path = officeCommon + @"\ClientTelemetry", ValueName = "SendTelemetry", Kind = RegistryValueKind.DWord, EnabledValue = 3, DisabledValue = null },
+                new TweakOperation { Path = officeCommon, ValueName = "QMEnable", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = officeCommon, ValueName = "LinkedIn", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM", ValueName = "Enablelogging", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM", ValueName = "EnableUpload", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM", ValueName = "EnableFileObfuscation", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null },
+                new TweakOperation { Path = officeCommon + @"\Feedback", ValueName = "Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = officeCommon + @"\Feedback", ValueName = "SurveyEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = officeCommon + @"\Feedback", ValueName = "IncludeEmail", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+                new TweakOperation { Path = officeCommon + @"\Privacy", ValueName = "UserContentDisabled", Kind = RegistryValueKind.DWord, EnabledValue = 2, DisabledValue = null },
+                new TweakOperation { Path = officeCommon + @"\Privacy", ValueName = "DownloadContentDisabled", Kind = RegistryValueKind.DWord, EnabledValue = 2, DisabledValue = null },
+                new TweakOperation { Path = @"HKCU\Software\Microsoft\Office\16.0\Common\MailSettings", ValueName = "InlineTextPrediction", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
+            }));
+
         // ── v0.9.17 — Edge-debloat-bundle ───────────────────────────
         // OFGB-stijl mega-bundle: ~19 Edge-policy-keys onder 1 toggle.
         // Allemaal HKLM\...\Policies\Microsoft\Edge → batchen in 1 UAC.
