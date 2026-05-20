@@ -2831,6 +2831,119 @@ public sealed class TweakService
                 }
             }));
 
+        // ── v0.9.15 GAPS — Privacy + Security ───────────────────────
+        // Gap-fill 2/3 (Winhance / Win11Debloat gap-analyse mei 2026). 5 nieuwe
+        // Privacy-tweaks + 1 nieuwe Security-categorie (voorlopig alleen
+        // BitLocker; vult later met de geparkeerde caution-tier items). De
+        // HKLM-policies batchen samen in 1 UAC.
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableLocationServices",
+            category: TweakCategory.Privacy,
+            name: "Disable Location Services",
+            description: "Schakelt de locatievoorziening systeembreed uit via policy — geen enkele app of Windows-functie kan dan je locatie opvragen.",
+            useCase: "Maximale locatie-privacy op een desktop die geen locatie nodig heeft.",
+            restart: RestartRequirement.SignOut,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors",
+                    ValueName = "DisableLocation",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableFindMyDevice",
+            category: TweakCategory.Privacy,
+            name: "Disable Find My Device",
+            description: "Schakelt 'Mijn apparaat zoeken' uit — Windows houdt de locatie van het toestel dan niet bij voor terugvinden op afstand.",
+            useCase: "Geen periodieke locatie-registratie voor de Find My Device-functie.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\FindMyDevice",
+                    ValueName = "AllowFindMyDevice",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableSearchHistory",
+            category: TweakCategory.Privacy,
+            name: "Disable device search history",
+            description: "Stopt het lokaal bijhouden van je zoekgeschiedenis in Windows Search (Start-menu / verkenner-zoekbalk).",
+            useCase: "Geen opslag van wat je op het apparaat hebt gezocht.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings",
+                    ValueName = "IsDeviceSearchHistoryEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.MinimizeTelemetry",
+            category: TweakCategory.Privacy,
+            name: "Set telemetry to minimum",
+            description: "Zet de diagnostische-data policy op de laagste stand (`AllowTelemetry=0`). Op Home/Pro klemt Windows dit naar 'Basic/Required' (de echte 'Security'-stand is alleen Enterprise/Edu), maar het minimaliseert de verzameling. Vult de DiagTrack-service-tweak aan.",
+            useCase: "Zo weinig mogelijk diagnostische data naar Microsoft binnen de grenzen van je editie.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection",
+                    ValueName = "AllowTelemetry",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Privacy.DisableOnlineSpeechRecognition",
+            category: TweakCategory.Privacy,
+            name: "Disable online speech recognition",
+            description: "Schakelt cloud-gebaseerde spraakherkenning uit — je stem wordt niet meer naar Microsoft gestuurd voor verwerking. Offline spraakherkenning blijft beschikbaar.",
+            useCase: "Spraak-input blijft op het apparaat; niets gaat naar de cloud.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy",
+                    ValueName = "HasAccepted",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        // ── Security (nieuwe categorie) ──
+        list.Add(new Tweak(
+            id: "Security.DisableBitLockerAutoEncryption",
+            category: TweakCategory.Security,
+            name: "Disable automatic BitLocker device encryption",
+            description: "Voorkomt dat Windows 11 24H2 je systeemschijf automatisch versleutelt bij een schone installatie / OOBE. LET OP: dit raakt alleen TOEKOMSTIGE automatische encryptie — een al versleutelde schijf blijft versleuteld. Schakel deze tweak in vóór je Windows opnieuw installeert of resetten.",
+            useCase: "Geen automatische BitLocker-encryptie waarvan je de recovery-key kunt mislopen (data-verlies-risico bij hardware-wissel).",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKLM\SYSTEM\CurrentControlSet\Control\BitLocker",
+                    ValueName = "PreventDeviceEncryption",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    RequiresElevation = true
+                }
+            }));
+
         return list;
     }
 }

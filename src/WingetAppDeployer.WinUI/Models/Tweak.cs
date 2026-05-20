@@ -21,7 +21,8 @@ public enum TweakCategory
     Performance,
     ContextMenu,
     NotificationsLock,
-    Updates
+    Updates,
+    Security
 }
 
 // Wat moet de user doen na een tweak-apply voor het effect zichtbaar wordt.
@@ -281,6 +282,7 @@ public static class TweakCategoryExtensions
         TweakCategory.ContextMenu => "Context Menu",
         TweakCategory.NotificationsLock => "Notifications & Lock Screen",
         TweakCategory.Updates => "Updates",
+        TweakCategory.Security => "Security",
         _ => cat.ToString()
     };
 
@@ -299,6 +301,7 @@ public static class TweakCategoryExtensions
         TweakCategory.ContextMenu => "\U0001F5B1",       // computer mouse
         TweakCategory.NotificationsLock => "\U0001F514", // bell
         TweakCategory.Updates => "\U0001F504",           // counterclockwise arrows
+        TweakCategory.Security => "\U0001F6E1",          // shield
         _ => "⚙"                                    // gear
     };
 
@@ -316,6 +319,7 @@ public static class TweakCategoryExtensions
         TweakCategory.ContextMenu => "Rechtermuisknop-menu aanpassingen",
         TweakCategory.NotificationsLock => "Meldingen & vergrendelscherm",
         TweakCategory.Updates => "Windows Update gedrag",
+        TweakCategory.Security => "Versleuteling & beveiliging",
         _ => string.Empty
     };
 }

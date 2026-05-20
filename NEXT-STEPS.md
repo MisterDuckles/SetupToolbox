@@ -10,6 +10,20 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.15 — Privacy + Security gaps (gap-fill 2/3)
+
+**6 tweaks** uit de gap-analyse: 5 Privacy + 1 nieuwe **Security**-categorie. De 4 HKLM-policies batchen in 1 UAC.
+
+**Privacy:**
+- Disable Location Services — HKLM `LocationAndSensors\DisableLocation=1`. SignOut
+- Disable Find My Device — HKLM `FindMyDevice\AllowFindMyDevice=0`
+- Disable device search history — `SearchSettings\IsDeviceSearchHistoryEnabled=0`
+- Set telemetry to minimum — HKLM `DataCollection\AllowTelemetry=0` (Home/Pro klemt naar Basic; vult `Privacy.DisableDiagTrackService` aan)
+- Disable online speech recognition — `Speech_OneCore\Settings\OnlineSpeechPrivacy\HasAccepted=0`
+
+**Security** (nieuwe categorie, 🛡 shield-icoon — user-keuze: losse categorie ondanks 1 tweak; vult later met geparkeerde caution-tier items):
+- Disable automatic BitLocker device encryption — HKLM `Control\BitLocker\PreventDeviceEncryption=1`. Raakt alleen toekomstige auto-encryptie (24H2 OOBE); al versleutelde schijf blijft versleuteld
+
 ### v0.9.14 — Explorer + Taskbar gaps (gap-fill 1/3)
 
 **7 tweaks** uit de Winhance / Win11Debloat gap-analyse (20 mei 2026). Geen nieuwe categorieën — aangevuld bij Explorer (4) en Taskbar (3); beide groeploos → renderen plat op naam.
@@ -747,10 +761,7 @@ Twee research-agents hebben de volledige tweak-inventaris van **Winhance** (mems
 
 ~~**v0.9.14 — Explorer + Taskbar gaps**~~ — gedaan (zie Voltooide versies). Auto-hide taskbar geparkeerd (binary-blob)
 
-**v0.9.15 — Privacy + Security gaps**
-- Privacy: Disable Location Services (HKLM `LocationAndSensors\DisableLocation=1`), Disable Find My Device (HKLM `FindMyDevice\AllowFindMyDevice=0`), Disable device search history (`SearchSettings\IsDeviceSearchHistoryEnabled=0`), Telemetrie op minimum (HKLM `DataCollection\AllowTelemetry=0`), Disable online speech recognition (`OnlineSpeechPrivacy\HasAccepted=0`)
-- Security: **Disable BitLocker auto-encryptie** (HKLM `Control\BitLocker\PreventDeviceEncryption=1`) — 24H2 versleutelt schone installs automatisch
-- **Open beslissing bij start v0.9.15**: aparte `Security`-categorie maken (alleen BitLocker = thin category, zelfde valkuil als Gaming) óf BitLocker in Privacy vouwen. Eventueel Security vullen met een paar caution-tier items uit de parking-lot (UAC-niveau etc.) om 'm een echte categorie te maken
+~~**v0.9.15 — Privacy + Security gaps**~~ — gedaan (zie Voltooide versies). Losse Security-categorie aangemaakt (alleen BitLocker; vult later met caution-tier)
 
 **v0.9.16 — Window management + Ads gaps**
 - Window mgmt: Disable Snap Layouts (`Explorer\Advanced\EnableSnapBar=0`), Alt+Tab browser-tab-filter (multi-choice: alleen vensters / +3 / +5 / +20 tabs — `MultiTaskingAltTabFilter` 3/1/2/0), Disable window-snapping volledig (`Control Panel\Desktop\WindowArrangementActive=0`)
