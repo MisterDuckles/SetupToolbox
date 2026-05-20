@@ -10,6 +10,23 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.14 — Explorer + Taskbar gaps (gap-fill 1/3)
+
+**7 tweaks** uit de Winhance / Win11Debloat gap-analyse (20 mei 2026). Geen nieuwe categorieën — aangevuld bij Explorer (4) en Taskbar (3); beide groeploos → renderen plat op naam.
+
+**Explorer:**
+- Drive letter position — multi-choice: `Explorer\ShowDriveLettersFirst` — Na de naam (absent, standaard) / Vóór de naam (4) / Alleen netwerkschijven vóór (1) / Verbergen (2)
+- Hide 'Home' in navigation pane — `CLSID\{f874310e-…}\System.IsPinnedToNamespaceTree=0`
+- Hide 'Gallery' in navigation pane — `CLSID\{e88865ea-…}\System.IsPinnedToNamespaceTree=0`
+- Enable item checkboxes — `Advanced\AutoCheckSelect=1`
+
+**Taskbar:**
+- Hide Chat / Teams button — `Advanced\TaskbarMn=0`
+- Disable share drag-tray — `CDP\DragTrayEnabled=0` (24H2+)
+- Disable taskbar badges — `Advanced\TaskbarBadges=0`
+
+**Geparkeerd:** auto-hide taskbar — zit in `StuckRects3\Settings` binary-blob (byte 8 bit-flip), niet veilig in het scalar TweakOperation-model (zelfde reden als UserPreferencesMask).
+
 ### v0.9.13 — Gaming tweaks (→ Performance-categorie)
 
 **3 tweaks** toegevoegd. Geen aparte Gaming-categorie: een eigen tile voor maar 3 tweaks is mager naast categorieën met 9-13 — de 3 zijn stuk voor stuk achtergrond-overhead reducties en horen functioneel in **Performance**. De `TweakCategory.Gaming` enum-waarde is verwijderd (incl. DisplayName/Icon/Blurb-cases). Research mei 2026 (3 web-passes, Win11 24H2/25H2).
@@ -724,7 +741,23 @@ Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Tit
 
 ~~**v0.9.13 — Gaming (lagere prio)**~~ — gedaan (zie Voltooide versies). Geen aparte Gaming-categorie — de 3 tweaks zijn in Performance ondergebracht; Game Mode bewust niet uitgezet (nuttig op moderne Windows)
 
-**v0.9.14 — Presets / Profiles**
+#### Gap-fill uit Winhance + Win11Debloat (gap-analyse 20 mei 2026)
+
+Twee research-agents hebben de volledige tweak-inventaris van **Winhance** (memstechtips) en **Win11Debloat** (Raphire) opgehaald en naast onze 66 geïmplementeerde tweaks gelegd. ~21 genuine gaps gevonden + 2 ontbrekende deelgebieden (Security, Window management). Placebo-tweaks (Win32PrioritySeparation / SystemResponsiveness / SvcHostSplit — v0.9.9-lijn), Game Mode, defer-updates, en deprecated items (3D Objects / News-and-Interests / TaskbarSmallIcons) bewust eruit gefilterd. Al-geparkeerd: Edge-debloat-bundle, Security caution-tier, Sticky Keys, classic Photo Viewer.
+
+~~**v0.9.14 — Explorer + Taskbar gaps**~~ — gedaan (zie Voltooide versies). Auto-hide taskbar geparkeerd (binary-blob)
+
+**v0.9.15 — Privacy + Security gaps**
+- Privacy: Disable Location Services (HKLM `LocationAndSensors\DisableLocation=1`), Disable Find My Device (HKLM `FindMyDevice\AllowFindMyDevice=0`), Disable device search history (`SearchSettings\IsDeviceSearchHistoryEnabled=0`), Telemetrie op minimum (HKLM `DataCollection\AllowTelemetry=0`), Disable online speech recognition (`OnlineSpeechPrivacy\HasAccepted=0`)
+- Security: **Disable BitLocker auto-encryptie** (HKLM `Control\BitLocker\PreventDeviceEncryption=1`) — 24H2 versleutelt schone installs automatisch
+- **Open beslissing bij start v0.9.15**: aparte `Security`-categorie maken (alleen BitLocker = thin category, zelfde valkuil als Gaming) óf BitLocker in Privacy vouwen. Eventueel Security vullen met een paar caution-tier items uit de parking-lot (UAC-niveau etc.) om 'm een echte categorie te maken
+
+**v0.9.16 — Window management + Ads gaps**
+- Window mgmt: Disable Snap Layouts (`Explorer\Advanced\EnableSnapBar=0`), Alt+Tab browser-tab-filter (multi-choice: alleen vensters / +3 / +5 / +20 tabs — `MultiTaskingAltTabFilter` 3/1/2/0), Disable window-snapping volledig (`Control Panel\Desktop\WindowArrangementActive=0`)
+- Ads: Disable Settings 365-ads (HKLM `CloudContent\DisableConsumerAccountStateContent=1`), Disable Desktop Spotlight-collectie (`CloudContent\DisableSpotlightCollectionOnDesktop=1`), Disable Settings "Home"-pagina (HKLM `Policies\Explorer\SettingsPageVisibility="hide:home"`)
+- Misc: Disable muis-acceleratie / Enhance Pointer Precision (`Control Panel\Mouse` MouseSpeed/Threshold1/Threshold2=0, 3-op) → Performance; Disable AI-service auto-start (`Services\WSAIFabricSvc\Start=3`, Copilot+ PC) → AiCopilot
+
+**v0.9.17 — Presets / Profiles**
 - `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"
 - Eén klik vinkt een set tweaks aan in de Tweaks tab (user kan nog deselecten voor Apply)
 - Inspiratie: WinUtil's preset-knoppen

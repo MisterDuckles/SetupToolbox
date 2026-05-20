@@ -2708,6 +2708,129 @@ public sealed class TweakService
                 XboxService("XboxGipSvc"),
             }));
 
+        // ── v0.9.14 GAPS — Explorer + Taskbar ───────────────────────
+        // Gap-fill na de Winhance / Win11Debloat gap-analyse (mei 2026).
+        // Category = Explorer / Taskbar (beide groeploos → renderen plat op
+        // naam). explorerAdvanced-const is hierboven in de EXPLORER-sectie
+        // gedefinieerd en in scope binnen deze method.
+        const string explorerRoot = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer";
+
+        // Drive-letter-positie (Win11Debloat-waarden): 0 = na de naam (default,
+        // value-absent), 4 = vóór de naam, 1 = alleen netwerkschijven vóór,
+        // 2 = verbergen. Default-choice = absent zodat revert clean deletet.
+        TweakChoiceValue[] DriveLetterValue(int? mode) => new TweakChoiceValue[]
+        {
+            new() { Path = explorerRoot, ValueName = "ShowDriveLettersFirst", Kind = RegistryValueKind.DWord, Value = mode }
+        };
+
+        list.Add(new Tweak(
+            id: "Explorer.DriveLetterPosition",
+            category: TweakCategory.Explorer,
+            name: "Drive letter position",
+            description: "Waar de schijfletter (C:, D:) verschijnt t.o.v. het volume-label in File Explorer.",
+            useCase: "Schijfletters vóór de naam maakt schijven sneller herkenbaar; verbergen geeft een schonere weergave.",
+            restart: RestartRequirement.ExplorerRestart,
+            choices: new[]
+            {
+                new TweakChoice("Na de naam (standaard)",        DriveLetterValue(null)),
+                new TweakChoice("Vóór de naam",                  DriveLetterValue(4)),
+                new TweakChoice("Alleen netwerkschijven vóór",   DriveLetterValue(1)),
+                new TweakChoice("Verbergen",                     DriveLetterValue(2)),
+            }));
+
+        // Hide Home / Gallery uit de nav-pane. System.IsPinnedToNamespaceTree=0
+        // verbergt, =1 toont. HKCU\Software\Classes per-user.
+        Tweak HideNavPaneItem(string id, string name, string desc, string clsid) =>
+            new Tweak(
+                id: id,
+                category: TweakCategory.Explorer,
+                name: name,
+                description: desc,
+                restart: RestartRequirement.ExplorerRestart,
+                operations: new[]
+                {
+                    new TweakOperation
+                    {
+                        Path = $@"HKCU\Software\Classes\CLSID\{clsid}",
+                        ValueName = "System.IsPinnedToNamespaceTree",
+                        Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                    }
+                });
+
+        list.Add(HideNavPaneItem("Explorer.HideHome",
+            "Hide 'Home' in navigation pane",
+            "Verbergt het 'Home'-item bovenaan de navigatiebalk in File Explorer (de pagina met snelle toegang, favorieten en recente bestanden).",
+            "{f874310e-b6b7-47dc-bc84-b9e6b38f5903}"));
+
+        list.Add(HideNavPaneItem("Explorer.HideGallery",
+            "Hide 'Gallery' in navigation pane",
+            "Verbergt het 'Gallery'-item (foto-tijdlijn) in de navigatiebalk van File Explorer.",
+            "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}"));
+
+        list.Add(new Tweak(
+            id: "Explorer.CheckboxSelection",
+            category: TweakCategory.Explorer,
+            name: "Enable item checkboxes",
+            description: "Toont selectie-checkboxes bij bestanden en mappen zodat je meerdere items kunt aanvinken zonder Ctrl ingedrukt te houden.",
+            useCase: "Makkelijker multi-select met de muis, vooral op touch.",
+            restart: RestartRequirement.ExplorerRestart,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "AutoCheckSelect",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = 0
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.HideChatButton",
+            category: TweakCategory.Taskbar,
+            name: "Hide Chat / Teams button",
+            description: "Verbergt de Chat- (Microsoft Teams) knop op de taskbar. (Op recente 24H2/25H2-builds is deze knop vaak al weg; de tweak is dan een no-op.)",
+            useCase: "Schonere taskbar voor wie de ingebouwde Teams-chat niet gebruikt.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "TaskbarMn",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.DisableShareDragTray",
+            category: TweakCategory.Taskbar,
+            name: "Disable share drag-tray",
+            description: "Schakelt het deel-vak uit dat bovenaan verschijnt wanneer je een bestand naar de taskbar sleept (Win11 24H2+).",
+            useCase: "Voorkomt de pop-up-balk bij het per ongeluk slepen van bestanden over de taskbar.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = @"HKCU\Software\Microsoft\Windows\CurrentVersion\CDP", ValueName = "DragTrayEnabled",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
+        list.Add(new Tweak(
+            id: "Taskbar.DisableBadges",
+            category: TweakCategory.Taskbar,
+            name: "Disable taskbar badges",
+            description: "Verbergt de notificatie-tellers (rode badges met aantallen) op taskbar-app-iconen.",
+            useCase: "Minder visuele ruis op de taskbar.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                new TweakOperation
+                {
+                    Path = explorerAdvanced, ValueName = "TaskbarBadges",
+                    Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = 1
+                }
+            }));
+
         return list;
     }
 }
