@@ -10,6 +10,12 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.17 — Edge-debloat-bundle
+
+**1 OFGB-stijl bundle** in AdsBloat: 19 HKLM `Policies\Microsoft\Edge`-keys onder één toggle, batchend in 1 UAC (`DisabledValue=null` → revert deletet de policy). Bron: O&O ShutUp10 Edge-set + parking-lot Edge-debloat (gap-analyse ronde 2, winutil + ShutUp10).
+
+Keys: ConfigureDoNotTrack=1, EdgeShoppingAssistantEnabled, HubsSidebarEnabled, AddressBarMicrosoftSearchInBingProviderEnabled, UserFeedbackAllowed, AutofillCreditCardEnabled, LocalProvidersEnabled, SearchSuggestEnabled, WebWidgetAllowed, NetworkPredictionOptions=2, PersonalizationReportingEnabled, PaymentMethodQueryEnabled, StartupBoostEnabled, BackgroundModeEnabled, ShowRecommendationsEnabled, SpotlightExperiencesAndRecommendationsEnabled, NewTabPageContentEnabled, NewTabPageHideDefaultTopSites=1, WalletDonationEnabled.
+
 ### v0.9.16 — Window management + Ads + misc gaps (gap-fill 3/3)
 
 **8 tweaks** uit de gap-analyse over 4 categorieën — laatste gap-fill-ronde.
@@ -785,9 +791,29 @@ Twee research-agents hebben de volledige tweak-inventaris van **Winhance** (mems
 
 ~~**v0.9.16 — Window management + Ads gaps**~~ — gedaan (zie Voltooide versies). Daarmee alle ~21 gap-tweaks verwerkt
 
-**v0.9.17 — Presets / Profiles**
+#### Gap-fill ronde 2 — winutil + O&O ShutUp10 (gap-analyse 20 mei 2026)
+
+Tweede research-ronde (2 agents) tegen Chris Titus winutil + O&O ShutUp10++. Gecureerd; placebo/deprecated/te-niche eruit. User-keuzes: Office-bundle + battery-% er WÉL bij; Defender caution-tier + app-permissie-mass-deny + classic Photo Viewer er NIET bij (te riskant/fragiel).
+
+~~**v0.9.17 — Edge-debloat-bundle**~~ — gedaan (zie Voltooide versies)
+
+**v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office**
+- Privacy: telemetrie-hardening (AITEnable=0, DisableInventory=1, AllowExperimentation=0, DisableOneSettingsDownloads=1, dmwappushservice Start=4 + Diagtrack-AutoLogger=0), Windows Error Reporting (`Disabled=1`), handwriting-data-sharing + error-reports, TIPC typ-info (`Input\TIPC\Enabled=0`), settings-sync uit (`SettingSync\SyncPolicy=5`), lock-screen camera uit (`Personalization\NoLockScreenCamera=1`)
+- Office-bundle (1 multi-op, alleen effect mét Office): ClientTelemetry DisableTelemetry/SendTelemetry, QMEnable=0 (CEIP), LinkedIn=0, OSM Enablelogging/EnableUpload=0 + EnableFileObfuscation=1, Feedback SurveyEnabled/Enabled=0, Privacy UserContentDisabled=2, Outlook InlineTextPrediction
+
+**v0.9.19 — Network tweaks** (nieuwe Network-categorie, 4 tweaks)
+- IPv6 volledig uit (`Tcpip6\Parameters\DisabledComponents=255`), Teredo uit (`=1` of policy), LLMNR uit (`DNSClient\EnableMulticast=0`), NetBIOS-over-TCP uit
+
+**v0.9.20 — UI & Performance misc + battery %**
+- UI: Sticky Keys-prompt uit (`Accessibility\StickyKeys\Flags=506`), scrollbars altijd zichtbaar (`Accessibility\DynamicScrollbars=0`), MenuShowDelay sneller
+- Performance: hibernation toggle (`Power\HibernateEnabled` + `ShowHibernateOption`), Fullscreen Optimizations uit (`GameConfigStore\GameDVR_DXGIHonorFSEWindowsCompatible=1`)
+- Security/backup: System Restore-point-frequentie (`SystemRestore\SystemRestorePointCreationFrequency=0`), periodieke registry-backup (`Configuration Manager\EnablePeriodicBackup=1`)
+- Taskbar: battery-% in tray (`Advanced\IsBatteryPercentageEnabled=1`)
+
+**v0.9.21 — Presets / Profiles + import/export**
 - `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"
 - Eén klik vinkt een set tweaks aan in de Tweaks tab (user kan nog deselecten voor Apply)
+- Import/export van een tweak-selectie (mirror van de bestaande app-selectie export/import)
 - Inspiratie: WinUtil's preset-knoppen
 
 **v0.9.0 — Milestone release**

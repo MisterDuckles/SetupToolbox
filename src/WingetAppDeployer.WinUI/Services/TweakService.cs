@@ -3077,6 +3077,48 @@ public sealed class TweakService
                 new TweakOperation { Path = @"HKCU\Control Panel\Mouse", ValueName = "MouseThreshold2", Kind = RegistryValueKind.String, EnabledValue = "0", DisabledValue = "10" }
             }));
 
+        // ── v0.9.17 — Edge-debloat-bundle ───────────────────────────
+        // OFGB-stijl mega-bundle: ~19 Edge-policy-keys onder 1 toggle.
+        // Allemaal HKLM\...\Policies\Microsoft\Edge → batchen in 1 UAC.
+        // DisabledValue=null overal → revert deletet de policy (Edge terug
+        // naar default). Bron: ShutUp10 Edge-set + parking-lot Edge-debloat.
+        const string edgePolicy = @"HKLM\SOFTWARE\Policies\Microsoft\Edge";
+        TweakOperation EdgeOp(string valueName, int enabledValue) => new TweakOperation
+        {
+            Path = edgePolicy, ValueName = valueName, Kind = RegistryValueKind.DWord,
+            EnabledValue = enabledValue, DisabledValue = null, RequiresElevation = true
+        };
+
+        list.Add(new Tweak(
+            id: "Ads.DisableEdgeBloat",
+            category: TweakCategory.AdsBloat,
+            name: "Disable Edge bloat & tracking (bundle)",
+            description: "Schakelt 19 Microsoft Edge-policy-keys uit in één toggle: shopping-assistant, sidebar/Discover, address-bar Bing-suggesties, feedback, creditcard-autofill, zoek-suggesties, Edge-bar/widget, pagina-preload, personalisatie-rapportage, betaalmethode-query, startup-boost, achtergrond-modus, aanbevelingen, Spotlight, MSN-nieuwsfeed op nieuw tabblad, default-browser-nag — plus Do Not Track aan. Edge moet herstart worden.",
+            useCase: "Een schone, niet-tracking Edge zonder dat je naar een andere browser hoeft.",
+            restart: RestartRequirement.None,
+            operations: new[]
+            {
+                EdgeOp("ConfigureDoNotTrack", 1),
+                EdgeOp("EdgeShoppingAssistantEnabled", 0),
+                EdgeOp("HubsSidebarEnabled", 0),
+                EdgeOp("AddressBarMicrosoftSearchInBingProviderEnabled", 0),
+                EdgeOp("UserFeedbackAllowed", 0),
+                EdgeOp("AutofillCreditCardEnabled", 0),
+                EdgeOp("LocalProvidersEnabled", 0),
+                EdgeOp("SearchSuggestEnabled", 0),
+                EdgeOp("WebWidgetAllowed", 0),
+                EdgeOp("NetworkPredictionOptions", 2),
+                EdgeOp("PersonalizationReportingEnabled", 0),
+                EdgeOp("PaymentMethodQueryEnabled", 0),
+                EdgeOp("StartupBoostEnabled", 0),
+                EdgeOp("BackgroundModeEnabled", 0),
+                EdgeOp("ShowRecommendationsEnabled", 0),
+                EdgeOp("SpotlightExperiencesAndRecommendationsEnabled", 0),
+                EdgeOp("NewTabPageContentEnabled", 0),
+                EdgeOp("NewTabPageHideDefaultTopSites", 1),
+                EdgeOp("WalletDonationEnabled", 0),
+            }));
+
         list.Add(new Tweak(
             id: "AiCopilot.DisableAiServiceAutostart",
             category: TweakCategory.AiCopilot,
