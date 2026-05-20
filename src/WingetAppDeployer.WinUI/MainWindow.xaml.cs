@@ -22,6 +22,43 @@ public sealed partial class MainWindow : Window
         NavView.SelectedItem = NavView.MenuItems[0];
     }
 
+    // Vanuit Settings ("Profiel maken"): start de Tweaks-tab in profiel-modus —
+    // clean slate, alle vinkjes uit. We wissen ook de normale pending changes om
+    // mode-bleed te voorkomen.
+    public void EnterTweakProfileMode()
+    {
+        App.ProfileMode = true;
+        App.ProfileSelection.Clear();
+        App.TweakPending.Clear();
+        SelectTweaksNav();
+    }
+
+    // Vanuit Settings na een profiel-import: spring naar de Tweaks-tab (normale
+    // modus) zodat de gebruiker de klaargezette pending changes ziet + Apply kan.
+    public void NavigateToTweaks()
+    {
+        App.ProfileMode = false;
+        SelectTweaksNav();
+    }
+
+    // Selecteert het "Tweaks" nav-item. Bij een echte selectie-wissel vuurt
+    // SelectionChanged → ContentFrame.Navigate(TweaksPage); als het item al
+    // geselecteerd is forceren we een re-render in de (mogelijk gewijzigde) modus.
+    private void SelectTweaksNav()
+    {
+        foreach (var mi in NavView.MenuItems)
+        {
+            if (mi is NavigationViewItem nvi && nvi.Tag is string tag && tag == "Tweaks")
+            {
+                if (!ReferenceEquals(NavView.SelectedItem, nvi))
+                    NavView.SelectedItem = nvi;
+                else if (ContentFrame.Content is TweaksPage tp)
+                    tp.RefreshForModeChange();
+                return;
+            }
+        }
+    }
+
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         Type? pageType = null;

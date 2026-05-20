@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Navigation;
 using WingetAppDeployer_WinUI.Dialogs;
 using WingetAppDeployer_WinUI.Helpers;
 using WingetAppDeployer_WinUI.Models;
+using WingetAppDeployer_WinUI.Services;
 
 namespace WingetAppDeployer_WinUI.Pages;
 
@@ -33,7 +34,10 @@ public sealed partial class TweaksPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        // Beide stores abonneren: normale modus muteert App.TweakPending, profiel-
+        // modus muteert App.ProfileSelection. UpdateFooter leest de juiste store.
         App.TweakPending.Changed += OnPendingChanged;
+        App.ProfileSelection.Changed += OnPendingChanged;
 
         // States detecteren bij de eerste navigatie; bij terugkeer van een
         // detail-pagina zijn ze al vers (de detail-pagina / apply-runner
@@ -50,7 +54,9 @@ public sealed partial class TweaksPage : Page
         // (nieuwe instance, detection al gedaan) hier expliciet verbergen.
         LoadingOverlay.Visibility = Visibility.Collapsed;
 
-        BuildCategoryGrid();
+        if (App.ProfileMode) BuildProfileChecklist();
+        else BuildCategoryGrid();
+        ApplyModeChrome();
         UpdateFooter();
         UpdateRestoreButton();
     }
@@ -59,6 +65,28 @@ public sealed partial class TweaksPage : Page
     {
         base.OnNavigatedFrom(e);
         App.TweakPending.Changed -= OnPendingChanged;
+        App.ProfileSelection.Changed -= OnPendingChanged;
+
+        // Een profiel-bouw is niet persistent tot 'Opslaan' — wegnavigeren van de
+        // Tweaks-tab annuleert 'm. Sluiten/Toepassen zetten de flag zelf al uit en
+        // navigeren niet weg, dus dit vangt alleen het echt-weg-klikken op.
+        if (App.ProfileMode)
+        {
+            App.ProfileMode = false;
+            App.ProfileSelection.Clear();
+        }
+    }
+
+    // Aangeroepen door MainWindow als de Tweaks-page al de actieve content is en
+    // de modus extern is gewijzigd (zeldzaam — normaal navigeert SelectionChanged
+    // naar een verse instance).
+    public void RefreshForModeChange()
+    {
+        if (App.ProfileMode) BuildProfileChecklist();
+        else BuildCategoryGrid();
+        ApplyModeChrome();
+        UpdateFooter();
+        UpdateRestoreButton();
     }
 
     private void OnPendingChanged() => UpdateFooter();
@@ -72,6 +100,11 @@ public sealed partial class TweaksPage : Page
     public void ResetToRoot()
     {
         SearchBox.Text = string.Empty;
+        if (App.ProfileMode)
+        {
+            BuildProfileChecklist();
+            return;
+        }
         CategoryGrid.Visibility = Visibility.Visible;
         SearchResultsSection.Visibility = Visibility.Collapsed;
     }
@@ -119,6 +152,13 @@ public sealed partial class TweaksPage : Page
     {
         if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
         var query = sender.Text?.Trim() ?? string.Empty;
+
+        // In profiel-modus filtert de zoekbalk de clean-slate checklist.
+        if (App.ProfileMode)
+        {
+            BuildProfileChecklist(query);
+            return;
+        }
 
         if (query.Length == 0)
         {
@@ -172,11 +212,174 @@ public sealed partial class TweaksPage : Page
     }
 
     // ---------------------------------------------------------------
+    // PROFIEL-MODUS (v0.9.20)
+    // ---------------------------------------------------------------
+
+    // Vlakke checklist van alle tweaks, gegroepeerd per categorie, clean-slate
+    // (cards in profileMode). Optioneel gefilterd op de zoekterm.
+    private void BuildProfileChecklist(string query = "")
+    {
+        ProfileChecklist.Children.Clear();
+
+        var byCat = App.Tweaks.All
+            .Where(t => string.IsNullOrEmpty(query) || Matches(t, query))
+            .GroupBy(t => t.Category)
+            .OrderBy(g => (int)g.Key);
+
+        var total = 0;
+        foreach (var grp in byCat)
+        {
+            var list = grp.OrderBy(t => t.Group).ThenBy(t => t.Name).ToList();
+            if (list.Count == 0) continue;
+            total += list.Count;
+
+            var header = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Margin = new Thickness(0, 6, 0, 0)
+            };
+            header.Children.Add(new TextBlock { Text = grp.Key.Icon(), FontSize = 18, VerticalAlignment = VerticalAlignment.Center });
+            header.Children.Add(new TextBlock
+            {
+                Text = grp.Key.DisplayName(),
+                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            ProfileChecklist.Children.Add(header);
+
+            var cards = new StackPanel { Spacing = 8 };
+            foreach (var tweak in list)
+                cards.Children.Add(TweakCardFactory.Build(tweak, profileMode: true));
+            ProfileChecklist.Children.Add(cards);
+        }
+
+        if (total == 0)
+        {
+            ProfileChecklist.Children.Add(new TextBlock
+            {
+                Text = "Geen tweaks gevonden.",
+                Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            });
+        }
+    }
+
+    // Toont de juiste UI-elementen voor de actieve modus (profiel vs normaal).
+    private void ApplyModeChrome()
+    {
+        var profile = App.ProfileMode;
+
+        ProfileBanner.IsOpen = profile;
+        ProfileChecklist.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
+        NormalFooter.Visibility = profile ? Visibility.Collapsed : Visibility.Visible;
+        ProfileFooter.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
+        // Utility-knoppen zijn niet relevant tijdens profiel-bouw.
+        RestartExplorerButton.Visibility = profile ? Visibility.Collapsed : Visibility.Visible;
+
+        if (profile)
+        {
+            CategoryGrid.Visibility = Visibility.Collapsed;
+            SearchResultsSection.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            CategoryGrid.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void ProfileCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        App.ProfileMode = false;
+        App.ProfileSelection.Clear();
+        SearchBox.Text = string.Empty;
+        ApplyModeChrome();
+        BuildCategoryGrid();
+        UpdateFooter();
+        UpdateRestoreButton();
+    }
+
+    private async void ProfileSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        var n = App.ProfileSelection.Count;
+        if (n == 0) return;
+
+        var file = await FilePickerHelper.PickSaveFileAsync(
+            $"my-tweaks-{DateTime.Now:yyyy-MM-dd}", "WingetAppDeployer tweak-profiel", ".json");
+        if (file == null) return;
+
+        try
+        {
+            await App.TweakProfileIO.ExportAsync(file.Path, App.ProfileSelection.Snapshot());
+            ShowResult(InfoBarSeverity.Success, "Profiel opgeslagen",
+                $"{n} tweak{(n == 1 ? "" : "s")} weggeschreven naar {file.Name}.");
+        }
+        catch (Exception ex)
+        {
+            ShowResult(InfoBarSeverity.Error, "Opslaan mislukt", ex.Message);
+        }
+    }
+
+    private async void ProfileApplyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.ProfileSelection.Count == 0) return;
+
+        var matched = App.ProfileSelection.Snapshot()
+            .Select(kv => new TweakProfileMatch(kv.Key, kv.Value))
+            .ToList();
+        var (staged, _) = TweakProfileService.StageDelta(matched, App.TweakPending);
+
+        if (staged == 0)
+        {
+            ShowResult(InfoBarSeverity.Informational, "Niets toe te passen",
+                $"Alle {matched.Count} tweak{(matched.Count == 1 ? "" : "s")} uit je profiel staan al in de gewenste staat.");
+            return;
+        }
+
+        // Verlaat profiel-modus en draai de normale apply-flow (backup-prompt + UAC).
+        App.ProfileMode = false;
+        App.ProfileSelection.Clear();
+        SearchBox.Text = string.Empty;
+        ApplyModeChrome();
+
+        var outcome = await TweakApplyRunner.RunAsync(this.XamlRoot, onWorkStarting: () =>
+        {
+            LoadingOverlayText.Text = "Wijzigingen toepassen...";
+            LoadingOverlay.Visibility = Visibility.Visible;
+        });
+
+        LoadingOverlay.Visibility = Visibility.Collapsed;
+        TweakApplyRunner.ShowOutcome(ResultBar, outcome);
+        BuildCategoryGrid();
+        UpdateFooter();
+        UpdateRestoreButton();
+    }
+
+    private void ShowResult(InfoBarSeverity severity, string title, string message)
+    {
+        ResultBar.Severity = severity;
+        ResultBar.Title = title;
+        ResultBar.Message = message;
+        ResultBar.IsOpen = true;
+    }
+
+    // ---------------------------------------------------------------
     // FOOTER
     // ---------------------------------------------------------------
 
     private void UpdateFooter()
     {
+        if (App.ProfileMode)
+        {
+            var sel = App.ProfileSelection.Count;
+            ProfileSaveButton.IsEnabled = sel > 0;
+            ProfileApplyButton.IsEnabled = sel > 0;
+            ProfileSelectedText.Text = sel == 0
+                ? "Niets geselecteerd — vink tweaks aan voor je profiel"
+                : $"{sel} tweak{(sel == 1 ? "" : "s")} geselecteerd";
+            return;
+        }
+
         var count = App.TweakPending.Count;
         ApplyButton.IsEnabled = count > 0;
         DiscardButton.IsEnabled = count > 0;
@@ -188,7 +391,7 @@ public sealed partial class TweaksPage : Page
 
     private void UpdateRestoreButton()
     {
-        RestoreButton.Visibility = App.Snapshots.GetLatest() != null
+        RestoreButton.Visibility = (!App.ProfileMode && App.Snapshots.GetLatest() != null)
             ? Visibility.Visible
             : Visibility.Collapsed;
     }

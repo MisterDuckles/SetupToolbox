@@ -83,6 +83,15 @@
                         Padding="0,0,14,12"
                         ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
                 <StackPanel Spacing="16">
+                    <!-- Profiel-modus banner (v0.9.20) — alleen zichtbaar tijdens
+                         het samenstellen van een tweak-profiel. -->
+                    <InfoBar x:Name="ProfileBanner"
+                             IsOpen="False"
+                             IsClosable="False"
+                             Severity="Informational"
+                             Title="Profiel-modus"
+                             Message="Alle vinkjes staan uit. Vink de tweaks aan die je in je profiel wilt — dit verandert nog niets aan je systeem. Klik daarna 'Opslaan profiel' of 'Toepassen'." />
+
                     <!-- Category-grid (zichtbaar buiten search-modus). -->
                     <ItemsRepeater x:Name="CategoryGrid">
                         <ItemsRepeater.Layout>
@@ -191,6 +200,13 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    Visibility="Collapsed" />
                     </StackPanel>
+
+                    <!-- Profiel-modus checklist — vlakke lijst van alle tweaks
+                         gegroepeerd per categorie (clean-slate). Code-behind vult
+                         dit + toont/verbergt afhankelijk van App.ProfileMode. -->
+                    <StackPanel x:Name="ProfileChecklist"
+                                Visibility="Collapsed"
+                                Spacing="8" />
                 </StackPanel>
             </ScrollView>
 
@@ -213,6 +229,7 @@
         <!-- Globale footer: pending count + Discard + Apply. Zelfde footer
              zit op de category-detail-pagina (TweakCategoryDetailPage). -->
         <Grid Grid.Row="3"
+              x:Name="NormalFooter"
               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
               BorderThickness="0,1,0,0"
               Padding="0,12,0,0"
@@ -244,6 +261,56 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <FontIcon Glyph="&#xE73E;" FontSize="14" />
                     <TextBlock x:Name="ApplyButtonText" Text="Apply" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- Profiel-modus footer (v0.9.20) — alternatief voor NormalFooter; één
+             van de twee is zichtbaar (ApplyModeChrome regelt dat). -->
+        <Grid Grid.Row="3"
+              x:Name="ProfileFooter"
+              Visibility="Collapsed"
+              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="0,12,0,0"
+              Margin="0,16,0,0"
+              ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       x:Name="ProfileSelectedText"
+                       Text="Niets geselecteerd — vink tweaks aan voor je profiel"
+                       Style="{StaticResource BodyTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    x:Name="ProfileCloseButton"
+                    Content="Sluiten"
+                    Click="ProfileCloseButton_Click"
+                    VerticalAlignment="Center" />
+            <Button Grid.Column="2"
+                    x:Name="ProfileSaveButton"
+                    Click="ProfileSaveButton_Click"
+                    IsEnabled="False"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xEDE1;" FontSize="14" />
+                    <TextBlock Text="Opslaan profiel" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="3"
+                    x:Name="ProfileApplyButton"
+                    Click="ProfileApplyButton_Click"
+                    Style="{StaticResource AccentButtonStyle}"
+                    IsEnabled="False"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE73E;" FontSize="14" />
+                    <TextBlock Text="Toepassen" />
                 </StackPanel>
             </Button>
         </Grid>

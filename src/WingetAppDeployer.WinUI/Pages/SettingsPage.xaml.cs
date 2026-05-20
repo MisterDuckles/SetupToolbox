@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -301,6 +302,77 @@ public sealed partial class SettingsPage : Page
         SelectionResultBar.Title = title;
         SelectionResultBar.Message = message;
         SelectionResultBar.IsOpen = true;
+    }
+
+    // ── TWEAK-PROFIELEN (v0.9.20) ──
+
+    // Opent de Tweaks-tab in profiel-modus (clean slate) zodat de user een set
+    // tweaks kan samenstellen en opslaan.
+    private void ProfileMakeButton_Click(object sender, RoutedEventArgs e)
+    {
+        App.Window?.EnterTweakProfileMode();
+    }
+
+    // Importeert een profielbestand: matcht tegen de catalog, detecteert states,
+    // en zet alléén de delta klaar in TweakPending. Springt daarna (na bevestiging)
+    // naar de Tweaks-tab waar de user Apply klikt.
+    private async void ProfileImportButton_Click(object sender, RoutedEventArgs e)
+    {
+        var file = await FilePickerHelper.PickOpenFileAsync(".json");
+        if (file == null) return;
+
+        var result = await App.TweakProfileIO.ImportAsync(file.Path, App.Tweaks.All.ToList());
+        if (result.Error != null)
+        {
+            ShowProfileInfo(InfoBarSeverity.Error, "Import mislukt", result.Error);
+            return;
+        }
+        if (result.Matched.Count == 0)
+        {
+            var extra = result.SkippedIds.Count > 0 ? $" ({result.SkippedIds.Count} onbekend)" : "";
+            ShowProfileInfo(InfoBarSeverity.Warning, "Geen bekende tweaks",
+                $"Dit bestand bevat geen tweaks die in deze versie bestaan{extra}.");
+            return;
+        }
+
+        // States detecteren voor de delta-berekening (al-actieve tweaks overslaan).
+        try { await App.Tweaks.DetectStatesAsync(); }
+        catch { }
+        var (staged, already) = TweakProfileService.StageDelta(result.Matched, App.TweakPending);
+
+        if (staged == 0)
+        {
+            ShowProfileInfo(InfoBarSeverity.Success, "Alles staat al goed",
+                $"Alle {result.Matched.Count} tweak{(result.Matched.Count == 1 ? "" : "s")} uit dit profiel staan al in de gewenste staat — niets toe te passen.");
+            return;
+        }
+
+        var note = $"{staged} tweak{(staged == 1 ? "" : "s")} klaargezet om toe te passen.";
+        if (already > 0) note += $" {already} stond{(already == 1 ? "" : "en")} al goed.";
+        if (result.SkippedIds.Count > 0) note += $" {result.SkippedIds.Count} onbekend en overgeslagen.";
+
+        var dialog = new ContentDialog
+        {
+            Title = "Profiel geïmporteerd",
+            Content = $"{note}\n\nGa je naar de Tweaks-tab om ze toe te passen?",
+            PrimaryButtonText = "Naar Tweaks",
+            CloseButtonText = "Blijf hier",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            App.Window?.NavigateToTweaks();
+        else
+            ShowProfileInfo(InfoBarSeverity.Informational, "Klaargezet",
+                note + " Open de Tweaks-tab en klik Apply.");
+    }
+
+    private void ShowProfileInfo(InfoBarSeverity severity, string title, string message)
+    {
+        TweakProfileResultBar.Severity = severity;
+        TweakProfileResultBar.Title = title;
+        TweakProfileResultBar.Message = message;
+        TweakProfileResultBar.IsOpen = true;
     }
 
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>

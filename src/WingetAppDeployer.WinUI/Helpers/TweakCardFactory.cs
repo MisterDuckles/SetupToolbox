@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -22,10 +23,15 @@ public static class TweakCardFactory
 {
     /// <summary>
     /// Bouwt de Border-card voor één tweak. De control rechts is een ComboBox
-    /// (choice-tweak) of een IsThreeState CheckBox (toggle-tweak), beide
-    /// gekoppeld aan App.TweakPending.
+    /// (choice-tweak) of een IsThreeState CheckBox (toggle-tweak), gekoppeld aan
+    /// App.TweakPending.
+    ///
+    /// In <paramref name="profileMode"/> (de v0.9.20 profiel-bouwer) is het een
+    /// CLEAN-SLATE selectie: de checkbox/ComboBox negeert de live system-state en
+    /// schrijft naar App.ProfileSelection. De status-pill wordt dan verborgen —
+    /// het profiel is een gewenste-config, geen weergave van de huidige staat.
     /// </summary>
-    public static FrameworkElement Build(Tweak tweak)
+    public static FrameworkElement Build(Tweak tweak, bool profileMode = false)
     {
         var border = new Border
         {
@@ -50,7 +56,10 @@ public static class TweakCardFactory
             Style = Res<Style>("BodyStrongTextBlockStyle"),
             VerticalAlignment = VerticalAlignment.Center
         });
-        titleRow.Children.Add(BuildStatePill(tweak));
+        // Status-pill alleen buiten profiel-modus — in clean-slate is de live
+        // state niet relevant en zou 'm verwarrend zijn.
+        if (!profileMode)
+            titleRow.Children.Add(BuildStatePill(tweak));
         content.Children.Add(titleRow);
         content.Children.Add(new TextBlock
         {
@@ -98,8 +107,8 @@ public static class TweakCardFactory
 
         // Rechter control.
         FrameworkElement rightControl = tweak.IsChoice && tweak.Choices != null
-            ? BuildChoiceCombo(tweak)
-            : BuildToggleCheckBox(tweak);
+            ? BuildChoiceCombo(tweak, profileMode)
+            : BuildToggleCheckBox(tweak, profileMode);
         Grid.SetColumn(rightControl, 2);
         grid.Children.Add(rightControl);
 
@@ -107,8 +116,33 @@ public static class TweakCardFactory
         return border;
     }
 
-    private static ComboBox BuildChoiceCombo(Tweak tweak)
+    private static ComboBox BuildChoiceCombo(Tweak tweak, bool profileMode)
     {
+        if (profileMode)
+        {
+            // Clean slate: een "— niet in profiel —" sentinel op index 0, daarna
+            // de echte opties. Selectie schrijft naar App.ProfileSelection.
+            var labels = new List<string> { "— niet in profiel —" };
+            labels.AddRange(tweak.Choices!.Select(c => c.Label));
+            var initial = 0;
+            if (App.ProfileSelection.TryGet(tweak, out var pv) && pv is int pidx) initial = pidx + 1;
+
+            var pc = new ComboBox
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 200,
+                ItemsSource = labels,
+                SelectedIndex = initial
+            };
+            pc.SelectionChanged += (s, e) =>
+            {
+                var sel = pc.SelectedIndex;
+                if (sel <= 0) App.ProfileSelection.Remove(tweak);   // sentinel = niet opnemen
+                else App.ProfileSelection.Set(tweak, sel - 1);      // echte choice-index
+            };
+            return pc;
+        }
+
         // Initiële selectie: pending desired index als die er is, anders de
         // gedetecteerde SelectedChoiceIndex.
         var initialIndex = tweak.SelectedChoiceIndex;
@@ -133,8 +167,30 @@ public static class TweakCardFactory
         return combo;
     }
 
-    private static CheckBox BuildToggleCheckBox(Tweak tweak)
+    private static CheckBox BuildToggleCheckBox(Tweak tweak, bool profileMode)
     {
+        if (profileMode)
+        {
+            // Clean slate: altijd 2-state, initieel UIT (negeert tweak.State).
+            // Aangevinkt = opnemen in profiel; schrijft naar App.ProfileSelection.
+            var pcb = new CheckBox
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 0,
+                Content = string.Empty,
+                IsThreeState = false,
+                IsChecked = App.ProfileSelection.Contains(tweak)
+            };
+            RoutedEventHandler pHandler = (s, e) =>
+            {
+                if (pcb.IsChecked == true) App.ProfileSelection.Set(tweak, true);
+                else App.ProfileSelection.Remove(tweak);
+            };
+            pcb.Checked += pHandler;
+            pcb.Unchecked += pHandler;
+            return pcb;
+        }
+
         var checkbox = new CheckBox
         {
             VerticalAlignment = VerticalAlignment.Center,

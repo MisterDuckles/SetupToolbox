@@ -10,6 +10,23 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-relea
 
 ## Voltooide versies
 
+### v0.9.20 — Tweak-profielen (export / import)
+
+**Apps-stijl profiel-bouwer** voor de Tweaks-tab. Vooraf-bedachte presets ("Privacy basics" etc.) bewust GESCHRAPT (user-keuze) — in plaats daarvan stel je zélf een set tweaks samen, slaat 'm op naar een bestand, en past 'm later toe (op deze of een andere PC). De apply/detect-logica in TweakService is ongemoeid; dit is een UI- + IO-laag eromheen.
+
+**Profiel-bouwer (`TweakProfileService`):**
+- Export-format `{ version, exportedAt, count, tweaks: [{ id, choice? }] }` — tweak-`Id` + bij multi-choice het optie-**label** (label i.p.v. index zodat herordening het profiel niet corrupt maakt). camelCase + WriteIndented, mirror van `SelectionImportExportService`.
+- `ImportAsync` matcht op Id tegen `TweakService.All`; onbekende Id's of verdwenen choice-labels → `SkippedIds` (geteld + gemeld).
+- `StageDelta` (static) zet alléén de **delta** in TweakPending: tweaks die al in de gewenste staat staan worden overgeslagen — geen redundante write, geen onnodige UAC.
+
+**Profiel-modus op de Tweaks-tab** (clean slate, los van de normale live-state weergave):
+- Een aparte selectie-store `App.ProfileSelection` (tweede `TweakPendingService`-instance, los van `TweakPending` om mode-bleed te voorkomen) + globale `App.ProfileMode` flag.
+- `TweakCardFactory.Build(tweak, profileMode)` — clean-slate renderpad: 2-state checkbox altijd initieel UIT (negeert `tweak.State`), multi-choice ComboBox met "— niet in profiel —" sentinel op index 0, status-pill verborgen.
+- TweaksPage rendert in profiel-modus een **vlakke checklist** van alle tweaks gegroepeerd per categorie (i.p.v. de tile-grid) — daardoor geen profiel-modus nodig op de detail-pagina. Eigen **banner** + **footer** ("N geselecteerd" · Sluiten · Opslaan profiel · Toepassen). Zoekbalk filtert de checklist. Wegnavigeren annuleert de (niet-opgeslagen) bouw.
+- "Toepassen" = `StageDelta` → verlaat profiel-modus → bestaande `TweakApplyRunner` (backup-prompt + 1 UAC + re-detect).
+
+**Settings — nieuwe sectie "Tweak-profielen"** (naast de app-export/import, zelfde card-patroon): "Profiel maken" (→ `MainWindow.EnterTweakProfileMode` zet de flag + selecteert de Tweaks-nav) + "Importeren" (→ match + detect + `StageDelta`, daarna ContentDialog "Naar Tweaks" → `NavigateToTweaks` → Apply).
+
 ### v0.9.19 — UI & Performance misc + battery %
 
 **8 tweaks** (laatste tweak-uitbreiding vóór Presets). Network-versie geschrapt (user vond 'm niet nuttig).
@@ -833,11 +850,7 @@ Tweede research-ronde (2 agents) tegen Chris Titus winutil + O&O ShutUp10++. Gec
 
 > **Geschrapt — Network tweaks** (IPv6-multichoice / LLMNR / NetBIOS): user vond Network-tweaks niet nuttig. NetBIOS was sowieso geparkeerd (per-adapter). De bestaande `Performance.PreferIPv4` blijft ongemoeid.
 
-**v0.9.20 — Presets / Profiles + import/export**
-- `data/tweaks-presets.json` met preset bundles: "Privacy basics" / "Power user starter" / "Performance focus" / "Minimal UI"
-- Eén klik vinkt een set tweaks aan in de Tweaks tab (user kan nog deselecten voor Apply)
-- Import/export van een tweak-selectie (mirror van de bestaande app-selectie export/import)
-- Inspiratie: WinUtil's preset-knoppen
+~~**v0.9.20 — Tweak-profielen (export / import, apps-stijl)**~~ — gedaan (zie Voltooide versies). Presets geschrapt; profiel-bouwer (clean-slate selectie-modus op de Tweaks-tab) + file-based export/import via Settings, import = delta-only staging → Apply.
 
 **v0.9.0 — Milestone release**
 - Versie-bump naar v0.9.0 → release op GitHub met exe-artifacts (na Inno installer in v1.0)

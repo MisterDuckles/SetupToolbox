@@ -28,6 +28,9 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0"
@@ -276,13 +279,77 @@
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
-            <!-- ── BACKUP & HERSTEL (Tweaks snapshots) ── -->
+            <!-- ── TWEAK-PROFIELEN (v0.9.20) ── -->
             <TextBlock Grid.Row="11"
-                       Text="Backup &amp; herstel"
+                       Text="Tweak-profielen"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <Border Grid.Row="12"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xE713;"
+                              FontSize="20"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="Tweak-profiel maken / importeren"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Stel zelf een set tweaks samen — 'Profiel maken' opent de Tweaks-tab met alle vinkjes uit; vink aan wat je wilt en sla het op naar een bestand. 'Importeren' zet de tweaks uit een profiel klaar als pending changes (al-actieve tweaks worden overgeslagen), waarna je op de Tweaks-tab Apply klikt." />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
+                        <Button x:Name="ProfileMakeButton"
+                                Click="ProfileMakeButton_Click"
+                                Style="{ThemeResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE710;" FontSize="14" />
+                                <TextBlock Text="Profiel maken" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="ProfileImportButton"
+                                Click="ProfileImportButton_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                                <TextBlock Text="Importeren" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <InfoBar x:Name="TweakProfileResultBar"
+                     Grid.Row="13"
+                     Severity="Informational"
+                     IsOpen="False"
+                     IsClosable="True"
+                     Margin="0,12,0,0" />
+
+            <!-- ── BACKUP & HERSTEL (Tweaks snapshots) ── -->
+            <TextBlock Grid.Row="14"
+                       Text="Backup &amp; herstel"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,28,0,12" />
+
+            <Border Grid.Row="15"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -332,12 +399,12 @@
             </Border>
 
             <!-- ── SYSTEM RESTORE POINTS (Deep Clean + Debloat) ── -->
-            <TextBlock Grid.Row="13"
+            <TextBlock Grid.Row="16"
                        Text="System Restore Points"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="14"
+            <Border Grid.Row="17"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -465,7 +532,7 @@
             </Border>
 
             <InfoBar x:Name="BackupResultBar"
-                     Grid.Row="15"
+                     Grid.Row="18"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"

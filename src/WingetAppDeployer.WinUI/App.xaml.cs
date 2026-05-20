@@ -47,6 +47,13 @@ public partial class App : Application
     public static SnapshotService Snapshots { get; } = new();
     public static RestorePointService RestorePoint { get; } = new();
     public static TweakPendingService TweakPending { get; } = new();
+    // Profiel-bouwer (v0.9.20). ProfileSelection is een aparte selectie-store
+    // (los van TweakPending om mode-bleed te voorkomen); TweakProfileIO doet de
+    // file-IO. ProfileMode is de globale flag die de Tweaks-tab in clean-slate
+    // selectie-modus zet — zie TweaksPage / MainWindow.EnterTweakProfileMode.
+    public static TweakPendingService ProfileSelection { get; } = new();
+    public static TweakProfileService TweakProfileIO { get; } = new();
+    public static bool ProfileMode { get; set; }
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
