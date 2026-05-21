@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* ── Design tokens (Tailwind v4 @theme → bg-*, text-*, border-* utils) ── */
+@theme {
+  --color-bg: #060a11;
+  --color-bg2: #0a101b;
+  --color-panel: #0f1724;
+  --color-panel-2: #131c2c;
+  --color-stroke: #1e2a3e;
+  --color-ink: #e8edf5;
+  --color-muted: #9aa7bd;
+  --color-accent: #5b8cff;
+  --color-accent-2: #8b5cff;
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── Aurora-achtergrond: drie grote, vervaagde gekleurde blobs.
+   GSAP animeert hun positie/scale (zie App.jsx) voor traag drijvend effect. ── */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.blob-1 { width: 46rem; height: 46rem; top: -16rem; left: -10rem; background: radial-gradient(circle, #2a4fff, transparent 60%); }
+.blob-2 { width: 40rem; height: 40rem; top: -8rem; right: -12rem; background: radial-gradient(circle, #7c3cff, transparent 60%); }
+.blob-3 { width: 38rem; height: 38rem; top: 24rem; left: 30%; background: radial-gradient(circle, #1f6bff, transparent 60%); opacity: 0.35; }
+
+/* Fijn rasterpatroon over alles voor diepte. */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(91, 140, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 140, 255, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(70% 60% at 50% 0%, black, transparent 80%);
+}
+
+/* Glimmende, langzaam bewegende gradient-tekst (titel-accent). */
+.text-shiny {
+  background: linear-gradient(110deg, #5b8cff 20%, #c7b6ff 42%, #8b5cff 60%, #5b8cff 82%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shine 7s linear infinite;
+}
+@keyframes shine { to { background-position: 220% center; } }
+
+/* Per-woord reveal (GSAP zet de begin-state + animeert). */
+.word { display: inline-block; }
+
+/* ── Spotlight-kaart: radiale gloed volgt de cursor (--mx/--my via JS). ── */
+.card {
+  position: relative;
+  background: linear-gradient(180deg, var(--color-panel), var(--color-bg2));
+  border: 1px solid var(--color-stroke);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(91, 140, 255, 0.22), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-stroke)); }
+.card:hover::before { opacity: 1; }
+
+/* Primaire knop: subtiele lift + glans-sweep bij hover (geen magnetisch gedoe). */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(120deg, var(--color-accent), var(--color-accent-2));
+  box-shadow: 0 8px 30px -8px rgba(91, 140, 255, 0.6);
+  transition: transform 0.2s ease, box-shadow 0.25s ease, filter 0.2s ease;
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  transform: translateX(-130%);
+  transition: transform 0.6s ease;
+  pointer-events: none;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 14px 44px -8px rgba(124, 92, 255, 0.75);
+}
+.btn-primary:hover::after { transform: translateX(130%); }

@@ -1082,14 +1082,12 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 - Welcome-banner op AppsPage (dismissible via X + setting).
 - `SettingsService` uitbreiden: `CheckForUpdatesOnStartup` (default true) + `ShowWelcomeBanner` (default true). Settings-UI: toggles + "Check for updates now".
 
-### v1.0 go-live — nog te doen (user-acties + website)
+### v1.0 go-live — status
 
-De rebrand, self-update en proprietary licentie zijn gedaan (zie Voltooide versies → **v1.0.0**). Wat rest om v1.0 écht live te zetten:
-
-1. **GitHub-repo hernoemen** → `SetupToolbox` (repo Settings → Rename, of `gh repo rename SetupToolbox`) + lokale remote bijwerken. *(Bewust niet door de assistant gedaan — raakt jouw remote/account.)*
-2. **Repo publiek zetten** (secrets-scan was clean: `data-source.local.txt` nooit gecommit, geen tokens in 87 commits).
-3. **v1.0.0-release publiceren** met `SetupToolbox-v1.0.0.exe`: `scripts/build-installer.ps1` → `gh release create v1.0.0 installer/Output/SetupToolbox-v1.0.0.exe …`. Pas dán werkt self-update live (privé-repo gaf de `404`).
-4. **Website** — `website/`-map in deze repo (**React + Tailwind + GSAP / react-bits**): download/landing-pagina op **`projects.dpvb.nl/setup-toolbox`** met intro + features + download-knop die naar de GitHub-release linkt.
+1. ~~GitHub-repo hernoemen → `SetupToolbox`~~ ✅ (21 mei 2026)
+2. ~~Repo publiek zetten~~ ✅ (secrets-scan clean)
+3. ~~v1.0.0-release publiceren met `SetupToolbox-v1.0.0.exe`~~ ✅ — release live + latest; tag herricht naar het v1.0.0-commit; **self-update werkt live** (publieke API 200, asset matcht `^SetupToolbox-v…exe`).
+4. **Website** — `website/`-map (Vite + React + **JavaScript/JSX** + Tailwind v4 + **custom GSAP**: aurora-drift, masked word-reveal, shiny titel, spotlight-cards). Haalt versie + download live uit de GitHub-API. ✅ gebouwd. ⏳ **Nog te deployen** naar `projects.dpvb.nl/setup-toolbox` (`npm run build` → upload `website/dist/`-inhoud; `base` staat al op `/setup-toolbox/`).
 
 ### Latere milestones
 
