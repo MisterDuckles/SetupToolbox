@@ -51,7 +51,7 @@ Write-Host "[2/2] Compileren met ISCC..." -ForegroundColor Yellow
 & $iscc "/DPublishDir=$publishDir" "/DAppVersion=$version" $iss
 if ($LASTEXITCODE -ne 0) { throw "ISCC faalde (exit $LASTEXITCODE)." }
 
-$setup = Join-Path $repo "installer\Output\SetupToolbox-Setup-v$version.exe"
+$setup = Join-Path $repo "installer\Output\SetupToolbox-v$version.exe"
 Write-Host ""
 if (Test-Path $setup) {
     Write-Host ("Klaar: {0}  ({1:N1} MB)" -f $setup, ((Get-Item $setup).Length / 1MB)) -ForegroundColor Green
