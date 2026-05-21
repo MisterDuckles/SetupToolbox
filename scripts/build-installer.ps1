@@ -1,11 +1,11 @@
 <#
-  build-installer.ps1 — bouwt de WingetAppDeployer installer (setup.exe) end-to-end.
+  build-installer.ps1 — bouwt de SetupToolbox installer (setup.exe) end-to-end.
 
    1. dotnet publish -c Release (win-x64, self-contained folder)
    2. leest <Version> uit de csproj
-   3. compileert installer\WingetAppDeployer.iss met ISCC (Inno Setup 6)
+   3. compileert installer\SetupToolbox.iss met ISCC (Inno Setup 6)
 
-  Output: installer\Output\WingetAppDeployer-Setup-v<versie>.exe
+  Output: installer\Output\SetupToolbox-Setup-v<versie>.exe
 
   Gebruik:  pwsh scripts\build-installer.ps1            # volledige build
             pwsh scripts\build-installer.ps1 -SkipPublish   # alleen ISCC (hergebruik publish)
@@ -18,9 +18,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repo       = Split-Path $PSScriptRoot -Parent
-$csproj     = Join-Path $repo "src\WingetAppDeployer.WinUI\WingetAppDeployer.WinUI.csproj"
-$iss        = Join-Path $repo "installer\WingetAppDeployer.iss"
-$publishDir = Join-Path $repo "src\WingetAppDeployer.WinUI\bin\$Configuration\net10.0-windows10.0.26100.0\win-x64\publish"
+$csproj     = Join-Path $repo "src\SetupToolbox\SetupToolbox.csproj"
+$iss        = Join-Path $repo "installer\SetupToolbox.iss"
+$publishDir = Join-Path $repo "src\SetupToolbox\bin\$Configuration\net10.0-windows10.0.26100.0\win-x64\publish"
 
 # --- Versie uit de csproj (single source of truth) ---
 [xml]$xml = Get-Content $csproj
@@ -35,7 +35,7 @@ if (-not $SkipPublish) {
         -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:PublishSingleFile=False
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish faalde (exit $LASTEXITCODE)." }
 }
-if (-not (Test-Path (Join-Path $publishDir "WingetAppDeployer.WinUI.exe"))) {
+if (-not (Test-Path (Join-Path $publishDir "SetupToolbox.exe"))) {
     throw "Publish-output niet gevonden in $publishDir (draai zonder -SkipPublish)."
 }
 
@@ -51,7 +51,7 @@ Write-Host "[2/2] Compileren met ISCC..." -ForegroundColor Yellow
 & $iscc "/DPublishDir=$publishDir" "/DAppVersion=$version" $iss
 if ($LASTEXITCODE -ne 0) { throw "ISCC faalde (exit $LASTEXITCODE)." }
 
-$setup = Join-Path $repo "installer\Output\WingetAppDeployer-Setup-v$version.exe"
+$setup = Join-Path $repo "installer\Output\SetupToolbox-Setup-v$version.exe"
 Write-Host ""
 if (Test-Path $setup) {
     Write-Host ("Klaar: {0}  ({1:N1} MB)" -f $setup, ((Get-Item $setup).Length / 1MB)) -ForegroundColor Green

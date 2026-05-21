@@ -1,9 +1,9 @@
-# Deploy script voor WingetAppDeployer
-# Dit script download en installeert WingetAppDeployer op een nieuwe Windows installatie
+# Deploy script voor SetupToolbox
+# Dit script download en installeert SetupToolbox op een nieuwe Windows installatie
 
 param(
     [string]$GitHubUser = "MisterDuckles",
-    [string]$RepoName = "WinGetAppDeployer",
+    [string]$RepoName = "SetupToolbox",
     [switch]$CreateDesktopShortcut = $true,
     [switch]$AutoLaunch = $true
 )
@@ -14,8 +14,8 @@ Write-Host "==================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Setup paths
-$installDir = "$env:ProgramFiles\WingetAppDeployer"
-$launcherPath = Join-Path $installDir "WingetAppDeployer-Launcher.exe"
+$installDir = "$env:ProgramFiles\SetupToolbox"
+$launcherPath = Join-Path $installDir "SetupToolbox-Launcher.exe"
 $launcherUrl = "https://github.com/$GitHubUser/$RepoName/releases/latest/download/Launcher.exe"
 
 try {

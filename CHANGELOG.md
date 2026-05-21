@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to WingetAppDeployer (WinUI). Vorige WPF-historie staat
+All notable changes to SetupToolbox (WinUI). Vorige WPF-historie staat
 gearchiveerd onder de git tag `wpf-final-v1.2.1`.
 
 ## [Unreleased] — v0.5.x
@@ -36,7 +36,7 @@ gearchiveerd onder de git tag `wpf-final-v1.2.1`.
 
 - WPF app + Launcher uit de repo verwijderd, code blijft recoverable via tag
   `wpf-final-v1.2.1`
-- Solution opgeschoond — alleen `WingetAppDeployer.WinUI` blijft over
+- Solution opgeschoond — alleen `SetupToolbox` blijft over
 - README, INTEGRATIE.md en NEXT-STEPS.md herschreven naar WinUI-only context
 - CLAUDE.md bijgewerkt: WPF-specifieke regels (DynamicResource, ARGB hex) weg
 

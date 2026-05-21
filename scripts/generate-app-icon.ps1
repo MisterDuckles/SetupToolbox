@@ -18,7 +18,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$OutPath = "$PSScriptRoot\..\src\WingetAppDeployer.WinUI\Assets\AppIcon.ico",
+    [string]$OutPath = "$PSScriptRoot\..\src\SetupToolbox\Assets\AppIcon.ico",
     [string]$PreviewPng = "$PSScriptRoot\..\data\app-icon-preview.png"
 )
 

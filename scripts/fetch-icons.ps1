@@ -203,7 +203,7 @@ function Get-IconHorseUrl {
 function Invoke-IconFetch {
     param([string]$Url)
     try {
-        $headers = @{ 'User-Agent' = 'WingetAppDeployer/0.5 (https://github.com/MisterDuckles/WinAppInstaller; nlmulitigaming123@gmail.com) icon-fetcher' }
+        $headers = @{ 'User-Agent' = 'SetupToolbox/0.5 (https://github.com/MisterDuckles/WinAppInstaller; nlmulitigaming123@gmail.com) icon-fetcher' }
         $resp = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -Headers $headers -ErrorAction Stop
         if ($resp.StatusCode -ne 200) { return $null }
         $bytes = $resp.Content

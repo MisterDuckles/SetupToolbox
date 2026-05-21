@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="SetupToolbox.Dialogs.BackupPromptDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Backup maken voor Apply?"
+    PrimaryButtonText="Apply met backup"
+    SecondaryButtonText="Apply zonder backup"
+    CloseButtonText="Annuleer"
+    DefaultButton="Primary"
+    CornerRadius="8">
+
+    <StackPanel Spacing="14" MinWidth="420">
+        <TextBlock TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+            We kunnen een snapshot maken van de huidige registry-waardes voor de tweaks die je zo gaat applyen. Als er later iets niet bevalt, klik je op <Run FontWeight="SemiBold">Vorige staat herstellen</Run> bovenaan de Tweaks tab om alles terug te zetten zoals 't was.
+        </TextBlock>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Naam voor deze snapshot (optioneel)"
+                       Style="{StaticResource CaptionTextBlockStyle}" />
+            <TextBox x:Name="NameBox"
+                     PlaceholderText="Bijv. 'Voor Bing search uit'"
+                     MaxLength="80" />
+        </StackPanel>
+
+        <CheckBox x:Name="DontAskCheckBox"
+                  Content="Vraag dit niet meer en maak voortaan altijd een backup" />
+
+        <InfoBar Severity="Informational"
+                 IsOpen="True"
+                 IsClosable="False"
+                 Title="Veiligheid"
+                 Message="Snapshots worden lokaal opgeslagen (max 20 stuks, oudste wordt automatisch verwijderd). Je kan alle snapshots later inzien via Settings." />
+    </StackPanel>
+</ContentDialog>

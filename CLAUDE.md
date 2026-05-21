@@ -1,4 +1,4 @@
-# Claude Guardrails - WingetAppDeployer
+# Claude Guardrails - SetupToolbox
 
 ## NEXT-STEPS.md is de single source of truth
 
@@ -39,6 +39,6 @@
 
 - Lees relevante bestanden VOORDAT je wijzigingen maakt
 - Geen hardcoded kleuren in UI code — gebruik `ThemeResource` keys uit het Fluent design system (zoals `CardBackgroundFillColorDefaultBrush`, `AccentFillColorDefaultBrush`)
-- Bouw altijd na wijzigingen (`dotnet build src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj -c Debug`) en meld het resultaat
+- Bouw altijd na wijzigingen (`dotnet build src/SetupToolbox/SetupToolbox.csproj -c Debug`) en meld het resultaat
 - Bij UI-wijzigingen ook `dotnet run` om visueel te verifiëren — build succeeded != feature werkt
 - Bij twijfel: vraag de gebruiker, maak geen aannames

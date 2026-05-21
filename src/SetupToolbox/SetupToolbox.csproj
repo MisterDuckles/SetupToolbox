@@ -1,0 +1,109 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>SetupToolbox</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <Nullable>enable</Nullable>
+    <!-- Exe-icoon: zichtbaar in taskbar, Explorer, alt-tab, run-dialog. Voor
+         unpackaged WinUI 3 apps wordt dit door MSBuild in de exe header gezet
+         via rc.exe. Multi-resolution ICO (16/24/32/48/64/128/256) — gegenereerd
+         door scripts/generate-app-icon.ps1. -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <!-- App-versie. Bump bij elke afgeronde feature (zie NEXT-STEPS.md). Zet
+         AssemblyVersion + FileVersion gelijk zodat assembly metadata, exe
+         properties en eventuele toekomstige in-app version-display match. -->
+    <AssemblyName>SetupToolbox</AssemblyName>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\AppIcon.ico" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+  </ItemGroup>
+
+  <!-- Shared apps.json — leeft op repo-niveau zodat zowel de WPF als de WinUI
+       app dezelfde curated lijst gebruiken. Wordt naast de exe gekopieerd in
+       data/apps.json zodat AppDatabaseService 'm direct kan lezen.
+       Distributie-model: private repo + public GitHub Releases, exe heeft
+       de apps.json gebundeld dus geen netwerk fetch nodig. -->
+  <ItemGroup>
+    <Content Include="..\..\data\apps.json" Link="data\apps.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Bundled app icons (128x128 PNG, transparante canvas, gecentreerd).
+       Gegenereerd door scripts/fetch-icons.ps1. App.IconPath verwijst naar
+       ms-appx:///Icons/<wingetId>.png. -->
+  <ItemGroup>
+    <Content Include="..\..\data\icons\*.png" Link="Icons\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FuzzySharp" Version="2.0.2" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="*" />
+    <!-- Pin op 1.8.* — Version="*" haalt 2.x op, maar dat vereist een aparte
+         WinAppRuntime 2.x install op de target machine ("Required components
+         of the Windows App Runtime are missing — Version 2.x"). 1.8 wordt
+         systeembreed gebruikt en self-contained gepublished naar exe. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <!-- ToastContentBuilder voor unpackaged Win32/WinUI apps. WinAppSDK's
+         eigen Microsoft.Windows.AppNotifications faalt met "Class not
+         registered" zonder een COM activator class. Dit toolkit-pakket
+         registreert via ToastNotificationManagerCompat automatisch een
+         Start Menu shortcut + AUMID bij eerste Show(). -->
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.*" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <!-- Trimming uit: JsonSerializer.Deserialize gebruikt reflection waardoor
+         apps.json niet meer parst in een trimmed publish ("could not load
+         categories"). Voor WinUI 3 unpackaged is trim sowieso fragiel — de
+         XAML compiler en WinRT-bridge leunen zwaar op reflection. -->
+    <PublishTrimmed>False</PublishTrimmed>
+  </PropertyGroup>
+</Project>

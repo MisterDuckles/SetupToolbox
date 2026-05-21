@@ -1,21 +1,31 @@
-# WingetAppDeployer — Roadmap
+# SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`. Pre-release (v0.5.x), op weg naar v1.0.
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.0** (rebrand: heette voorheen *WingetAppDeployer*).
 
-> WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only.
+> WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 
-**Stack:** .NET 10 + Windows App SDK 1.8 + WinUI 3 + unpackaged exe. Mica backdrop, native `Microsoft.UI.Xaml` controls. Distributie via private repo + public GitHub Releases. `apps.json` is gebundeld met de exe (geen live fetch).
+**Stack:** .NET 10 + Windows App SDK 1.8 + WinUI 3 + unpackaged exe. Mica backdrop, native `Microsoft.UI.Xaml` controls. **Distributie:** publieke GitHub-repo (restrictieve/proprietary licentie) + per-user Inno Setup installer als release-asset; self-update via de GitHub releases-API. `apps.json` is gebundeld met de exe (geen live fetch).
 
 ---
 
 ## Voltooide versies
 
+### v1.0.0 — Rebrand naar "Setup Toolbox" + self-update + proprietary licentie
+
+**Rebrand** WingetAppDeployer → **Setup Toolbox** (oude naam te lang, botste met WingetUI/UniGetUI, dekte de lading niet meer: install + debloat + tweaks + deep clean). Volledige rename, ook intern: namespace `WingetAppDeployer_WinUI` → `SetupToolbox`, assembly/exe → `SetupToolbox.exe`, projectmap `src/SetupToolbox/`, solution `SetupToolbox.sln`, data-map `%LocalAppData%\SetupToolbox`, install-map `…\Programs\SetupToolbox`, installer-asset `SetupToolbox-v{ver}.exe`, repo-constante → `MisterDuckles/SetupToolbox`. Display-naam "Setup Toolbox" (met spatie), interne identifiers zonder spatie. AppId-GUID behouden (stabiele installer-identiteit). 87 bestanden via scripted literal find-replace (langste varianten eerst, BOM-preserving) + `git mv` voor map/csproj/sln/iss; `winget`-CLI-refs (WingetService etc.) ongemoeid.
+
+**Self-update** (`GitHubService`) — startup-check + handmatige "Check for updates now" (Settings → App-updates); vergelijkt `AssemblyVersion` met de nieuwste stabiele GitHub-release, filtert op de installer-asset `^SetupToolbox-v…\.exe`. Update-InfoBar in MainWindow → download (met voortgang) → silent installer (`/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`) → Restart Manager sluit + vervangt + herstart de app. Welcome-banner op AppsPage (dismissible via X + setting). Nieuwe settings `CheckForUpdatesOnStartup` + `ShowWelcomeBanner`.
+
+**Distributie-keuze** — repo wordt **publiek** met een **proprietary `LICENSE`** (MIT vervangen): code is in te zien + PR's mogen voorgesteld worden, maar niet kopiëren/hergebruiken/herdistribueren zonder toestemming; de **app/exe** is vrij te downloaden + gebruiken. Git-historie gescand op secrets — clean (`data-source.local.txt` nooit gecommit, 0 token-patterns in 87 commits).
+
+> **Nog te doen vóór live** (user-acties / aparte stap): GitHub-repo hernoemen naar `SetupToolbox` + publiek zetten, eerste v1.0.0-release publiceren met `setup.exe`, en de website (`projects.dpvb.nl/setup-toolbox`, React+Tailwind+GSAP) bouwen. Pas dán werkt self-update live (privé-repo gaf de `404` waardoor we deze hele beslissing namen).
+
 ### v0.10.0 — Inno Setup installer (per-user) + Tweaks-padding fix
 
 **Inno Setup installer** — naar voren gehaald uit v1.0 omdat het de *enabler* is voor self-update (v0.10.1): een draaiende unpackaged folder-app kan z'n eigen geladen DLL's niet overschrijven, een installer wél (Restart Manager: in-use replace + relaunch).
 
-- `installer/WingetAppDeployer.iss` pakt de self-contained Release-publish (`win-x64.pubxml`, 631 files / ~267 MB) in tot **`WingetAppDeployer-Setup-v{versie}.exe`** (~69 MB, lzma2).
-- **Per-user install** (`{autopf}` + `PrivilegesRequired=lowest` → `%LocalAppData%\Programs\WingetAppDeployer`): GEEN UAC bij install én bij toekomstige self-update. Start Menu-entry + uninstaller + optionele desktop-icon-task.
+- `installer/SetupToolbox.iss` pakt de self-contained Release-publish (`win-x64.pubxml`, 631 files / ~267 MB) in tot **`SetupToolbox-Setup-v{versie}.exe`** (~69 MB, lzma2).
+- **Per-user install** (`{autopf}` + `PrivilegesRequired=lowest` → `%LocalAppData%\Programs\SetupToolbox`): GEEN UAC bij install én bij toekomstige self-update. Start Menu-entry + uninstaller + optionele desktop-icon-task.
 - `CloseApplications=yes` + `RestartApplications=yes` → ondersteunt `/SILENT /VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS` (wat self-update straks aanroept).
 - Vast `AppId` (GUID) zodat een update dezelfde install vervangt. Versie via ISCC `/DAppVersion` uit de csproj (single source of truth), of fallback `GetFileVersion` van de exe.
 - `scripts/build-installer.ps1` — one-shot: `dotnet publish` (self-contained, geen single-file) → ISCC-compile. ISCC user-scope geïnstalleerd (`JRSoftware.InnoSetup`). `installer/Output/` is gitignored (setup.exe gaat naar GitHub Releases, niet de repo).
@@ -321,7 +331,7 @@ Grote UI-herbouw van de Tweaks-tab naar het Apps-tab patroon, plus 13 UI/Theme t
 
 User-feedback v0.9.4 → "Zijn alle changes wel veilig en stabiel voor het systeem?". v0.9.5 voegt twee complementaire veiligheidsnetten toe — registry-snapshots voor de lichte registry-mutaties (Tweaks) en Windows System Restore Points voor de zware delete-operaties (Deep Clean + Debloat).
 
-**SnapshotService** (`Services/SnapshotService.cs`) — JSON-snapshots in `%LOCALAPPDATA%\WingetAppDeployer.WinUI\snapshots\`:
+**SnapshotService** (`Services/SnapshotService.cs`) — JSON-snapshots in `%LOCALAPPDATA%\SetupToolbox\snapshots\`:
 - `CaptureAsync(tweaks, description)` leest vóór elke Apply de actuele registry-state van alle ops die zouden worden geschreven (incl. `WasAbsent` markers) en parkeert die als JSON
 - `RestoreAsync(snapshotId)` zet de exacte staat terug: schrijft `PreviousValue` waar mogelijk, deletet de value als die origineel absent was. Splitst lokale (HKCU non-policy) van elevated (HKLM + HKCU Policies) ops — elevated via 1 UAC reg.exe batch, zelfde patroon als TweakService.ApplyAsync
 - Auto-prune op 20 snapshots; oudere worden silent verwijderd. Per snapshot: id (timestamp + guid-fragment), description (user-defined of auto-gegenereerd uit tweak-namen), createdAt, tweakIds, entries
@@ -361,7 +371,7 @@ User-feedback v0.9.4 → "Zijn alle changes wel veilig en stabiel voor het syste
 - `BackupBeforeApplyMode` enum (Ask/Always/Never) + property (default Ask)
 - `RestorePointBeforeDeepClean` + `DeepCleanRestorePointConfigured` bools
 - `RestorePointBeforeDebloat` + `DebloatRestorePointConfigured` bools
-- JSON-persisted naar `%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json` zoals bestaande settings
+- JSON-persisted naar `%LOCALAPPDATA%\SetupToolbox\settings.json` zoals bestaande settings
 
 ### v0.9.4 — Ads & Tracking + Win11 24H2+ Policies-ACL fix + Partial-state UX
 
@@ -477,7 +487,7 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 
 ### v0.8.11 — Diagnostic logs gated + multi-badge + empty-state + auto-refresh + dialog search
 
-- **Diagnostic logs uit voor productie**: nieuwe `Helpers/Diagnostics.cs` met `Enabled` static-readonly bool (false in productie). Alle persistent diagnostic logfiles (`WingetAppDeployer_deepclean.log` / `_leftovers.log` / `_debloat.log` / `_toast.log`) lopen nu via `Diagnostics.Log(fileName, msg)` — no-op wanneer Enabled=false. Geen rommel meer in `%TEMP%` op user-systemen. Voor dev: flip de readonly naar true om de full per-scan trace weer aan te zetten. Load-bearing IPC logs (timestamped per-batch elevated PS-batches voor delete-progress + `_schtasks.log` voor schtasks stderr capture) lopen NIET via deze gate — die hebben hun eigen lifecycle en zijn nodig voor de UI om progress te tonen
+- **Diagnostic logs uit voor productie**: nieuwe `Helpers/Diagnostics.cs` met `Enabled` static-readonly bool (false in productie). Alle persistent diagnostic logfiles (`SetupToolbox_deepclean.log` / `_leftovers.log` / `_debloat.log` / `_toast.log`) lopen nu via `Diagnostics.Log(fileName, msg)` — no-op wanneer Enabled=false. Geen rommel meer in `%TEMP%` op user-systemen. Voor dev: flip de readonly naar true om de full per-scan trace weer aan te zetten. Load-bearing IPC logs (timestamped per-batch elevated PS-batches voor delete-progress + `_schtasks.log` voor schtasks stderr capture) lopen NIET via deze gate — die hebben hun eigen lifecycle en zijn nodig voor de UI om progress te tonen
 - **Multi-badge op gemixte bundles** in `DeepCleanDialog.BuildBundleCard`: voorheen toonde een bundle alleen de category-badge van het eerste item + een generieke "N folders" count-badge. Voor een gemixte bundle (bv. folder + 2× HKCU vendor van dezelfde app) zag user dus alleen "Orphaned folder" als badge, de HKCU-items verborgen in de Expander. Nu: één badge per unieke category in de bundle, met `×N` count-suffix wanneer er meer dan 1 item per category is. Voorbeeld: bundle "Brave" toont nu naast elkaar `Orphaned folder` + `HKCU vendor ×2`. Replacement van de oude dubbele badge (category + folder-count), netto cleaner
 - **Empty-state UI op DeepCleanPage**: nieuw `EmptyStatePanel` border met groen `&#xE73E;` checkmark-icon + heading + uitleg. Wordt zichtbaar wanneer een scan 0 items oplevert, i.p.v. de "nothing to clean" InfoBar. Voelt meer als positieve feedback ("looking clean!") dan als een dichtklapbare success-bar
 - **Auto-refresh na delete**: nieuwe `isAutoRefresh` parameter op `RunScanAsync`. Na een succesvolle delete-batch (`SuccessCount > 0`) triggert de page automatisch dezelfde scan-kind opnieuw als verify-pass. Drie outcomes: (1) 0 items remaining → empty-state met "cleanup verified" heading, success-InfoBar van de vorige delete blijft staan, (2) items remaining → warning-InfoBar "N items still present after cleanup", geen automatische tweede dialog (anders wordt het opdringerig na een failed delete), (3) auto-refresh roept geen nieuwe auto-refresh aan (geen loop)
@@ -618,13 +628,13 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 - Nieuwe `Dialogs/DeepCleanDialog` mirror van LeftoverCleanupDialog met preview + delete fases, items gegroepeerd op IsSafe-tier (Safe to clean → Caution — review carefully), per item: checkbox + naam + category badge + path + omschrijving + size + admin-marker + last-modified (alleen orphaned). Footer toont totaal-vrij-te-maken-ruimte zodra user iets aanvinkt. Caution-tier items hebben gele rand, safe-tier groene rand
 - Sidebar-restructure: NavigationView "Debloat" wordt nu een parent met `SelectsOnInvoked="False"` + `IsExpanded="True"` en twee sub-items: **Apps** (de bestaande MS / OEM / All apps flows op DebloatPage) en **Deep clean** (nieuwe DeepCleanPage). Klik op de parent klapt de groep in/uit zonder zelf te navigeren — sub-items hebben hun eigen Tag → page mapping in MainWindow.NavView_SelectionChanged. Deep clean kreeg een eigen pagina i.p.v. een in-page Expander zodat de pagina-titel + InfoBar + scan-cards eigen ruimte krijgen
 - `App.DeepClean` singleton toegevoegd
-- Diagnostic log per scan in `%TEMP%\\WingetAppDeployer_deepclean.log` met per-target size-trace + per-folder match-decision
+- Diagnostic log per scan in `%TEMP%\\SetupToolbox_deepclean.log` met per-target size-trace + per-folder match-decision
 
 ### v0.8.5 — Restant-opruiming direct na uninstall
 
 - Nieuwe `Models/LeftoverItem` met `LeftoverType` enum (`RegistryKey` / `ProgramFilesFolder` / `AppDataFolder`) en `LeftoverConfidence` (`High` / `Medium` / `Low`). Confidence bepaalt of het item default aangevinkt staat in de cleanup-dialog: high = checked (exact-match), medium/low = unchecked. Properties: Path, SourceAppName, SizeBytes (lazy folder-walk), RequiresElevation. UI helpers voor type-badge + size-label
 - Nieuwe `Models/UninstalledAppRef` record (DisplayName + Publisher + PackageName + WingetId) als input voor de scanner. Lichtgewicht alternatief voor het meegeven van zware UI-models — scanner heeft genoeg aan deze 4 velden om matches te vinden
-- Nieuwe `Services/LeftoverScannerService` scant drie locatie-types parallel: (1) registry uninstall keys (HKLM 64-bit + WOW6432Node + HKCU) — match op DisplayName + Publisher, (2) Program Files / Program Files (x86) folder-namen, (3) `%LOCALAPPDATA%` / `%APPDATA%` / `%PROGRAMDATA%` folders. Match-tier-systeem: exact-na-normalisatie = high, substring-bidirectional = medium (skipt korte namen om vendor-collisions zoals "MS"/"HP" te voorkomen), publisher-only = low. Protected-list voor AppData-folders die we nooit voorstellen (`Microsoft`, `Windows`, `Packages`, `Temp`, `WindowsApps`, `INetCache` etc.) zodat een Microsoft-bloatware uninstall niet de hele `%LOCALAPPDATA%\Microsoft` map suggereert. Diagnostic log per scan in `%TEMP%\\WingetAppDeployer_leftovers.log` met per-item match-trace voor debugging
+- Nieuwe `Services/LeftoverScannerService` scant drie locatie-types parallel: (1) registry uninstall keys (HKLM 64-bit + WOW6432Node + HKCU) — match op DisplayName + Publisher, (2) Program Files / Program Files (x86) folder-namen, (3) `%LOCALAPPDATA%` / `%APPDATA%` / `%PROGRAMDATA%` folders. Match-tier-systeem: exact-na-normalisatie = high, substring-bidirectional = medium (skipt korte namen om vendor-collisions zoals "MS"/"HP" te voorkomen), publisher-only = low. Protected-list voor AppData-folders die we nooit voorstellen (`Microsoft`, `Windows`, `Packages`, `Temp`, `WindowsApps`, `INetCache` etc.) zodat een Microsoft-bloatware uninstall niet de hele `%LOCALAPPDATA%\Microsoft` map suggereert. Diagnostic log per scan in `%TEMP%\\SetupToolbox_leftovers.log` met per-item match-trace voor debugging
 - `LeftoverScannerService.DeleteAsync` splitst per RequiresElevation: HKCU + AppData (user) gaan in-process via `Registry.DeleteSubKeyTree` / `Directory.Delete`; HKLM + Program Files + ProgramData gaan in één elevated PS-batch met `reg.exe delete /f` of `Remove-Item -Recurse -Force`. Eén UAC prompt voor de hele admin-required subset, log-tail-pattern voor result-parsing zoals BloatwareService / MixedSourceUninstaller
 - Nieuwe `Dialogs/LeftoverCleanupDialog` met preview-fase + delete-fase. Preview groepeert items per LeftoverType (Registry → Program Files → AppData), per item: checkbox + path + size + confidence-label + "from <app>" badge + admin-marker. Confidence-tier kleurt de border subtiel (high = success-green, medium/low = neutral). "Select all" toggle + selection-status footer ("X selected · Y need administrator rights"). Delete-fase swap UI naar progress-bar + status-tekst, na voltooiing wordt Primary een Close-knop met summary. **Always preview, never auto-delete** — secondary "Skip" sluit zonder iets te verwijderen
 - `SettingsService.ScanLeftoversAfterUninstall` (default true) + nieuwe **"Uninstall"** sectie op SettingsPage met ToggleSwitch. Wanneer false: na uninstall geen scan, geen dialog — user kan handmatig nog v0.8.6 deep-clean draaien
@@ -634,7 +644,7 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 ### v0.8.4 — Unified all-installed-apps sectie
 
 - Nieuwe `Models/InstalledAppEntry` met `InstalledSource` enum (`Winget` / `Store` / `Web`). Properties: DisplayName, Identifier (winget ID / PackageFullName / registry key path), Publisher, Version, IsSelected (INPC), `IsSystemComponent` flag, source-aware UI helpers (badge text + brush + tooltip, IconVisibility, GenericIconVisibility, SystemBadgeVisibility, Subtitle). Voor Winget-apps die ook in apps.json staan houden we een referentie naar de App-instance zodat we het bundled icon kunnen tonen; voor Store/Web (en Winget zonder catalog match) tonen we een generieke OEM-icon glyph. Source-namen: `Winget` = winget kan de app managen (Source-kolom uit `winget list`), `Store` = Microsoft Store / AppX, `Web` = vendor-installer download (MSI/EXE niet bekend bij winget of Store)
-- Nieuwe `Services/InstalledAppsService` detecteert uit drie bronnen parallel via `Task.WhenAll`: (1) `winget list` (deelt cache met `WingetService` — één gezamenlijke call i.p.v. twee), gefilterd op `Source=winget` óf catalog-match — entries met `Source=msstore` / leeg vallen door naar AppX/Registry detectie, (2) `Get-AppxPackage` voor Microsoft Store / AppX met framework + resource packages eruit gefilterd, system-AppX (`SignatureKind=System`) wordt mét `IsSystemComponent` flag bewaard zodat user ze achter de "Show system components" checkbox kan tonen, (3) registry uninstall keys (`HKLM\\SOFTWARE\\...\\Uninstall` 64-bit + 32-bit `WOW6432Node` + `HKCU` equivalent), filtert Windows Updates / hotfixes / SystemComponent eruit. Cross-source dedup op DisplayName met prioriteit Winget > Store > Web. Diagnostic log per refresh in `%TEMP%\\WingetAppDeployer_debloat.log` met per-bron count + duration zodat detectie-issues debugbaar zijn
+- Nieuwe `Services/InstalledAppsService` detecteert uit drie bronnen parallel via `Task.WhenAll`: (1) `winget list` (deelt cache met `WingetService` — één gezamenlijke call i.p.v. twee), gefilterd op `Source=winget` óf catalog-match — entries met `Source=msstore` / leeg vallen door naar AppX/Registry detectie, (2) `Get-AppxPackage` voor Microsoft Store / AppX met framework + resource packages eruit gefilterd, system-AppX (`SignatureKind=System`) wordt mét `IsSystemComponent` flag bewaard zodat user ze achter de "Show system components" checkbox kan tonen, (3) registry uninstall keys (`HKLM\\SOFTWARE\\...\\Uninstall` 64-bit + 32-bit `WOW6432Node` + `HKCU` equivalent), filtert Windows Updates / hotfixes / SystemComponent eruit. Cross-source dedup op DisplayName met prioriteit Winget > Store > Web. Diagnostic log per refresh in `%TEMP%\\SetupToolbox_debloat.log` met per-bron count + duration zodat detectie-issues debugbaar zijn
 - `Services/BloatwareService` omgebouwd naar **detection-driven** i.p.v. hardcoded curated lijst — gebruikt dezelfde `Get-AppxPackage` call en classificeert via vendor-patronen (Microsoft.* + MicrosoftCorporationII.* + MSTeams voor Microsoft, publisher CN= patterns + PFN-prefixes voor HP/Dell/Lenovo/ASUS/Acer/MSI). Curated `BloatwareItem.CuratedMetadata` dict (~50 entries) verrijkt bekende packages met friendly DisplayName + Description; onbekende krijgen de raw package-name. Voorkomt dat we hardcoded bloatware lists moeten onderhouden ("anders kan je aan de gang blijven")
 - Nieuwe `Services/MixedSourceUninstaller` runt een gemengde batch met per-source dispatch: Winget-items via bestaande `WingetService.UninstallAppAsync` sequentieel (geen UAC), Store + Web items in één gecombineerde elevated PS-batch zodat user maar één UAC prompt ziet voor alle admin-required items. `MsiExec /X{GUID}` patronen krijgen `/quiet /norestart` toegevoegd zodat MSI-uninstalls silent lopen — non-MSI installers vertrouwen op hun eigen `QuietUninstallString` (anders krijg je gewoon de installer's UI, dezelfde caveat als bij v0.8.1)
 - Nieuwe `Dialogs/AllAppsUninstallDialog` consumeert `MixedUninstallProgress` events met source-badge per card, gecombineerde "X of Y done" header, UAC-hint die alleen verschijnt als de batch ook elevated items bevat (pure Winget-batches niet). Cancelled-state bij UAC denial (zelfde patroon als v0.8.2 BloatwareUninstallDialog)
@@ -665,14 +675,14 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 - `WingetService.UninstallAppsAsync(IReadOnlyList<App>, IProgress<UninstallProgress>)` — sequential batch met per-app progress events, mirror van `InstallAppsAsync` API. Sequential by design omdat parallel uninstall meer kans geeft op Windows Installer locks (MSI-engine = single-instance) zonder noemenswaardig snelheidsvoordeel — uninstall is sowieso snel. Nieuwe `UninstallProgress` record + `UninstallPhase` enum (Pending / Running / Success / Failed)
 - Nieuwe `Dialogs/UninstallDialog.xaml` + `.xaml.cs` als spiegel van `InstallDialog`. Geen 4-stage ring zoals bij install (geen Downloading/Verifying/Installing — uninstall is één action), wel: ProgressRing tijdens Pending, indeterminate ProgressBar tijdens Running, checkmark op Success, error glyph op Failed. Per-app live message, header met "X of Y done" tijdens batch, summary "X uninstalled, Y failed" bij voltooiing. `HadSuccessfulUninstall` property zodat de page kan reageren op een geslaagde batch
 - `DebloatPage` herontworpen: card-based lijst (mirror van CategoryDetailPage card layout — icon + naam + winget ID + checkbox), Tapped op de hele card toggelt selectie (CheckBox `IsHitTestVisible=False`), hover-effect via `CardBackgroundFillColorSecondaryBrush`. Footer met selection count + Clear all + Uninstall button, plus Select all toggle in de toolbar. Confirm ContentDialog ("Uninstall N apps?") voor de batch start. `OnNavigatedFrom` cleared `IsSelectedForUninstall` zodat een vergeten selectie niet later terug-popt
-- `WingetAppDeployer.WinUI.csproj` krijgt nu wel een `<Version>` / `<AssemblyVersion>` / `<FileVersion>` zodat exe metadata en assembly version mee-bumpen per release. Eerste set op 0.8.1
+- `SetupToolbox.csproj` krijgt nu wel een `<Version>` / `<AssemblyVersion>` / `<FileVersion>` zodat exe metadata en assembly version mee-bumpen per release. Eerste set op 0.8.1
 
 ### v0.7.8 — Toast notificatie fix via Microsoft.Toolkit.Uwp.Notifications
 - v0.7.7's `Microsoft.Windows.AppNotifications.AppNotificationManager.Default.Register()` faalde silent op unpackaged WinUI 3 apps met `COMException: Class not registered` — vereist een COM activator class die WinAppSDK 1.8 niet auto-registreert
 - Switch naar `Microsoft.Toolkit.Uwp.Notifications` 7.x (NuGet `Microsoft.Toolkit.Uwp.Notifications`). `ToastNotificationManagerCompat` doet bij eerste `ToastContentBuilder().Show()` automatisch de AUMID-registratie in HKCU op basis van het exe-pad — geen COM activator class of Start Menu shortcut nodig. Werkt out-of-the-box voor unpackaged Win32/WinUI apps
 - `Helpers/ToastHelper.cs` herschreven met `ToastContentBuilder`. Geen `Register()` call meer in App constructor — registratie is implicit bij Show
 - Nieuw `/toasttest` debug command-line switch in App.xaml.cs voor snelle dev-verificatie zonder eerst `winget upgrade --all` (~30-60s) te wachten. Toont meteen de success-toast en exit
-- Diagnostic logfile in `%TEMP%\WingetAppDeployer_toast.log` met Show()-resultaat (OK / exception). Aangetoond effectief tijdens debug van het v0.7.7 issue
+- Diagnostic logfile in `%TEMP%\SetupToolbox_toast.log` met Show()-resultaat (OK / exception). Aangetoond effectief tijdens debug van het v0.7.7 issue
 - Bekend issue: `System.Drawing.Common` 4.7.0 transient dep van het toolkit-pakket heeft een NU1904 vulnerability warning. Niet uitbuitbaar via toast-content (we passen geen images aan via System.Drawing). Wordt opgelost zodra toolkit een nieuwere versie release of we naar WinAppSDK's eigen API switchen wanneer die voor unpackaged apps gerepareerd is
 
 ### v0.7.7 — Toast notificatie na /autoupdate
@@ -701,13 +711,13 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 ### v0.7.3 — Post-install schedule prompt + dialog polish
 - **Post-install "Schedule auto-updates?" prompt**: nieuwe `Helpers/ScheduleAutoUpdatePrompt.cs` met static `MaybeShowAsync(XamlRoot)`. Triggert na een succesvolle InstallDialog (alleen als `HadSuccessfulInstall == true` én er nog geen scheduled task is én user heeft niet eerder "Don't ask again" geklikt). 3 knoppen: **Schedule** → opent ScheduleDialog, **Don't ask again** → zet `DontAskAboutScheduling = true`, **Not now** → niets. Aangeroepen vanuit zowel `AppsPage.InstallButton_Click` als `CategoryDetailPage.InstallButton_Click`. Nieuwe `InstallDialog.HadSuccessfulInstall` property (set wanneer winget `successCount > 0`)
 - **SettingsService** uitgebreid met `DontAskAboutScheduling` (default `false`)
-- **`TaskSchedulerService.CreateUpdateTaskAsync`** refactor: schtasks-aanroep gewrapt in `cmd.exe /c "schtasks ... > log 2>&1"` zodat we stdout+stderr kunnen capturen ondanks `UseShellExecute=true` (vereist voor `Verb=runas`). Resolved silent quoting issues — schtasks lijkt een andere quote-parsing te volgen wanneer direct via UseShellExecute aangeroepen vs via cmd. Logfile in `%TEMP%\WingetAppDeployer_schtasks.log`. Return type van `CreateTaskResult` enum naar nieuw `CreateTaskOutcome` record (`Result` + `ErrorOutput`). InfoBar in ScheduleDialog toont nu de echte schtasks output bij `Failed`
+- **`TaskSchedulerService.CreateUpdateTaskAsync`** refactor: schtasks-aanroep gewrapt in `cmd.exe /c "schtasks ... > log 2>&1"` zodat we stdout+stderr kunnen capturen ondanks `UseShellExecute=true` (vereist voor `Verb=runas`). Resolved silent quoting issues — schtasks lijkt een andere quote-parsing te volgen wanneer direct via UseShellExecute aangeroepen vs via cmd. Logfile in `%TEMP%\SetupToolbox_schtasks.log`. Return type van `CreateTaskResult` enum naar nieuw `CreateTaskOutcome` record (`Result` + `ErrorOutput`). InfoBar in ScheduleDialog toont nu de echte schtasks output bij `Failed`
 - **ScheduleDialog success-feedback**: na `CreateTaskResult.Success` blijft de dialog open, toont `InfoBarSeverity.Success` "Scheduled task created" met de schedule-omschrijving (Daily at HH:MM / Weekly on Monday / On user logon), primary disabled, Close-tekst → "Done"
 - **Rounded ContentDialog footer buttons**: WinUI 3 default geeft footer buttons 0 corner radius (snap-fit aan dialog edges). Nieuwe `DialogPrimaryButtonStyle` (BasedOn `AccentButtonStyle`) + `DialogDefaultButtonStyle` (BasedOn `DefaultButtonStyle`) in App.xaml met `CornerRadius="4"`. Toegepast via `PrimaryButtonStyle` / `SecondaryButtonStyle` / `CloseButtonStyle` op ScheduleDialog, InstallDialog, ScheduleAutoUpdatePrompt, en de SettingsPage Disable confirm/result dialogs
 - **`DefaultButton = None` fix** voor de Disable-confirm dialog: ContentDialog's `DefaultButton` property forceert AccentButtonStyle op de aangewezen knop en overschrijft custom `CloseButtonStyle`. Was `Close` (Cancel werd dus blauw), nu `None` zodat Disable accent blijft en Cancel neutraal grijs is. Voor destructive actions sowieso veiliger: geen Enter-shortcut
 
 ### v0.7.2 — Settings-toggle voor manual download fallback
-- Nieuwe `SettingsService` (singleton via `App.Settings`) — JSON-backed store in `%LOCALAPPDATA%\WingetAppDeployer.WinUI\settings.json`. Minimal start: alleen `FallbackToDownloadPage` (default `true` = bestaand v0.7.1 gedrag). Best-effort persist (try/catch op disk IO, in-memory state altijd consistent), camelCase JSON serializer. Wordt in v0.10.0 uitgebreid met de andere settings (`CheckForUpdatesOnStartup`, `ShowWelcomeBanner`, etc.)
+- Nieuwe `SettingsService` (singleton via `App.Settings`) — JSON-backed store in `%LOCALAPPDATA%\SetupToolbox\settings.json`. Minimal start: alleen `FallbackToDownloadPage` (default `true` = bestaand v0.7.1 gedrag). Best-effort persist (try/catch op disk IO, in-memory state altijd consistent), camelCase JSON serializer. Wordt in v0.10.0 uitgebreid met de andere settings (`CheckForUpdatesOnStartup`, `ShowWelcomeBanner`, etc.)
 - Nieuwe **"Installation"** sectie op SettingsPage met `ToggleSwitch` "Open vendor download pages". Initial sync via `_suppressToggleEvent` guard zodat page-navigatie niet elke keer settings.json terugschrijft
 - `InstallDialog` respecteert de toggle: wanneer UIT worden manual-download apps geskipt met nieuwe `InstallItemState.Skipped` ("Skipped" label, secondary text colour) i.p.v. dat de browser geopend wordt. Final summary text combineert nu winget + manual-opened + skipped: "X installed, Y failed, Z manual downloads opened, N skipped"
 - Bonus fix: `manualOpenedCount` telt nu alleen state `ManualOpened` (i.p.v. raw count van manual apps), zodat een Failed manual-app niet dubbel in de summary verschijnt
@@ -758,9 +768,9 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 - Resultaat: `dotnet publish -c Release -p:PublishProfile=win-x64` levert een drop-and-run folder van ~262 MB op (ZIP'd ~70-80 MB voor distributie)
 
 ### v0.5.9 — WPF gearchiveerd
-- WPF source (`src/WingetAppDeployer/`) + Launcher (`src/Launcher/`) uit de repo verwijderd
+- WPF source (`src/SetupToolbox/`) + Launcher (`src/Launcher/`) uit de repo verwijderd
 - Code blijft recoverable via git tag `wpf-final-v1.2.1`
-- Solution opgeschoond — alleen `WingetAppDeployer.WinUI` blijft over
+- Solution opgeschoond — alleen `SetupToolbox` blijft over
 - README, INTEGRATIE.md, CHANGELOG.md, CLAUDE.md, NEXT-STEPS.md herschreven naar WinUI-only context
 
 ### Curated dataset (apps.json v2.0.0)
@@ -1056,14 +1066,14 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 
 > **Hervolgorde (user, 20 mei 2026):** de Inno Setup installer (stond op v1.0) is **naar voren gehaald**, want het is de *enabler* voor self-update. Reden: de app is unpackaged + folder-based (self-contained WinAppSDK, geen single-file → [WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Een draaiende folder-app kan z'n eigen geladen DLL's niet overschrijven; een installer kan dat wél (in-use file replace + relaunch). Self-update wordt dan triviaal: download `setup.exe` → `/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`. Een zelfgebouwde PowerShell-folder-swapper vermeden.
 
-~~**Fase 1 — Inno Setup installer**~~ — **gedaan in v0.10.0** (zie Voltooide versies): per-user installer (geen UAC), `setup.exe` via `installer/WingetAppDeployer.iss` + `scripts/build-installer.ps1`, getest op silent install / launch / uninstall.
+~~**Fase 1 — Inno Setup installer**~~ — **gedaan in v0.10.0** (zie Voltooide versies): per-user installer (geen UAC), `setup.exe` via `installer/SetupToolbox.iss` + `scripts/build-installer.ps1`, getest op silent install / launch / uninstall.
 
 ---
 
 **v0.10.1 — Self-update** (de resterende Fase 2 + 3 van de oorspronkelijke v0.10.0):
 
 **Fase 2 — WPF-releases opruimen (op publish-moment):**
-- GitHub-releases **v1.0.0 + v1.1.0** (WPF) verwijderen zodat `releases/latest` weer de WinUI-app reflecteert (user-oplossing voor de versie-collisie — WPF `releases/latest` v1.1.0 > WinUI 0.9.20 zou anders een valse "update" naar de oude WPF-exe triggeren). WinUI-releases (v0.5.0-alpha, v0.6.3) blijven. WPF-broncode veilig in git-tag `wpf-final-v1.2.1`. Onomkeerbaar/publiek → alleen met expliciete user-OK of door user zelf.
+- GitHub-releases **v1.0.0 + v1.1.0** (WPF) + **v0.5.0-alpha** (oude launcher-build, `Launcher.exe`/`WinAppInstaller.exe`) verwijderen zodat `releases/latest` weer de WinUI-app reflecteert (user-oplossing voor de versie-collisie — WPF `releases/latest` v1.1.0 > WinUI zou anders een valse "update" naar de oude WPF-exe triggeren). **Alleen `v0.6.3` (WinUI icon-milestone) blijft** als historie (user-keuze 20 mei 2026). Git-tags blijven staan (beïnvloeden `releases/latest` niet); WPF-broncode veilig in `wpf-final-v1.2.1`. Onomkeerbaar/publiek → alleen met expliciete user-OK.
 - Eerste WinUI-installer-release uitbrengen met de `setup.exe` als asset.
 
 **Fase 3 — Self-update-laag:**
@@ -1071,6 +1081,15 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 - "Update beschikbaar"-InfoBar in MainWindow → "Update now" → download `setup.exe` → run `/SILENT` → installer swapt + herstart.
 - Welcome-banner op AppsPage (dismissible via X + setting).
 - `SettingsService` uitbreiden: `CheckForUpdatesOnStartup` (default true) + `ShowWelcomeBanner` (default true). Settings-UI: toggles + "Check for updates now".
+
+### v1.0 go-live — nog te doen (user-acties + website)
+
+De rebrand, self-update en proprietary licentie zijn gedaan (zie Voltooide versies → **v1.0.0**). Wat rest om v1.0 écht live te zetten:
+
+1. **GitHub-repo hernoemen** → `SetupToolbox` (repo Settings → Rename, of `gh repo rename SetupToolbox`) + lokale remote bijwerken. *(Bewust niet door de assistant gedaan — raakt jouw remote/account.)*
+2. **Repo publiek zetten** (secrets-scan was clean: `data-source.local.txt` nooit gecommit, geen tokens in 87 commits).
+3. **v1.0.0-release publiceren** met `SetupToolbox-v1.0.0.exe`: `scripts/build-installer.ps1` → `gh release create v1.0.0 installer/Output/SetupToolbox-v1.0.0.exe …`. Pas dán werkt self-update live (privé-repo gaf de `404`).
+4. **Website** — `website/`-map in deze repo (**React + Tailwind + GSAP / react-bits**): download/landing-pagina op **`projects.dpvb.nl/setup-toolbox`** met intro + features + download-knop die naar de GitHub-release linkt.
 
 ### Latere milestones
 
@@ -1102,25 +1121,25 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 
 ```bash
 # Build
-dotnet build src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj -c Debug
+dotnet build src/SetupToolbox/SetupToolbox.csproj -c Debug
 
 # Run
-dotnet run --project src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj -c Debug
+dotnet run --project src/SetupToolbox/SetupToolbox.csproj -c Debug
 
 # Self-contained release publish
-dotnet publish src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj `
+dotnet publish src/SetupToolbox/SetupToolbox.csproj `
     -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -o ./release
 
 # GitHub release
-gh release create v0.X.Y ./release/WingetAppDeployer.WinUI.exe --title "WingetAppDeployer v0.X.Y"
+gh release create v0.X.Y ./release/SetupToolbox.exe --title "SetupToolbox v0.X.Y"
 ```
 
 ### Project structuur
 
 ```
 src/
-└── WingetAppDeployer.WinUI/             # Native Win11 app (WinUI 3 + WinAppSDK 1.8)
+└── SetupToolbox/             # Native Win11 app (WinUI 3 + WinAppSDK 1.8)
     ├── App.xaml / App.xaml.cs
     ├── MainWindow.xaml / .xaml.cs        # MicaBackdrop BaseAlt + NavigationView
     ├── Models/AppModels.cs               # App (INPC), Category, SubcategoryGroup

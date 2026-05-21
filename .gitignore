@@ -75,8 +75,7 @@ $RECYCLE.BIN/
 *.exe
 *.dll
 *.pdb
-!Launcher.exe
-!WingetAppDeployer.exe
+!SetupToolbox.exe
 
 # Publish profiles — *.pubxml.user blijft genegeerd (per-user state),
 # de profielen zelf checken we wel in zodat ze in sync blijven met de
@@ -102,6 +101,7 @@ data/icons-report.txt
 data/app-icon-preview.png
 
 # Release artifacts (gepubliceerd via GitHub Releases, niet in repo)
+SetupToolbox-*.zip
 WingetAppDeployer-*.zip
 release-singlefile/
 release/

@@ -13,9 +13,9 @@ dependencies — kopieer hem ergens en run.
 
 ```powershell
 # In je debloat / autounattend setup script
-$exeUrl = "https://github.com/MisterDuckles/WinGetAppDeployer/releases/latest/download/WingetAppDeployer.WinUI.exe"
-$installDir = "$env:ProgramFiles\WingetAppDeployer"
-$exePath = Join-Path $installDir "WingetAppDeployer.WinUI.exe"
+$exeUrl = "https://github.com/MisterDuckles/SetupToolbox/releases/latest/download/SetupToolbox.exe"
+$installDir = "$env:ProgramFiles\SetupToolbox"
+$exePath = Join-Path $installDir "SetupToolbox.exe"
 
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Invoke-WebRequest -Uri $exeUrl -OutFile $exePath -UseBasicParsing
@@ -23,7 +23,7 @@ Invoke-WebRequest -Uri $exeUrl -OutFile $exePath -UseBasicParsing
 # Desktop shortcut voor alle users
 $publicDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
 $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut(
-    (Join-Path $publicDesktop 'WingetAppDeployer.lnk'))
+    (Join-Path $publicDesktop 'SetupToolbox.lnk'))
 $shortcut.TargetPath = $exePath
 $shortcut.Save()
 ```

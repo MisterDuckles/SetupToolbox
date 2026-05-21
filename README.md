@@ -1,4 +1,4 @@
-# WingetAppDeployer 🪟
+# SetupToolbox 🪟
 
 Native Windows 11 app voor het in batch installeren van Windows-applicaties via `winget`. Bedoeld voor fresh-install setups en debloat-flows.
 
@@ -18,9 +18,9 @@ Native Windows 11 app voor het in batch installeren van Windows-applicaties via 
 ## 🏗️ Project Structuur
 
 ```
-WingetAppDeployer/
+SetupToolbox/
 ├── src/
-│   └── WingetAppDeployer.WinUI/      # Native Win11 app (WinUI 3 + WinAppSDK 1.8)
+│   └── SetupToolbox/      # Native Win11 app (WinUI 3 + WinAppSDK 1.8)
 │       ├── App.xaml / .xaml.cs
 │       ├── MainWindow.xaml / .xaml.cs    # NavigationView shell + Mica backdrop
 │       ├── Models/AppModels.cs            # App (INPC), Category, SubcategoryGroup
@@ -38,7 +38,7 @@ WingetAppDeployer/
 
 ### Voor gebruikers
 
-Download de nieuwste `.exe` van de [Releases pagina](https://github.com/MisterDuckles/WinGetAppDeployer/releases) en run.
+Download de nieuwste `.exe` van de [Releases pagina](https://github.com/MisterDuckles/SetupToolbox/releases) en run.
 
 ### Voor developers
 
@@ -48,14 +48,14 @@ Download de nieuwste `.exe` van de [Releases pagina](https://github.com/MisterDu
 - Visual Studio 2026 Community (of Rider) — niet strict nodig, `dotnet` CLI volstaat
 
 ```powershell
-git clone https://github.com/MisterDuckles/WinGetAppDeployer.git
-cd WinGetAppDeployer
+git clone https://github.com/MisterDuckles/SetupToolbox.git
+cd SetupToolbox
 
 # Build + run
-dotnet run --project src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj -c Debug
+dotnet run --project src/SetupToolbox/SetupToolbox.csproj -c Debug
 
 # Self-contained release publish
-dotnet publish src/WingetAppDeployer.WinUI/WingetAppDeployer.WinUI.csproj `
+dotnet publish src/SetupToolbox/SetupToolbox.csproj `
     -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -o ./release
 ```
@@ -101,7 +101,7 @@ Open **Settings** → **Scheduled auto-updates** → **Set up**:
 - Tijd kiezen (behalve OnStartup)
 - UAC-prompt voor admin rechten (taak draait met highest privileges)
 
-Achter de schermen maakt dit een Windows scheduled task `WingetAppDeployer_WinUI_AutoUpdate` die de exe runt met `/autoupdate` argument. App detecteert dat, runt `winget upgrade --all --silent`, en exit zonder window.
+Achter de schermen maakt dit een Windows scheduled task `SetupToolbox_AutoUpdate` die de exe runt met `/autoupdate` argument. App detecteert dat, runt `winget upgrade --all --silent`, en exit zonder window.
 
 ## 🛠️ Tech stack
 

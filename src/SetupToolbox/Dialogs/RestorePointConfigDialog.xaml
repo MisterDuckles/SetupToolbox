@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="SetupToolbox.Dialogs.RestorePointConfigDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="System Restore Points voor deze functie?"
+    PrimaryButtonText="Ja, restore point maken"
+    SecondaryButtonText="Nee, sla deze stap over"
+    DefaultButton="Primary"
+    CornerRadius="8">
+
+    <StackPanel Spacing="12" MinWidth="460">
+        <TextBlock x:Name="ContextText"
+                   TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        <InfoBar Severity="Informational"
+                 IsOpen="True"
+                 IsClosable="False"
+                 Title="Wat is een restore point?"
+                 Message="Een Windows System Restore Point is een momentopname van je registry + system files + installed programs. Bij problemen kan je het systeem terugzetten via 'System Properties > System Protection > System Restore'." />
+
+        <Grid x:Name="StatusGrid" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <FontIcon x:Name="StatusGlyph"
+                      Grid.Column="0"
+                      Glyph="&#xE73E;"
+                      FontSize="16"
+                      VerticalAlignment="Top"
+                      Margin="0,2,0,0" />
+            <TextBlock x:Name="StatusText"
+                       Grid.Column="1"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource CaptionTextBlockStyle}" />
+        </Grid>
+
+        <TextBlock Text="Je kan deze keuze later wijzigen in Settings &gt; System Restore Points."
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                   FontStyle="Italic" />
+    </StackPanel>
+</ContentDialog>

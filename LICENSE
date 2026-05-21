@@ -1,21 +1,54 @@
-MIT License
+Setup Toolbox — License
+Copyright (c) 2026 Daan. All rights reserved.
 
-Copyright (c) 2026 Daan
+This is a source-available, proprietary license. It is NOT an open-source
+license: the source code is published so it can be read and so that
+improvements can be proposed, but no rights to use or reuse the code are
+granted beyond what is stated below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. DEFINITIONS
+   "Software"     — the source code contained in this repository.
+   "Application"  — the compiled, distributable build of the Software (the
+                    installer and the program it installs).
+   "Author"       — the copyright holder named above.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. THE APPLICATION (BINARIES)
+   You may freely download, install, and use the Application, at no cost,
+   for personal or commercial purposes. This permission applies to the
+   official builds distributed by the Author.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. THE SOURCE CODE
+   The Software is made available for viewing and for proposing
+   contributions (see section 4) ONLY. Except with the prior written
+   permission of the Author, you may NOT:
+     (a) copy, reproduce, or store the Software, in whole or in part, other
+         than the transient copying inherent in viewing it or in preparing a
+         contribution under section 4;
+     (b) modify, translate, or create derivative works of the Software;
+     (c) use the Software, in whole or in part, in any other project or
+         product, whether or not for profit;
+     (d) redistribute, publish, sublicense, sell, rent, or lend the Software.
+
+4. CONTRIBUTIONS
+   You may propose improvements by submitting a pull request. The Author is
+   under no obligation to review, accept, or respond to any contribution. By
+   submitting a contribution you grant the Author a perpetual, worldwide,
+   royalty-free, irrevocable license to use, modify, sublicense, and
+   incorporate your contribution into the Software and the Application.
+
+5. NO WARRANTY
+   THE SOFTWARE AND THE APPLICATION ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+   ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+   OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE, THE
+   APPLICATION, OR THE USE THEREOF.
+
+6. TRADEMARKS
+   "Setup Toolbox", the project name, and any associated logos are not
+   licensed for use except as necessary to refer accurately to this project.
+
+7. RESERVATION OF RIGHTS
+   All rights not expressly granted in this license are reserved by the
+   Author. For any permission beyond the scope of this license, please
+   contact the Author.

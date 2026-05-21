@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="SetupToolbox.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:SetupToolbox"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Setup Toolbox"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <!-- Mica Alt (BaseAlt): sterker wallpaper-doorschijn dan gewone Mica,
+             maar zonder de live-blur van DesktopAcrylic. Hetzelfde effect dat
+             Windows 11 Notepad en Terminal gebruiken. -->
+        <MicaBackdrop Kind="BaseAlt" />
+    </Window.SystemBackdrop>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar x:Name="AppTitleBar" Title="Setup Toolbox">
+            <TitleBar.IconSource>
+                <ImageIconSource ImageSource="Assets/AppIcon.ico" />
+            </TitleBar.IconSource>
+        </TitleBar>
+
+        <!-- Self-update (v0.10.1): verschijnt als er een nieuwere GitHub-release
+             is. 'Update now' downloadt de setup.exe + draait 'm silent. -->
+        <InfoBar x:Name="UpdateBar"
+                 Grid.Row="1"
+                 IsOpen="False"
+                 Severity="Informational"
+                 Title="Update beschikbaar"
+                 Margin="12,4,12,0">
+            <InfoBar.ActionButton>
+                <Button x:Name="UpdateNowButton"
+                        Content="Update now"
+                        Click="UpdateNowButton_Click" />
+            </InfoBar.ActionButton>
+            <InfoBar.Content>
+                <ProgressBar x:Name="UpdateProgress"
+                             Minimum="0"
+                             Maximum="1"
+                             Visibility="Collapsed"
+                             Margin="0,4,0,12" />
+            </InfoBar.Content>
+        </InfoBar>
+
+        <NavigationView x:Name="NavView"
+                        Grid.Row="2"
+                        PaneDisplayMode="Left"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="True"
+                        SelectionChanged="NavView_SelectionChanged"
+                        ItemInvoked="NavView_ItemInvoked">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Icon="AllApps" Content="Apps" Tag="Apps" />
+                <NavigationViewItem Icon="Setting" Content="Tweaks" Tag="Tweaks" />
+                <!-- Debloat parent met twee sub-items. SelectsOnInvoked=False zodat
+                     klik op "Debloat" alleen de groep open/dichtklapt zonder zelf
+                     te navigeren. Default IsExpanded=True zodat user meteen ziet
+                     dat er twee opties zijn. Sub-items hebben hun eigen Tag → page
+                     mapping in NavView_SelectionChanged. -->
+                <NavigationViewItem Icon="Delete" Content="Debloat" SelectsOnInvoked="False" IsExpanded="True">
+                    <NavigationViewItem.MenuItems>
+                        <NavigationViewItem Content="Apps" Tag="DebloatApps">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE71D;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <!-- Deep clean glyph: Sweep / E7B8 — Broom bestaat niet in
+                             de Symbol enum, vandaar custom FontIcon. -->
+                        <NavigationViewItem Content="Deep clean" Tag="DebloatDeepClean">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE7B8;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationViewItem.MenuItems>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>

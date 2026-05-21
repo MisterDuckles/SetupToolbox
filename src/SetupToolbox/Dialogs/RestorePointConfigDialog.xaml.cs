@@ -1,0 +1,63 @@
+using System;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using SetupToolbox.Services;
+
+namespace SetupToolbox.Dialogs;
+
+// First-run popup voor Deep Clean / Debloat: vraagt user éénmalig of we een
+// System Restore Point willen maken voor elke delete/uninstall-batch. Toont
+// ook de huidige status van System Protection + laatste restore point zodat
+// user weet wat te verwachten.
+//
+// Twee outcomes:
+//   Primary   = ja, restore points aanmaken (setting → true)
+//   Secondary = nee, overslaan (setting → false)
+//
+// Caller markt de "Configured" setting op true zodat deze dialog niet meer
+// triggert. User kan altijd later via Settings > System Restore Points de
+// toggle aanpassen.
+public sealed partial class RestorePointConfigDialog : ContentDialog
+{
+    /// <summary>
+    /// "Deep Clean" of "Debloat" — wordt in de dialoog-tekst gebruikt.
+    /// </summary>
+    public string OperationName { get; set; } = "deze functie";
+
+    public RestorePointConfigDialog()
+    {
+        InitializeComponent();
+        Opened += async (s, e) => await OnOpenedAsync();
+    }
+
+    private async System.Threading.Tasks.Task OnOpenedAsync()
+    {
+        ContextText.Text =
+            $"Vóór elke {OperationName}-operatie kunnen we een Windows System Restore Point maken. " +
+            $"Bij problemen zet één klik in System Properties alles terug naar dat moment. " +
+            $"Eén UAC-prompt voor checkpoint + delete samen, geen aparte dialog elke keer.";
+
+        var status = await App.RestorePoint.GetStatusAsync();
+        if (status.BlockedReason != null && status.BlockedReason.Contains("System Protection"))
+        {
+            StatusGlyph.Glyph = "";  // warning
+            StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
+            StatusText.Text = status.BlockedReason +
+                " Schakel 't aan via System Properties > System Protection als je deze veiligheidsnet wil gebruiken.";
+        }
+        else if (status.HoursSinceLast.HasValue)
+        {
+            var ago = RestorePointService.FormatAgo(TimeSpan.FromHours(status.HoursSinceLast.Value));
+            StatusGlyph.Glyph = "";  // checkmark
+            StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+            StatusText.Text = $"Laatste Windows restore point was {ago} geleden. System Protection is actief.";
+        }
+        else
+        {
+            StatusGlyph.Glyph = "";
+            StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+            StatusText.Text = "System Protection is actief, nog geen restore points op dit systeem.";
+        }
+    }
+}

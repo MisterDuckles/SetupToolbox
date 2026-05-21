@@ -1,4 +1,4 @@
-# Contributing to WingetAppDeployer
+# Contributing to SetupToolbox
 
 Bedankt voor je interesse om bij te dragen! 🎉
 
@@ -114,8 +114,8 @@ Of met subcategorieën:
 
 ```bash
 # Clone repo
-git clone https://github.com/YOUR_USERNAME/WingetAppDeployer.git
-cd WingetAppDeployer
+git clone https://github.com/YOUR_USERNAME/SetupToolbox.git
+cd SetupToolbox
 
 # Restore packages
 dotnet restore
@@ -124,7 +124,7 @@ dotnet restore
 dotnet build
 
 # Run
-cd src/WingetAppDeployer
+cd src/SetupToolbox
 dotnet run
 ```
 
@@ -132,7 +132,7 @@ dotnet run
 
 ```
 src/
-├── WingetAppDeployer/          # Main WPF application
+├── SetupToolbox/          # Main WPF application
 │   ├── Models/               # Data models
 │   ├── Services/             # Business logic
 │   │   ├── WingetService     # Winget operations
@@ -173,7 +173,7 @@ src/
 
 ## Bug Reports
 
-Found a bug? [Open een issue](https://github.com/YOUR_USERNAME/WingetAppDeployer/issues/new)!
+Found a bug? [Open een issue](https://github.com/YOUR_USERNAME/SetupToolbox/issues/new)!
 
 **Include:**
 - OS version (Windows 10/11)
@@ -184,7 +184,7 @@ Found a bug? [Open een issue](https://github.com/YOUR_USERNAME/WingetAppDeployer
 
 ## Feature Requests
 
-Heb je een idee? [Open een feature request](https://github.com/YOUR_USERNAME/WingetAppDeployer/issues/new)!
+Heb je een idee? [Open een feature request](https://github.com/YOUR_USERNAME/SetupToolbox/issues/new)!
 
 Beschrijf:
 - **Wat** je wil toevoegen
