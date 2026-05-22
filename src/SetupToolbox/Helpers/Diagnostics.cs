@@ -3,20 +3,24 @@ using System.IO;
 
 namespace SetupToolbox.Helpers;
 
-// Centrale gate voor diagnostic-logging dat in productie geen disk-IO doet.
+// Centrale gate voor diagnostische / install-logging. Aan/uit via de
+// Settings-toggle (App.Settings.ErrorLoggingEnabled). Logs gaan naar
+// %LocalAppData%\SetupToolbox\logs — één eigen map, te openen via de
+// "Open logmap"-knop in Settings (i.p.v. ruis in %TEMP%).
+//
 // Load-bearing IPC logs (elevated PS-batch progress + results, schtasks stderr
 // capture) lopen NIET via deze gate — die hebben hun eigen lifecycle en zijn
 // nodig voor de UI om progress te tonen of errors te reporten.
-//
-// Voor dev: flip Enabled naar true om de scan-diagnostics weer naar
-// %TEMP%\SetupToolbox_*.log te laten schrijven. In productie blijft 'ie
-// false zodat we geen ruis op de user z'n temp-folder achterlaten.
 internal static class Diagnostics
 {
-    // static readonly i.p.v. const zodat de compiler de body niet als
-    // unreachable code flagt (CS0162) wanneer Enabled=false. Runtime overhead
-    // is verwaarloosbaar (één bool-compare per call).
-    public static readonly bool Enabled = false;
+    // Runtime-toggle: leest de Settings-flag (default aan). App.Settings is een
+    // static singleton, dus geen extra dependency-injection nodig.
+    public static bool Enabled => App.Settings.ErrorLoggingEnabled;
+
+    /// <summary>Map met de logbestanden — geopend via de "Open logmap"-knop in Settings.</summary>
+    public static string LogDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SetupToolbox", "logs");
 
     /// <summary>
     /// Append een regel aan een diagnostic-logfile in %TEMP%. No-op wanneer
@@ -30,8 +34,9 @@ internal static class Diagnostics
         if (!Enabled) return;
         try
         {
-            var path = Path.Combine(Path.GetTempPath(), fileName);
-            File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
+            Directory.CreateDirectory(LogDir);
+            var path = Path.Combine(LogDir, fileName);
+            File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
         }
         catch
         {

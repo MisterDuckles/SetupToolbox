@@ -10,6 +10,14 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Voltooide versies
 
+### v1.0.1 — Fix: winget-installs falen op een schone install (msstore-bronfout)
+
+**Bug** (gevonden bij test op verse Windows-install): álle winget-installs faalden identiek. **Oorzaak:** het install-commando gaf geen `--source` mee → winget doorzocht óók de `msstore`-bron, die op verse installs een certificaat-fout geeft (`0x8a15005e` "server certificate did not match any of the expected values"). Winget weigert dan de winget-source-match automatisch te kiezen en stopt met *"specify --source"*. Dus een bron-laag-probleem, niet per app.
+
+- **Fix:** winget-apps pinnen nu op **`--source winget`** in `InstallAppAsync` → de `msstore`-bron wordt niet meer aangeraakt. (msstore-apps behouden hun eigen install-pad.)
+- **Foutlogging-toggle** (Settings → **Diagnostiek**, `ErrorLoggingEnabled`, default aan) + knop **"Open logmap"**: install- + scan-fouten (commando + exit-code + ruwe winget stdout/stderr) → `%LocalAppData%\SetupToolbox\logs\install.log`. De `Diagnostics`-gate leest nu deze runtime-toggle (was een compile-time const) en schrijft naar een eigen logmap i.p.v. `%TEMP%`.
+- **Betere UI-foutmeldingen:** echte winget exit-code (`0x…`) + verwijzing naar de log; specifieke melding bij de bron-/certificaatfout (hint: `winget source reset --force`).
+
 ### v1.0.0 — Rebrand naar "Setup Toolbox" + self-update + proprietary licentie
 
 **Rebrand** WingetAppDeployer → **Setup Toolbox** (oude naam te lang, botste met WingetUI/UniGetUI, dekte de lading niet meer: install + debloat + tweaks + deep clean). Volledige rename, ook intern: namespace `WingetAppDeployer_WinUI` → `SetupToolbox`, assembly/exe → `SetupToolbox.exe`, projectmap `src/SetupToolbox/`, solution `SetupToolbox.sln`, data-map `%LocalAppData%\SetupToolbox`, install-map `…\Programs\SetupToolbox`, installer-asset `SetupToolbox-v{ver}.exe`, repo-constante → `MisterDuckles/SetupToolbox`. Display-naam "Setup Toolbox" (met spatie), interne identifiers zonder spatie. AppId-GUID behouden (stabiele installer-identiteit). 87 bestanden via scripted literal find-replace (langste varianten eerst, BOM-preserving) + `git mv` voor map/csproj/sln/iss; `winget`-CLI-refs (WingetService etc.) ongemoeid.

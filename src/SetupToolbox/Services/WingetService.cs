@@ -460,15 +460,16 @@ public sealed class WingetService
         {
             progress?.Report($"Installing {wingetId}...");
 
-            // Source-bewust install. msstore apps (productID-formaat 9XXX of XPXXX)
-            // installeren TANTOE traag wanneer we --silent + --source msstore
-            // forceren — die combinatie gebruikt onder water een COM-pad dat de
-            // download-stream throttlet. `winget install <id>` zonder die flags
-            // (zoals user kan reproduceren in PowerShell) gaat direct via de
-            // native Microsoft Store backend en is meervoudig sneller.
-            //
-            // Voor reguliere winget apps blijven we wel --silent --exact gebruiken
-            // — daar werkt het wel goed en hebben we de stille install nodig.
+            // Source-bewust install:
+            //  - msstore apps (productID 9XXX/XPXXX): `winget install <id>` zonder
+            //    --silent/--source — die combinatie gaat via de native Store backend
+            //    en is veel sneller dan een geforceerd --source msstore COM-pad.
+            //  - reguliere winget apps: PIN op `--source winget`. Zonder --source
+            //    doorzoekt winget óók de msstore-bron; als die op een (schone)
+            //    machine een certificaat-fout geeft (0x8a15005e "server certificate
+            //    did not match"), weigert winget vervolgens de winget-match auto te
+            //    kiezen en stopt met "specify --source". Pinnen op winget vermijdt
+            //    de msstore-bron volledig.
             string args;
             if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase))
             {
@@ -476,23 +477,27 @@ public sealed class WingetService
             }
             else
             {
-                args = $"install --id {wingetId} --exact --silent --accept-source-agreements --accept-package-agreements";
+                args = $"install --id {wingetId} --exact --silent --source winget --accept-source-agreements --accept-package-agreements";
             }
 
+            LogInstall($"START {wingetId} (source={source}) -> winget {args}");
             var (exitCode, output, error) = await RunWingetCommandAsync(args, line => progress?.Report(line));
 
             if (exitCode == 0)
             {
+                LogInstall($"OK    {wingetId}");
                 progress?.Report("Installed");
                 return (true, "Installed");
             }
 
-            var friendly = FriendlyError(error, output, wingetId);
+            LogInstall($"FAIL  {wingetId} exit=0x{exitCode:X8} | stderr: {Trim1k(error)} | stdout: {Trim1k(output)}");
+            var friendly = FriendlyError(error, output, exitCode, wingetId);
             progress?.Report(friendly);
             return (false, friendly);
         }
         catch (Exception ex)
         {
+            LogInstall($"EXCEPTION {wingetId}: {ex.Message}");
             progress?.Report(ex.Message);
             return (false, ex.Message);
         }
@@ -562,7 +567,7 @@ public sealed class WingetService
         }
     }
 
-    private static string FriendlyError(string error, string output, string wingetId)
+    private static string FriendlyError(string error, string output, int exitCode, string wingetId)
     {
         var combined = error + output;
         if (combined.Contains("No applicable installer", StringComparison.OrdinalIgnoreCase))
@@ -576,7 +581,25 @@ public sealed class WingetService
         if (combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("0x80070005", StringComparison.OrdinalIgnoreCase))
             return "Access denied. Try running as administrator.";
-        return "Install failed.";
+        // Bron-/certificaatfout (typisch op verse installs): de msstore-bron faalt.
+        // Sinds we --source winget pinnen zou dit voor winget-apps niet meer mogen
+        // gebeuren; voor msstore-apps is 't een machine-issue (winget source reset).
+        if (combined.Contains("0x8a15005e", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("server certificate did not match", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("Failed when searching source", StringComparison.OrdinalIgnoreCase))
+            return "Winget-bronfout (certificaat). Probeer in een terminal: winget source reset --force";
+        return $"Install failed (winget exit 0x{exitCode:X8}). Details in de log (Settings → Diagnostiek → Open logmap).";
+    }
+
+    // Install-logging via de gedeelde Diagnostics-gate (Settings-toggle
+    // ErrorLoggingEnabled). Landt in %LocalAppData%\SetupToolbox\logs\install.log.
+    private static void LogInstall(string message) => Helpers.Diagnostics.Log("install.log", message);
+
+    private static string Trim1k(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var t = s.Replace("\r", " ").Replace("\n", " ").Trim();
+        return t.Length > 1000 ? t.Substring(0, 1000) + "…" : t;
     }
 
     private static async Task<(int exitCode, string output, string error)> RunWingetCommandAsync(

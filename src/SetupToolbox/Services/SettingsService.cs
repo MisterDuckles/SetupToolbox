@@ -220,6 +220,20 @@ public sealed class SettingsService
         }
     }
 
+    // Schrijft diagnostische / install-logs naar %LocalAppData%\SetupToolbox\logs.
+    // Default true zodat falende installs e.d. meteen te diagnosticeren zijn; user
+    // kan 't uitzetten in Settings. Zowel Diagnostics als WingetService lezen 'm.
+    public bool ErrorLoggingEnabled
+    {
+        get => _data.ErrorLoggingEnabled;
+        set
+        {
+            if (_data.ErrorLoggingEnabled == value) return;
+            _data.ErrorLoggingEnabled = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -287,5 +301,8 @@ public sealed class SettingsService
 
         [JsonPropertyName("showWelcomeBanner")]
         public bool ShowWelcomeBanner { get; set; } = true;
+
+        [JsonPropertyName("errorLoggingEnabled")]
+        public bool ErrorLoggingEnabled { get; set; } = true;
     }
 }

@@ -32,6 +32,7 @@ public sealed partial class SettingsPage : Page
         DebloatRestoreToggle.IsOn = App.Settings.RestorePointBeforeDebloat;
         UpdateCheckToggle.IsOn = App.Settings.CheckForUpdatesOnStartup;
         WelcomeBannerToggle.IsOn = App.Settings.ShowWelcomeBanner;
+        ErrorLoggingToggle.IsOn = App.Settings.ErrorLoggingEnabled;
         SyncBackupModeRadios();
         _suppressToggleEvent = false;
 
@@ -430,6 +431,31 @@ public sealed partial class SettingsPage : Page
         UpdateCheckResultBar.Title = title;
         UpdateCheckResultBar.Message = message;
         UpdateCheckResultBar.IsOpen = true;
+    }
+
+    // ── DIAGNOSTIEK (foutlogging) ──
+
+    private void ErrorLoggingToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToggleEvent) return;
+        App.Settings.ErrorLoggingEnabled = ErrorLoggingToggle.IsOn;
+    }
+
+    // Opent de logmap (%LocalAppData%\SetupToolbox\logs) in Explorer. Maakt 'm
+    // aan als 'ie nog niet bestaat (bv. als er nog nooit gelogd is).
+    private void OpenLogFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dir = Diagnostics.LogDir;
+            System.IO.Directory.CreateDirectory(dir);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = dir,
+                UseShellExecute = true,
+            });
+        }
+        catch { /* best-effort — geen UI-fout als Explorer niet opent */ }
     }
 
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
