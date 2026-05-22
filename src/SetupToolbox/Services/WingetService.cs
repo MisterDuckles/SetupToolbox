@@ -599,25 +599,46 @@ public sealed class WingetService
     private static string FriendlyError(string error, string output, int exitCode, string wingetId)
     {
         var combined = error + output;
+
+        // Exit-code eerst — taal-onafhankelijk én betrouwbaarder dan output-tekst.
+        // Codes geobserveerd in echte install-logs (zie winget returnCodes.md). Veel
+        // hiervan zijn TIJDELIJK (UAC geweigerd, app in gebruik, parallel-botsing,
+        // onderbroken download) → "Probeer opnieuw", géén misleidende "niet compatibel".
+        switch (unchecked((uint)exitCode))
+        {
+            case 0x800704C7: // ERROR_CANCELLED — UAC-prompt niet (op tijd) geaccepteerd
+            case 0x8A15010C: // INSTALL_CANCELLED_BY_USER
+                return "Geannuleerd — UAC niet (op tijd) geaccepteerd. Probeer opnieuw.";
+            case 0x8A150006: // SHELLEXEC_INSTALL_FAILED — installer gaf een fout terug
+                return "Installer mislukte (afgebroken, UAC geweigerd of al bezig). Probeer opnieuw.";
+            case 0x8A150011: // INSTALLER_HASH_MISMATCH — download corrupt of manifest-hash verouderd
+                return "Download-verificatie faalde (hash). Probeer later opnieuw.";
+            case 0x8A150101: // INSTALL_PACKAGE_IN_USE
+            case 0x8A150103: // INSTALL_FILE_IN_USE
+            case 0x8A150111: // INSTALL_PACKAGE_IN_USE_BY_APPLICATION
+                return "App of bestand is in gebruik — sluit 'm en probeer opnieuw.";
+            case 0x8A150102: // INSTALL_INSTALL_IN_PROGRESS
+                return "Er loopt al een installatie — even wachten en opnieuw proberen.";
+            case 0x8A150105: // INSTALL_DISK_FULL
+                return "Schijf vol — maak ruimte vrij en probeer opnieuw.";
+            case 0x8A150001: // INTERNAL_ERROR (o.a. na VM-pauze / onverwachte winget-staat)
+                return "Winget interne fout. Probeer opnieuw.";
+            case 0x8A15005E: // PINNED_CERTIFICATE_MISMATCH — msstore-bronfout op verse machines
+                return "Winget-bronfout (certificaat). Draai in een terminal: winget source reset --force";
+            case 0x80070005: // E_ACCESSDENIED
+                return "Toegang geweigerd — vereist mogelijk admin-rechten.";
+        }
+
+        // Tekst-fallback voor codes die we niet expliciet mappen.
         if (combined.Contains("No applicable installer", StringComparison.OrdinalIgnoreCase))
-            return "No compatible installer for this system.";
-        if (combined.Contains("already installed", StringComparison.OrdinalIgnoreCase))
-            return "Already installed.";
+            return "Geen geschikte installer voor dit systeem (architectuur/scope).";
         if (combined.Contains("No package found", StringComparison.OrdinalIgnoreCase))
-            return "Package not found.";
-        if (combined.Contains("installer hash does not match", StringComparison.OrdinalIgnoreCase))
-            return "Download verification failed.";
-        if (combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("0x80070005", StringComparison.OrdinalIgnoreCase))
-            return "Access denied. Try running as administrator.";
-        // Bron-/certificaatfout (typisch op verse installs): de msstore-bron faalt.
-        // Sinds we --source winget pinnen zou dit voor winget-apps niet meer mogen
-        // gebeuren; voor msstore-apps is 't een machine-issue (winget source reset).
-        if (combined.Contains("0x8a15005e", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("server certificate did not match", StringComparison.OrdinalIgnoreCase)
+            return "Pakket niet gevonden in winget.";
+        if (combined.Contains("server certificate did not match", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("Failed when searching source", StringComparison.OrdinalIgnoreCase))
-            return "Winget-bronfout (certificaat). Probeer in een terminal: winget source reset --force";
-        return $"Install failed (winget exit 0x{exitCode:X8}). Details in de log (Settings → Diagnostiek → Open logmap).";
+            return "Winget-bronfout (certificaat). Draai in een terminal: winget source reset --force";
+
+        return $"Install mislukt (winget exit 0x{exitCode:X8}). Details in de log (Settings → Diagnostiek → Open logmap).";
     }
 
     // Install-logging via de gedeelde Diagnostics-gate (Settings-toggle

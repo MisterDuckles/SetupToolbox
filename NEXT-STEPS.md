@@ -10,6 +10,17 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Voltooide versies
 
+### v1.0.3 — Icon-regressie fix + accurate install-foutmeldingen
+
+Vervolg op de volledige VM-test van v1.0.2 (alle apps geïnstalleerd). **Werkt bevestigd:** Edge → `SKIP` (exit `0x8A15002B`), Vivaldi.Vivaldi → OK, ~30 apps OK.
+
+- **Icon-regressie (v1.0.2 neveneffect):** door de winget-ID-wijzigingen verdwenen de Vivaldi- en NordVPN-iconen. Het icoon-pad is `ms-appx:///Icons/<wingetId>.png`, dus een ID-wijziging vereist een hernoemd icoon-bestand. `data/icons/VivaldiTechnologies-Vivaldi.png` → `Vivaldi-Vivaldi.png` en `NordVPN-NordVPN.png` → `NordSecurity-NordVPN.png` (via `git mv`). *Let op voor toekomstige ID-wijzigingen: icoon mee-hernoemen.*
+- **Accurate install-foutmeldingen (`FriendlyError`):** mapt nu op de échte winget exit-codes i.p.v. een misleidende "niet compatibel". Tijdelijke fouten krijgen "Probeer opnieuw": `0x800704C7`/`0x8A15010C` (UAC niet geaccepteerd), `0x8A150006` (installer-fout), `0x8A150011` (hash-mismatch), `0x8A150101/0103/0111` (in gebruik), `0x8A150102` (al bezig), `0x8A150105` (schijf vol), `0x8A150001` (interne fout), `0x8A15005E` (msstore-certfout → `winget source reset --force`).
+
+> **Uit de VM-test, géén code-bugs:** de 7 msstore-apps (Norton/Bitdefender/iCloud/ChatGPT/Perplexity/WhatsApp/Apple Music) faalden met `0x8A15005E` door de **kapotte msstore-bron op de VM** → fix op de VM met `winget source reset --force`. Een cluster fouten na een **VM-pauze van ~2,5u** (Dropbox/Notion/Steam/EA/Adobe/Foxit/Signal/Discord/Spotify/VLC/OBS/…) kwam door onderbroken installs + UAC-timeouts + parallel-botsingen, niet door de catalogus. Alle winget-IDs resolveden (geen "no package found" meer).
+
+> **Nog open (ontwerpkeuze, v1.0.4):** UAC-aanpak (per-app prompt vs. één keer admin per batch), parallelisme (nu 2; MSI's serialiseren toch op de globale installer-mutex), en een "retry mislukte apps"-knop.
+
 ### v1.0.2 — "Already installed" error-based + catalogus-IDs geverifieerd
 
 Vervolg op de v1.0.1-test (browsers op verse install): ná de `--source winget`-fix installeerde alles **behalve Edge en Vivaldi**.
