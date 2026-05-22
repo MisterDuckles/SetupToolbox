@@ -42,7 +42,7 @@
         },
         {
           "name": "Vivaldi",
-          "wingetId": "VivaldiTechnologies.Vivaldi",
+          "wingetId": "Vivaldi.Vivaldi",
           "description": "Highly customizable browser for power users"
         },
         {
@@ -260,7 +260,7 @@
           "apps": [
             {
               "name": "NordVPN",
-              "wingetId": "NordVPN.NordVPN",
+              "wingetId": "NordSecurity.NordVPN",
               "description": "Commercial VPN service"
             },
             {
@@ -332,16 +332,6 @@
               "name": "OnlyOffice Desktop",
               "wingetId": "ONLYOFFICE.DesktopEditors",
               "description": "MS Office-compatible alternative"
-            },
-            {
-              "name": "Proton Docs",
-              "wingetId": "Proton.ProtonDocs",
-              "description": "Encrypted document editor by Proton"
-            },
-            {
-              "name": "Proton Sheets",
-              "wingetId": "Proton.ProtonSheets",
-              "description": "Encrypted spreadsheets by Proton"
             }
           ]
         },
@@ -729,6 +719,7 @@
               "name": "DaVinci Resolve",
               "wingetId": "BlackmagicDesign.DaVinciResolve",
               "description": "Free professional video editor and color grading",
+              "downloadUrl": "https://www.blackmagicdesign.com/products/davinciresolve",
               "popular": true
             },
             {
@@ -802,12 +793,14 @@
             {
               "name": "Proton Calendar",
               "wingetId": "Proton.ProtonCalendar",
-              "description": "End-to-end encrypted calendar by Proton"
+              "description": "End-to-end encrypted calendar by Proton",
+              "downloadUrl": "https://proton.me/calendar"
             },
             {
               "name": "Proton Wallet",
               "wingetId": "Proton.ProtonWallet",
-              "description": "Self-custodial Bitcoin wallet by Proton"
+              "description": "Self-custodial Bitcoin wallet by Proton",
+              "downloadUrl": "https://proton.me/wallet"
             },
             {
               "name": "Proton Authenticator",
@@ -817,12 +810,14 @@
             {
               "name": "Proton Sheets",
               "wingetId": "Proton.ProtonSheets",
-              "description": "Encrypted spreadsheets by Proton"
+              "description": "Encrypted spreadsheets by Proton",
+              "downloadUrl": "https://proton.me/drive/sheets"
             },
             {
               "name": "Proton Docs",
               "wingetId": "Proton.ProtonDocs",
-              "description": "Encrypted document editor by Proton"
+              "description": "Encrypted document editor by Proton",
+              "downloadUrl": "https://proton.me/drive/docs"
             },
             {
               "name": "Proton Meet",

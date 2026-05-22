@@ -10,6 +10,20 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Voltooide versies
 
+### v1.0.2 — "Already installed" error-based + catalogus-IDs geverifieerd
+
+Vervolg op de v1.0.1-test (browsers op verse install): ná de `--source winget`-fix installeerde alles **behalve Edge en Vivaldi**.
+
+- **Edge "already installed" — niet gehardcode, op winget's eigen response.** Edge is voorgeïnstalleerd op Windows; `winget install Microsoft.Edge` vindt niets nieuwers en geeft een "zit er al"-code. `InstallAppAsync` herkent dit nu via `IsAlreadyInstalled(exitCode, output)` → behandelt als succes/overslaan ("Al geïnstalleerd"), geen rode failure. **Taal-onafhankelijk** op de gedocumenteerde winget exit codes `0x8A150061` (PACKAGE_ALREADY_INSTALLED), `0x8A15010D` (INSTALL_ALREADY_INSTALLED) en `0x8A15002B` (UPDATE_NOT_APPLICABLE = al op nieuwste versie), met de Engelstalige output-tekst `"already installed"` als extra vangnet. Bewust géén hardcoded app-namen — elke reeds-aanwezige app valt hieronder. De `FAIL`-logregel bevat al `exit=0x…` + ruwe stdout/stderr zodat onverwachte gevallen diagnoseerbaar blijven.
+- **Catalogus-IDs geverifieerd tegen de échte winget-bron** (`winget show --exact`, niet gegokt). 6 kapotte IDs gevonden + opgelost:
+  - **Vivaldi**: `VivaldiTechnologies.Vivaldi` → **`Vivaldi.Vivaldi`** (verklaart de tweede test-failure).
+  - **NordVPN**: `NordVPN.NordVPN` → **`NordSecurity.NordVPN`**.
+  - **DaVinci Resolve**: staat niet in winget → **`downloadUrl`** naar blackmagicdesign.com (opent in browser, zoals VMware/ON1). `wingetId` behouden voor het icoon-pad.
+  - **Proton Calendar / Wallet / Docs / Sheets**: geen winget-pakket én geen Windows-installer (web/mobiel-only) → **`downloadUrl`** naar hun `proton.me`-pagina (browser). **Docs + Sheets stonden dubbel** (Office Suites + Proton Suite) → duplicaten uit Office Suites verwijderd, één entry in Proton Suite. Catalogus nu 110 entries (was 112).
+  - *Niet aangeraakt:* `Proton VPN` / `Proton Drive` staan bewust 2× (echte winget-apps, gekruist in hun functie-categorie + Proton Suite).
+
+> **Te (her)verifiëren op de schone VM:** browser-test opnieuw draaien — Edge moet nu "Al geïnstalleerd" tonen i.p.v. rood; Vivaldi/NordVPN/DaVinci/Proton-web-apps controleren. `install.log` (Settings → Diagnostiek → Open logmap) bevestigt de exacte Edge-exit-code in de `SKIP`-regel.
+
 ### v1.0.1 — Fix: winget-installs falen op een schone install (msstore-bronfout)
 
 **Bug** (gevonden bij test op verse Windows-install): álle winget-installs faalden identiek. **Oorzaak:** het install-commando gaf geen `--source` mee → winget doorzocht óók de `msstore`-bron, die op verse installs een certificaat-fout geeft (`0x8a15005e` "server certificate did not match any of the expected values"). Winget weigert dan de winget-source-match automatisch te kiezen en stopt met *"specify --source"*. Dus een bron-laag-probleem, niet per app.

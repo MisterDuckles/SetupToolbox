@@ -490,6 +490,19 @@ public sealed class WingetService
                 return (true, "Installed");
             }
 
+            // "Already installed" / "niets nieuwers": geen echte fout. NIET gehardcode
+            // op Edge — gebaseerd op winget's eigen response (zie IsAlreadyInstalled):
+            // taal-onafhankelijke exit codes + de Engelstalige output-tekst als fallback.
+            // Edge is preinstalled op Windows → winget probeert te upgraden, vindt niets
+            // nieuwers en geeft een van die codes. Behandel als succes/overslaan zodat het
+            // niet als rode failure in de UI komt.
+            if (IsAlreadyInstalled(exitCode, error + output))
+            {
+                LogInstall($"SKIP  {wingetId} (already installed, exit=0x{exitCode:X8})");
+                progress?.Report("Al geïnstalleerd");
+                return (true, "Al geïnstalleerd");
+            }
+
             LogInstall($"FAIL  {wingetId} exit=0x{exitCode:X8} | stderr: {Trim1k(error)} | stdout: {Trim1k(output)}");
             var friendly = FriendlyError(error, output, exitCode, wingetId);
             progress?.Report(friendly);
@@ -565,6 +578,22 @@ public sealed class WingetService
         {
             sem.Release();
         }
+    }
+
+    // "Zit er al / niets nieuwers" — geen echte install-fout. Primair op winget's
+    // gedocumenteerde exit codes (taal-onafhankelijk), met de Engelstalige output-tekst
+    // als extra vangnet. Bewust GEEN hardcoded app-namen (zoals Edge): elke app die
+    // winget als reeds-aanwezig rapporteert valt hieronder.
+    private static bool IsAlreadyInstalled(int exitCode, string combined)
+    {
+        switch (unchecked((uint)exitCode))
+        {
+            case 0x8A150061: // PACKAGE_ALREADY_INSTALLED  ("Found at least one version installed")
+            case 0x8A15010D: // INSTALL_ALREADY_INSTALLED  (installer meldt al aanwezig)
+            case 0x8A15002B: // UPDATE_NOT_APPLICABLE       (al op nieuwste versie — bv. Edge preinstalled)
+                return true;
+        }
+        return combined.Contains("already installed", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FriendlyError(string error, string output, int exitCode, string wingetId)
