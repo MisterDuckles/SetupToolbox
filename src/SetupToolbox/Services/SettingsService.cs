@@ -75,19 +75,19 @@ public sealed class SettingsService
         }
     }
 
-    // Run twee winget installs tegelijk i.p.v. sequentieel. Default false omdat
-    // sommige MSI-installers single-instance locks hebben en falen wanneer een
-    // andere installer in dezelfde MSI-engine actief is. Voor power users die
-    // typisch lossere apps installeren (Firefox, VS Code, Discord) levert het
-    // ~2x snelheidswinst zonder problemen op. Hard-cap op 2 — meer dan 2
-    // tegelijk wordt riskant op typische Windows-machines.
-    public bool ParallelInstalls
+    // Aantal winget installs dat tegelijk mag lopen (1 = sequentieel). Default 2:
+    // ~2x sneller voor losse EXE-installers (Firefox, VS Code, Discord). MSI-
+    // installers serialiseren sowieso op de globale Windows-installer-mutex, dus
+    // hoger dan ~2-3 levert vooral meer gelijktijdige UAC-prompts op. InstallAppsAsync
+    // capt hard op 4. Instelbaar via Settings (NumberBox 1-4).
+    public int MaxParallelInstalls
     {
-        get => _data.ParallelInstalls;
+        get => _data.MaxParallelInstalls;
         set
         {
-            if (_data.ParallelInstalls == value) return;
-            _data.ParallelInstalls = value;
+            var v = value < 1 ? 1 : value > 4 ? 4 : value;
+            if (_data.MaxParallelInstalls == v) return;
+            _data.MaxParallelInstalls = v;
             Save();
         }
     }
@@ -272,8 +272,8 @@ public sealed class SettingsService
         [JsonPropertyName("dontAskAboutScheduling")]
         public bool DontAskAboutScheduling { get; set; } = false;
 
-        [JsonPropertyName("parallelInstalls")]
-        public bool ParallelInstalls { get; set; } = false;
+        [JsonPropertyName("maxParallelInstalls")]
+        public int MaxParallelInstalls { get; set; } = 2;
 
         [JsonPropertyName("parallelInstallsAsked")]
         public bool ParallelInstallsAsked { get; set; } = false;

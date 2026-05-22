@@ -454,6 +454,11 @@ public sealed class WingetService
         finally { _appsListLock.Release(); }
     }
 
+    // Sentinel-bericht voor de "zit er al"-uitkomst. Gedeeld met de UI (InstallDialog)
+    // zodat die de al-aanwezig-case kan onderscheiden van een verse install zonder op
+    // een losse magic string te matchen.
+    public const string AlreadyInstalledMessage = "Al geïnstalleerd";
+
     public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget")
     {
         try
@@ -499,8 +504,8 @@ public sealed class WingetService
             if (IsAlreadyInstalled(exitCode, error + output))
             {
                 LogInstall($"SKIP  {wingetId} (already installed, exit=0x{exitCode:X8})");
-                progress?.Report("Al geïnstalleerd");
-                return (true, "Al geïnstalleerd");
+                progress?.Report(AlreadyInstalledMessage);
+                return (true, AlreadyInstalledMessage);
             }
 
             LogInstall($"FAIL  {wingetId} exit=0x{exitCode:X8} | stderr: {Trim1k(error)} | stdout: {Trim1k(output)}");
@@ -569,10 +574,10 @@ public sealed class WingetService
             var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source);
             results[app.WingetId] = (success, message);
 
-            overall?.Report(new InstallProgress(
-                index, total, app,
-                success ? InstallPhase.Success : InstallPhase.Failed,
-                message));
+            var phase = !success ? InstallPhase.Failed
+                : message == AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
+                : InstallPhase.Success;
+            overall?.Report(new InstallProgress(index, total, app, phase, message));
         }
         finally
         {
@@ -732,6 +737,7 @@ public enum InstallPhase
     Starting,
     Running,
     Success,
+    AlreadyInstalled,
     Failed
 }
 

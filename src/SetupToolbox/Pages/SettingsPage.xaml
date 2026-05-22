@@ -142,7 +142,7 @@
                 </Grid>
             </Border>
 
-            <!-- Parallel installs toggle -->
+            <!-- Parallel installs count (1-4) -->
             <Border Grid.Row="5"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -164,18 +164,23 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Run installs in parallel"
+                        <TextBlock Text="Parallel installs"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="Install up to 2 apps at the same time. Roughly halves install time, but some MSI installers fail when run concurrently — disable if you see weird install errors." />
+                                   Text="How many apps to install at the same time (1–4). Higher is faster for regular installers, but MSI installers still serialize and higher counts mean more UAC prompts. 1 = one at a time." />
                     </StackPanel>
 
-                    <ToggleSwitch x:Name="ParallelToggle"
-                                  Grid.Column="2"
-                                  VerticalAlignment="Center"
-                                  Toggled="ParallelToggle_Toggled" />
+                    <NumberBox x:Name="ParallelCountBox"
+                               Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Minimum="1"
+                               Maximum="4"
+                               SmallChange="1"
+                               LargeChange="1"
+                               SpinButtonPlacementMode="Inline"
+                               ValueChanged="ParallelCountBox_ValueChanged" />
                 </Grid>
             </Border>
 

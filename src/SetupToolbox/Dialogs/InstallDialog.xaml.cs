@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -39,6 +40,7 @@ public sealed partial class InstallDialog : ContentDialog
 
         Opened += InstallDialog_Opened;
         Closing += InstallDialog_Closing;
+        SecondaryButtonClick += InstallDialog_SecondaryButtonClick;
     }
 
     private async void InstallDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
@@ -81,46 +83,84 @@ public sealed partial class InstallDialog : ContentDialog
             }
         }
 
-        var manualOpenedCount = _items.Count(i => i.State == InstallItemState.ManualOpened);
-        var skippedCount = _items.Count(i => i.State == InstallItemState.Skipped);
+        if (wingetApps.Count > 0)
+            await RunWingetInstallsAsync(wingetApps);
+        else
+            UpdateSummaryAndButtons();
+    }
 
-        if (wingetApps.Count == 0)
-        {
-            // Alleen manual downloads geselecteerd — geen winget run nodig
-            var parts = new List<string>();
-            if (manualOpenedCount > 0) parts.Add($"Opened {manualOpenedCount} download page{(manualOpenedCount == 1 ? "" : "s")}");
-            if (skippedCount > 0)      parts.Add($"{skippedCount} skipped");
-            ProgressHeader.Text = parts.Count > 0
-                ? string.Join(", ", parts)
-                : "No installable apps selected";
-            _installFinished = true;
-            IsPrimaryButtonEnabled = true;
-            return;
-        }
-
-        var maxParallelism = App.Settings.ParallelInstalls ? 2 : 1;
-        _parallelLabel = maxParallelism > 1 ? " (2 in parallel)" : string.Empty;
-        _wingetTotal = wingetApps.Count;
+    // Draait een winget-install-batch (initieel of retry) en werkt daarna de
+    // samenvatting + knoppen bij. Herbruikbaar zodat "Retry failed" exact dezelfde
+    // weg volgt voor alléén de gefaalde apps.
+    private async Task RunWingetInstallsAsync(IReadOnlyList<AppModel> apps)
+    {
+        var maxParallelism = App.Settings.MaxParallelInstalls;
+        _parallelLabel = maxParallelism > 1 ? $" ({maxParallelism} in parallel)" : string.Empty;
+        _wingetTotal = apps.Count;
         _completedCount = 0;
+
+        _installFinished = false;
+        IsPrimaryButtonEnabled = false;
+        IsSecondaryButtonEnabled = false;
         ProgressHeader.Text = $"Installing {_wingetTotal} app{(_wingetTotal == 1 ? "" : "s")}{_parallelLabel}";
 
         var progress = new Progress<InstallProgress>(OnProgress);
-        var results = await App.Winget.InstallAppsAsync(wingetApps, progress, maxParallelism);
+        await App.Winget.InstallAppsAsync(apps, progress, maxParallelism);
 
-        var successCount = results.Count(kv => kv.Value.success);
-        var failCount = results.Count - successCount;
-        if (successCount > 0) HadSuccessfulInstall = true;
+        UpdateSummaryAndButtons();
+    }
 
-        // Final summary text — combineert winget + manual results
-        var summaryParts = new List<string>();
-        if (successCount > 0)       summaryParts.Add($"{successCount} installed");
-        if (failCount > 0)          summaryParts.Add($"{failCount} failed");
-        if (manualOpenedCount > 0)  summaryParts.Add($"{manualOpenedCount} manual download{(manualOpenedCount == 1 ? "" : "s")} opened");
-        if (skippedCount > 0)       summaryParts.Add($"{skippedCount} skipped");
-        ProgressHeader.Text = string.Join(", ", summaryParts);
+    // Samenvatting + knopstaat afgeleid uit _items (cumulatief over de initiële run
+    // én retries). "Retry failed" verschijnt alleen als er nog winget-apps gefaald zijn.
+    private void UpdateSummaryAndButtons()
+    {
+        var manualIds = _apps.Where(a => a.IsManualDownload).Select(a => a.WingetId).ToHashSet();
+        var installed = _items.Count(i => i.State == InstallItemState.Success);
+        var already = _items.Count(i => i.State == InstallItemState.AlreadyInstalled);
+        var failed = _items.Count(i => i.State == InstallItemState.Failed);
+        var failedWinget = _items.Count(i => i.State == InstallItemState.Failed && !manualIds.Contains(i.WingetId));
+        var manualOpened = _items.Count(i => i.State == InstallItemState.ManualOpened);
+        var skipped = _items.Count(i => i.State == InstallItemState.Skipped);
+
+        HadSuccessfulInstall = installed > 0 || already > 0;
+
+        var parts = new List<string>();
+        if (installed > 0)    parts.Add($"{installed} installed");
+        if (already > 0)      parts.Add($"{already} already installed");
+        if (failed > 0)       parts.Add($"{failed} failed");
+        if (manualOpened > 0) parts.Add($"{manualOpened} manual download{(manualOpened == 1 ? "" : "s")} opened");
+        if (skipped > 0)      parts.Add($"{skipped} skipped");
+        ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : "No installable apps selected";
 
         _installFinished = true;
         IsPrimaryButtonEnabled = true;
+
+        if (failedWinget > 0)
+        {
+            SecondaryButtonText = failedWinget == 1 ? "Retry failed app" : $"Retry {failedWinget} failed apps";
+            IsSecondaryButtonEnabled = true;
+        }
+        else
+        {
+            SecondaryButtonText = string.Empty; // lege tekst verbergt de Secondary-knop
+        }
+    }
+
+    // "Retry failed": reset de gefaalde winget-items en draai alléén die opnieuw,
+    // zonder de dialog te sluiten.
+    private async void InstallDialog_SecondaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        args.Cancel = true; // dialog open houden — we herproberen in-place
+
+        var failedIds = _items.Where(i => i.State == InstallItemState.Failed)
+                              .Select(i => i.WingetId).ToHashSet();
+        var failedApps = _apps.Where(a => !a.IsManualDownload && failedIds.Contains(a.WingetId)).ToList();
+        if (failedApps.Count == 0) return;
+
+        foreach (var item in _items.Where(i => failedIds.Contains(i.WingetId)))
+            item.Reset();
+
+        await RunWingetInstallsAsync(failedApps);
     }
 
     private void OnProgress(InstallProgress p)
@@ -168,6 +208,11 @@ public sealed partial class InstallDialog : ContentDialog
                 item.AdvanceStage(4); // Done — ring is hidden anyway, checkmark takes over
                 _completedCount++;
                 break;
+            case InstallPhase.AlreadyInstalled:
+                item.State = InstallItemState.AlreadyInstalled;
+                item.AdvanceStage(4);
+                _completedCount++;
+                break;
             case InstallPhase.Failed:
                 item.State = InstallItemState.Failed;
                 _completedCount++;
@@ -188,7 +233,7 @@ public sealed partial class InstallDialog : ContentDialog
     }
 }
 
-public enum InstallItemState { Pending, Installing, Success, Failed, ManualOpened, Skipped }
+public enum InstallItemState { Pending, Installing, Success, AlreadyInstalled, Failed, ManualOpened, Skipped }
 
 public sealed class InstallItem : INotifyPropertyChanged
 {
@@ -258,6 +303,14 @@ public sealed class InstallItem : INotifyPropertyChanged
     // Ladder-style advance: stage only moves forward, never backwards.
     public void AdvanceStage(int target) => Stage = Math.Max(_stage, target);
 
+    // Reset naar begintoestand zodat een retry de kaart opnieuw door de fases laat lopen.
+    public void Reset()
+    {
+        Message = string.Empty;
+        Stage = 0;
+        State = InstallItemState.Pending;
+    }
+
     // ProgressRing value — Maximum is TotalStages so the ring fills fully at stage 4.
     public double StageValue => _stage;
 
@@ -283,7 +336,7 @@ public sealed class InstallItem : INotifyPropertyChanged
         _state == InstallItemState.Installing ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility CheckVisibility =>
-        _state == InstallItemState.Success ? Visibility.Visible : Visibility.Collapsed;
+        _state is InstallItemState.Success or InstallItemState.AlreadyInstalled ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility ErrorVisibility =>
         _state == InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
@@ -296,13 +349,14 @@ public sealed class InstallItem : INotifyPropertyChanged
     // Text state label (right column) only shown outside the Installing phase;
     // during install the stage ring occupies that column instead.
     public Visibility StateLabelVisibility =>
-        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.Failed or InstallItemState.ManualOpened or InstallItemState.Skipped
+        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.AlreadyInstalled or InstallItemState.Failed or InstallItemState.ManualOpened or InstallItemState.Skipped
             ? Visibility.Visible
             : Visibility.Collapsed;
 
     public Brush StateLabelBrush => _state switch
     {
         InstallItemState.Success => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
+        InstallItemState.AlreadyInstalled => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
         InstallItemState.Failed => (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
         InstallItemState.ManualOpened => (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
         InstallItemState.Skipped => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
@@ -313,6 +367,7 @@ public sealed class InstallItem : INotifyPropertyChanged
     {
         InstallItemState.Pending => "Waiting",
         InstallItemState.Success => "Installed",
+        InstallItemState.AlreadyInstalled => "Al geïnstalleerd",
         InstallItemState.Failed => "Failed",
         InstallItemState.ManualOpened => "Browser opened",
         InstallItemState.Skipped => "Skipped",

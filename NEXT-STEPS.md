@@ -10,6 +10,16 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Voltooide versies
 
+### v1.0.4 — Install-UX: "Al geïnstalleerd"-status, instelbaar parallelisme, retry-knop
+
+Drie gebundelde install-UX-verbeteringen na de VM-test:
+
+- **"Al geïnstalleerd" i.p.v. "Installed".** Reeds-aanwezige apps (bv. Edge, preinstalled) toonden "Installed" (groen) terwijl er niets geïnstalleerd werd. Nieuwe `InstallPhase.AlreadyInstalled` + `InstallItemState.AlreadyInstalled` via gedeelde sentinel `WingetService.AlreadyInstalledMessage` (geen magic string). Per-app label nu **"Al geïnstalleerd"** (groen vinkje) en de samenvatting splitst `X installed, Y already installed, Z failed`.
+- **Parallelisme instelbaar (1-4).** Bool `ParallelInstalls` → int **`MaxParallelInstalls`** (default 2). Settings toont nu een `NumberBox` (1-4) i.p.v. een toggle; de one-time prompt zet 2 (Yes) of 1 (No). `InstallDialog` leest de int; `InstallAppsAsync` capt sowieso op 4. MSI-installers serialiseren op de globale Windows-installer-mutex, dus hoger helpt vooral losse EXE-installers.
+- **"Retry failed"-knop.** Na een batch verschijnt — alleen bij gefaalde winget-apps — een Secondary-knop die alléén de gefaalde apps reset (`InstallItem.Reset()`) + opnieuw draait, zonder de dialog te sluiten. Run + samenvatting zijn nu herbruikbaar (`RunWingetInstallsAsync` / `UpdateSummaryAndButtons`) en cumulatief afgeleid uit de item-lijst. Handig bij tijdelijke fouten (UAC-cancel, VM-pauze, hash, parallel-botsing).
+
+> **Nog open (v1.0.5):** UAC eenmalig per batch — een elevated install-runner (relaunch in `--install-runner` headless mode via `runas`, één UAC) + IPC om progress terug te streamen. De architecturale grote; alleen op de VM met echte UAC volledig te verifiëren.
+
 ### v1.0.3 — Icon-regressie fix + accurate install-foutmeldingen
 
 Vervolg op de volledige VM-test van v1.0.2 (alle apps geïnstalleerd). **Werkt bevestigd:** Edge → `SKIP` (exit `0x8A15002B`), Vivaldi.Vivaldi → OK, ~30 apps OK.

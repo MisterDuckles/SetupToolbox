@@ -33,7 +33,9 @@ internal static class ParallelInstallsPrompt
         var result = await dialog.ShowAsync();
 
         // Beide knoppen tellen als "answered" zodat de prompt niet terugkomt.
-        App.Settings.ParallelInstalls = result == ContentDialogResult.Primary;
+        // Yes → 2 parallel (default speed-up), No → 1 (sequentieel). Fijnafstemming
+        // (1-4) kan altijd nog via Settings.
+        App.Settings.MaxParallelInstalls = result == ContentDialogResult.Primary ? 2 : 1;
         App.Settings.ParallelInstallsAsked = true;
     }
 }

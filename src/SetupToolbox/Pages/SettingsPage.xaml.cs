@@ -26,7 +26,7 @@ public sealed partial class SettingsPage : Page
         // page-navigatie de current value terug naar disk (no-op maar onnodig IO).
         _suppressToggleEvent = true;
         FallbackToggle.IsOn = App.Settings.FallbackToDownloadPage;
-        ParallelToggle.IsOn = App.Settings.ParallelInstalls;
+        ParallelCountBox.Value = App.Settings.MaxParallelInstalls;
         LeftoverToggle.IsOn = App.Settings.ScanLeftoversAfterUninstall;
         DeepCleanRestoreToggle.IsOn = App.Settings.RestorePointBeforeDeepClean;
         DebloatRestoreToggle.IsOn = App.Settings.RestorePointBeforeDebloat;
@@ -177,10 +177,17 @@ public sealed partial class SettingsPage : Page
         App.Settings.FallbackToDownloadPage = FallbackToggle.IsOn;
     }
 
-    private void ParallelToggle_Toggled(object sender, RoutedEventArgs e)
+    private void ParallelCountBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
         if (_suppressToggleEvent) return;
-        App.Settings.ParallelInstalls = ParallelToggle.IsOn;
+        // Leeg veld → NaN; val dan terug op 2 en herstel de box zodat hij niet leeg blijft.
+        if (double.IsNaN(args.NewValue))
+        {
+            App.Settings.MaxParallelInstalls = 2;
+            sender.Value = App.Settings.MaxParallelInstalls;
+            return;
+        }
+        App.Settings.MaxParallelInstalls = (int)args.NewValue;
     }
 
     private void LeftoverToggle_Toggled(object sender, RoutedEventArgs e)
