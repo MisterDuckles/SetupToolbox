@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -21,6 +22,12 @@ public sealed partial class InstallDialog : ContentDialog
     private int _completedCount;
     private int _wingetTotal;
     private string _parallelLabel = string.Empty;
+
+    // v1.0.7: per-batch cancellation. Tijdens een lopende install draait de
+    // Primary-knop als "Annuleren" en cancelt deze CTS → propageert door de hele
+    // install-stack (kind/parent via cancel.flag, en in beide procesden naar
+    // WingetService die z'n actieve winget-processen + installer-tree killt).
+    private CancellationTokenSource? _cancelCts;
 
     // True wanneer minstens één winget install slaagde. Calling page gebruikt
     // dit om de post-install "Schedule auto-updates?" prompt alleen te tonen
@@ -41,6 +48,19 @@ public sealed partial class InstallDialog : ContentDialog
         Opened += InstallDialog_Opened;
         Closing += InstallDialog_Closing;
         SecondaryButtonClick += InstallDialog_SecondaryButtonClick;
+        PrimaryButtonClick += InstallDialog_PrimaryButtonClick;
+    }
+
+    // Primary-knop:
+    //  - tijdens batch (!_installFinished) = "Annuleren" → cancel CTS, dialog open houden.
+    //  - na batch = "Sluiten" → default-gedrag (dialog sluit).
+    private void InstallDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        if (_installFinished) return;            // Sluiten — laat de default-close door
+        args.Cancel = true;                      // dialog open houden tijdens cancel-wind-down
+        _cancelCts?.Cancel();
+        PrimaryButtonText = "Annuleren...";
+        IsPrimaryButtonEnabled = false;
     }
 
     private async void InstallDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
@@ -100,8 +120,15 @@ public sealed partial class InstallDialog : ContentDialog
         _completedCount = 0;
 
         _installFinished = false;
-        IsPrimaryButtonEnabled = false;
         IsSecondaryButtonEnabled = false;
+
+        // v1.0.7: Primary-knop tijdens batch = "Annuleren" (PrimaryButtonClick-handler
+        // cancelt de CTS en houdt de dialog open). Na de batch zet UpdateSummaryAndButtons
+        // de tekst weer terug naar "Sluiten".
+        _cancelCts = new CancellationTokenSource();
+        PrimaryButtonText = "Annuleren";
+        IsPrimaryButtonEnabled = true;
+
         ProgressHeader.Text = $"Installing {_wingetTotal} app{(_wingetTotal == 1 ? "" : "s")}{_parallelLabel}";
 
         var progress = new Progress<InstallProgress>(OnProgress);
@@ -118,13 +145,44 @@ public sealed partial class InstallDialog : ContentDialog
 
         if (community.Count > 0)
         {
-            var result = await ElevatedInstallRunner.InstallAppsElevatedAsync(community, progress, maxParallelism);
-            if (result != ElevatedRunResult.Completed)
-                await App.Winget.InstallAppsAsync(community, progress, maxParallelism);
+            var result = await ElevatedInstallRunner.InstallAppsElevatedAsync(community, progress, maxParallelism, _cancelCts.Token);
+            if (result == ElevatedRunResult.Completed)
+            {
+                // B (v1.0.7): apps die elevation weigerden (typisch Spotify, exit
+                // 0x8A150056) krijgen automatisch een tweede pass in-process onge-
+                // eleveerd. Detectie via de sentinel-message — geen hardcoded
+                // blocklist; werkt voor elke huidige/toekomstige app met dit gedrag.
+                var retryApps = community.Where(a =>
+                {
+                    var it = _items.FirstOrDefault(i => i.WingetId == a.WingetId);
+                    return it != null
+                        && it.State == InstallItemState.Failed
+                        && it.Message == WingetService.RequiresUnelevatedMessage;
+                }).ToList();
+
+                if (retryApps.Count > 0 && !_cancelCts.IsCancellationRequested)
+                {
+                    foreach (var a in retryApps)
+                        _items.First(i => i.WingetId == a.WingetId).Reset();
+                    _completedCount -= retryApps.Count;   // worden opnieuw geteld in OnProgress
+                    await App.Winget.InstallAppsAsync(retryApps, progress, maxParallelism, _cancelCts.Token);
+                }
+            }
+            else
+            {
+                // UAC geweigerd / elevatie mislukt → terugvallen op in-process flow.
+                await App.Winget.InstallAppsAsync(community, progress, maxParallelism, _cancelCts.Token);
+            }
         }
 
         if (msstore.Count > 0)
-            await App.Winget.InstallAppsAsync(msstore, progress, maxParallelism);
+            await App.Winget.InstallAppsAsync(msstore, progress, maxParallelism, _cancelCts.Token);
+
+        _cancelCts.Dispose();
+        _cancelCts = null;
+
+        // Knop terug naar "Sluiten" (default close-gedrag via de Primary-handler).
+        PrimaryButtonText = "Sluiten";
 
         UpdateSummaryAndButtons();
     }
@@ -142,16 +200,21 @@ public sealed partial class InstallDialog : ContentDialog
         var failed = _items.Count(i => i.State == InstallItemState.Failed);
         var failedWinget = _items.Count(i => i.State == InstallItemState.Failed && !manualIds.Contains(i.WingetId));
         var manualOpened = _items.Count(i => i.State == InstallItemState.ManualOpened);
+        var openedInStore = _items.Count(i => i.State == InstallItemState.OpenedInStore);
         var skipped = _items.Count(i => i.State == InstallItemState.Skipped);
 
-        HadSuccessfulInstall = installed > 0 || already > 0;
+        // openedInStore telt mee voor HadSuccessfulInstall: we hebben de install
+        // succesvol getriggerd via de Store-app; user moet alleen nog op "Halen"
+        // klikken. De "Schedule auto-updates?"-prompt is dan ook relevant.
+        HadSuccessfulInstall = installed > 0 || already > 0 || openedInStore > 0;
 
         var parts = new List<string>();
-        if (installed > 0)    parts.Add($"{installed} installed");
-        if (already > 0)      parts.Add($"{already} already installed");
-        if (failed > 0)       parts.Add($"{failed} failed");
-        if (manualOpened > 0) parts.Add($"{manualOpened} manual download{(manualOpened == 1 ? "" : "s")} opened");
-        if (skipped > 0)      parts.Add($"{skipped} skipped");
+        if (installed > 0)     parts.Add($"{installed} installed");
+        if (already > 0)       parts.Add($"{already} already installed");
+        if (failed > 0)        parts.Add($"{failed} failed");
+        if (manualOpened > 0)  parts.Add($"{manualOpened} manual download{(manualOpened == 1 ? "" : "s")} opened");
+        if (openedInStore > 0) parts.Add($"{openedInStore} opened in Store");
+        if (skipped > 0)       parts.Add($"{skipped} skipped");
         ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : "No installable apps selected";
 
         _installFinished = true;
@@ -235,6 +298,11 @@ public sealed partial class InstallDialog : ContentDialog
                 item.AdvanceStage(4);
                 _completedCount++;
                 break;
+            case InstallPhase.OpenedInStore:
+                item.State = InstallItemState.OpenedInStore;
+                item.AdvanceStage(4);
+                _completedCount++;
+                break;
             case InstallPhase.Failed:
                 item.State = InstallItemState.Failed;
                 _completedCount++;
@@ -255,7 +323,7 @@ public sealed partial class InstallDialog : ContentDialog
     }
 }
 
-public enum InstallItemState { Pending, Installing, Success, AlreadyInstalled, Failed, ManualOpened, Skipped }
+public enum InstallItemState { Pending, Installing, Success, AlreadyInstalled, Failed, ManualOpened, OpenedInStore, Skipped }
 
 public sealed class InstallItem : INotifyPropertyChanged
 {
@@ -364,14 +432,14 @@ public sealed class InstallItem : INotifyPropertyChanged
         _state == InstallItemState.Failed ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility MessageVisibility =>
-        (_state == InstallItemState.Installing || _state == InstallItemState.ManualOpened || _state == InstallItemState.Skipped) && !string.IsNullOrEmpty(_message)
+        (_state == InstallItemState.Installing || _state == InstallItemState.ManualOpened || _state == InstallItemState.OpenedInStore || _state == InstallItemState.Skipped) && !string.IsNullOrEmpty(_message)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
     // Text state label (right column) only shown outside the Installing phase;
     // during install the stage ring occupies that column instead.
     public Visibility StateLabelVisibility =>
-        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.AlreadyInstalled or InstallItemState.Failed or InstallItemState.ManualOpened or InstallItemState.Skipped
+        _state is InstallItemState.Pending or InstallItemState.Success or InstallItemState.AlreadyInstalled or InstallItemState.Failed or InstallItemState.ManualOpened or InstallItemState.OpenedInStore or InstallItemState.Skipped
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -381,6 +449,7 @@ public sealed class InstallItem : INotifyPropertyChanged
         InstallItemState.AlreadyInstalled => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
         InstallItemState.Failed => (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
         InstallItemState.ManualOpened => (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
+        InstallItemState.OpenedInStore => (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
         InstallItemState.Skipped => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         _ => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
     };
@@ -392,6 +461,7 @@ public sealed class InstallItem : INotifyPropertyChanged
         InstallItemState.AlreadyInstalled => "Al geïnstalleerd",
         InstallItemState.Failed => "Failed",
         InstallItemState.ManualOpened => "Browser opened",
+        InstallItemState.OpenedInStore => "Geopend in Store",
         InstallItemState.Skipped => "Skipped",
         _ => string.Empty
     };

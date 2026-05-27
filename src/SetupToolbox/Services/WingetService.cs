@@ -459,7 +459,25 @@ public sealed class WingetService
     // een losse magic string te matchen.
     public const string AlreadyInstalledMessage = "Al geïnstalleerd";
 
-    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget")
+    // Sentinel (v1.0.7): installer weigert elevated context (typisch Spotify met
+    // exit 0x8A150056 "The installer cannot be run from an administrator context").
+    // De InstallDialog detecteert deze message na een elevated batch en draait die
+    // apps automatisch nog een keer in-process (onge-eleveerd).
+    public const string RequiresUnelevatedMessage = "Vereist onge-eleveerde install";
+
+    // Sentinel (v1.0.7): user heeft de batch geannuleerd via de Annuleren-knop.
+    public const string CancelledMessage = "Geannuleerd";
+
+    // Sentinel (v1.0.7 D): winget kon de msstore-install niet via z'n eigen IPC
+    // doen (cert-error 0x8A15005E — gebroken cert-pin laag tussen winget en
+    // Microsoft Store, zien we typisch op stale Windows-installs / corporate
+    // proxies / AV-interferentie, niet alleen op VMs). Fallback: Store-app
+    // rechtstreeks openen op de productpagina (`ms-windows-store://pdp/?productid=…`).
+    // User moet daar 1× op "Halen" klikken; updates lopen daarna via winget
+    // (healthy) of via de Store-app zelf in de achtergrond (broken).
+    public const string MsStoreOpenedMessage = "Geopend in Microsoft Store";
+
+    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget", CancellationToken ct = default)
     {
         try
         {
@@ -486,7 +504,17 @@ public sealed class WingetService
             }
 
             LogInstall($"START {wingetId} (source={source}) -> winget {args}");
-            var (exitCode, output, error) = await RunWingetCommandAsync(args, line => progress?.Report(line));
+            var (exitCode, output, error) = await RunWingetCommandAsync(args, line => progress?.Report(line), ct);
+
+            // Cancellation gewonnen: het winget-proces is gekild via de ct.Register-hook;
+            // de exit-code die we terugkrijgen is willekeurig (kill-signaal). Géén
+            // FriendlyError mapping — gewoon als "Geannuleerd" rapporteren.
+            if (ct.IsCancellationRequested)
+            {
+                LogInstall($"CANCEL {wingetId}");
+                progress?.Report(CancelledMessage);
+                return (false, CancelledMessage);
+            }
 
             if (exitCode == 0)
             {
@@ -508,10 +536,42 @@ public sealed class WingetService
                 return (true, AlreadyInstalledMessage);
             }
 
+            // v1.0.7: installer-weigert-admin (typisch Spotify exit 0x8A150056). Gemarkeerd
+            // met de sentinel-message zodat InstallDialog na een elevated batch deze app
+            // automatisch onge-eleveerd opnieuw kan proberen. Géén failure-status hier —
+            // we hebben 'm geprobeerd maar de installer zelf wil deze context niet.
+            if (IsAdminContextRefused(exitCode, error + output))
+            {
+                LogInstall($"REJECT-ADMIN {wingetId} exit=0x{exitCode:X8} — needs unelevated retry");
+                progress?.Report(RequiresUnelevatedMessage);
+                return (false, RequiresUnelevatedMessage);
+            }
+
+            // v1.0.7 D: msstore cert-error (0x8A15005E) — winget's IPC-pad naar de
+            // Store-app is stuk, maar de Store-app zélf werkt meestal nog. Open de
+            // productpagina rechtstreeks zodat user 1× op "Halen" kan klikken. Alleen
+            // voor msstore-source apps; voor winget-community apps zou deze code geen
+            // zin hebben (geen Store-productID). Bij Process.Start-fout (geen Store-app
+            // geïnstalleerd) vallen we door op de gewone FriendlyError hieronder.
+            if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)
+                && IsMsStoreCertError(exitCode, error + output)
+                && TryOpenInMicrosoftStore(wingetId))
+            {
+                LogInstall($"STORE-OPEN {wingetId} (msstore cert-error fallback)");
+                progress?.Report(MsStoreOpenedMessage);
+                return (true, MsStoreOpenedMessage);
+            }
+
             LogInstall($"FAIL  {wingetId} exit=0x{exitCode:X8} | stderr: {Trim1k(error)} | stdout: {Trim1k(output)}");
             var friendly = FriendlyError(error, output, exitCode, wingetId);
             progress?.Report(friendly);
             return (false, friendly);
+        }
+        catch (OperationCanceledException)
+        {
+            LogInstall($"CANCEL {wingetId} (token)");
+            progress?.Report(CancelledMessage);
+            return (false, CancelledMessage);
         }
         catch (Exception ex)
         {
@@ -524,7 +584,8 @@ public sealed class WingetService
     public async Task<Dictionary<string, (bool success, string message)>> InstallAppsAsync(
         IReadOnlyList<AppModel> apps,
         IProgress<InstallProgress>? overall = null,
-        int maxParallelism = 1)
+        int maxParallelism = 1,
+        CancellationToken ct = default)
     {
         var results = new ConcurrentDictionary<string, (bool, string)>();
         var total = apps.Count;
@@ -542,7 +603,7 @@ public sealed class WingetService
         {
             var app = apps[i];
             var index = i + 1;
-            tasks.Add(InstallOneInBatchAsync(app, index, total, sem, results, overall));
+            tasks.Add(InstallOneInBatchAsync(app, index, total, sem, results, overall, ct));
         }
 
         await Task.WhenAll(tasks);
@@ -561,21 +622,38 @@ public sealed class WingetService
         int total,
         SemaphoreSlim sem,
         ConcurrentDictionary<string, (bool, string)> results,
-        IProgress<InstallProgress>? overall)
+        IProgress<InstallProgress>? overall,
+        CancellationToken ct)
     {
-        await sem.WaitAsync();
+        // Cancellation kan al getriggerd zijn vóór we überhaupt aan de semaphore
+        // komen (bv. user kliket Annuleren tijdens een lange MSI-wachtrij).
+        try { await sem.WaitAsync(ct); }
+        catch (OperationCanceledException)
+        {
+            results[app.WingetId] = (false, CancelledMessage);
+            overall?.Report(new InstallProgress(index, total, app, InstallPhase.Failed, CancelledMessage));
+            return;
+        }
         try
         {
+            if (ct.IsCancellationRequested)
+            {
+                results[app.WingetId] = (false, CancelledMessage);
+                overall?.Report(new InstallProgress(index, total, app, InstallPhase.Failed, CancelledMessage));
+                return;
+            }
+
             overall?.Report(new InstallProgress(index, total, app, InstallPhase.Starting, $"Starting {app.Name}"));
 
             var perApp = new Progress<string>(msg =>
                 overall?.Report(new InstallProgress(index, total, app, InstallPhase.Running, msg)));
 
-            var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source);
+            var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source, ct);
             results[app.WingetId] = (success, message);
 
             var phase = !success ? InstallPhase.Failed
                 : message == AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
+                : message == MsStoreOpenedMessage ? InstallPhase.OpenedInStore
                 : InstallPhase.Success;
             overall?.Report(new InstallProgress(index, total, app, phase, message));
         }
@@ -599,6 +677,49 @@ public sealed class WingetService
                 return true;
         }
         return combined.Contains("already installed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // v1.0.7: installer weigert in elevated context te draaien (typisch Spotify).
+    // Exit-code primair (taal-onafhankelijk); Engelstalige output-tekst als vangnet.
+    // InstallDialog gebruikt deze signal om de app in een tweede pass onge-eleveerd
+    // opnieuw te proberen — winget zelf draait nog steeds via z'n alias.
+    private static bool IsAdminContextRefused(int exitCode, string combined)
+    {
+        if (unchecked((uint)exitCode) == 0x8A150056) // INSTALLER_PROHIBITS_ELEVATION
+            return true;
+        return combined.Contains("cannot be run from an administrator context", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("must not be run as administrator", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // v1.0.7 D: msstore cert-pin error. winget's `source update` werkt vaak nog
+    // (CDN-laag oké), maar de install-IPC naar de Store-app valt op een aparte
+    // cert-check. Op gezonde machines is dit zeldzaam; op stale Windows-installs
+    // / AV-proxies / corporate setups regelmatig. Detectie via exit-code +
+    // tekst-fallback.
+    private static bool IsMsStoreCertError(int exitCode, string combined) =>
+        unchecked((uint)exitCode) == 0x8A15005E
+        || combined.Contains("server certificate did not match", StringComparison.OrdinalIgnoreCase);
+
+    // v1.0.7 D: opent de Microsoft Store-app direct op de productpagina van de
+    // gegeven Store-productID (formaat "9XXXXXX" of "XPXXX…"). ShellExecute via
+    // het `ms-windows-store:`-protocol. Faalt netjes (false) als de Store-app
+    // niet geïnstalleerd is of het protocol om een andere reden niet handled
+    // wordt — caller valt dan door op de gewone FriendlyError.
+    private static bool TryOpenInMicrosoftStore(string productId)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = $"ms-windows-store://pdp/?productid={productId}",
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string FriendlyError(string error, string output, int exitCode, string wingetId)
@@ -659,7 +780,8 @@ public sealed class WingetService
 
     private static async Task<(int exitCode, string output, string error)> RunWingetCommandAsync(
         string arguments,
-        Action<string>? outputCallback = null)
+        Action<string>? outputCallback = null,
+        CancellationToken ct = default)
     {
         using var process = new Process
         {
@@ -680,6 +802,15 @@ public sealed class WingetService
         var errorBuilder = new StringBuilder();
 
         process.Start();
+
+        // Cancellation (v1.0.7): bij Annuleren moet niet alleen winget zelf sterven
+        // maar óók de installer die winget zelf spawnt (msi / setup.exe).
+        // entireProcessTree:true zorgt voor de hele boom. Try/catch want het proces
+        // kan al normaal geëindigd zijn (race) en dan throwt Kill InvalidOperation.
+        using var ctReg = ct.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+        });
 
         // winget updates its download progress bar by overwriting the current
         // terminal line with '\r' instead of emitting a new line. The default
@@ -738,6 +869,7 @@ public enum InstallPhase
     Running,
     Success,
     AlreadyInstalled,
+    OpenedInStore,   // v1.0.7 D: msstore cert-fallback opende de Store-app
     Failed
 }
 

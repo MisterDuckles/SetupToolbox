@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using AppModel = SetupToolbox.Models.App;
 
@@ -38,13 +39,15 @@ public static class ElevatedInstallRunner
     public static async Task<ElevatedRunResult> InstallAppsElevatedAsync(
         IReadOnlyList<AppModel> apps,
         IProgress<InstallProgress>? overall,
-        int maxParallelism)
+        int maxParallelism,
+        CancellationToken ct = default)
     {
         if (apps.Count == 0) return ElevatedRunResult.Completed;
 
         var workDir = Path.Combine(Path.GetTempPath(), "SetupToolbox", "runner-" + Guid.NewGuid().ToString("N"));
         var jobPath = Path.Combine(workDir, "job.json");
         var progressPath = Path.Combine(workDir, "progress.jsonl");
+        var cancelFlagPath = Path.Combine(workDir, "cancel.flag");
 
         try
         {
@@ -111,10 +114,22 @@ public static class ElevatedInstallRunner
         foreach (var a in apps) byId[a.WingetId] = a;
 
         var processed = 0;
+        var cancelWritten = false;
         try
         {
             while (true)
             {
+                // Cancellation (v1.0.7): bij Annuleren schrijven we cancel.flag in de
+                // workDir; het ge-eleveerde kind pollt die file en cancelt z'n eigen
+                // installs (medium-IL parent kan een high-IL kind niet betrouwbaar
+                // killen, dus self-cancel via flag-IPC is de schone weg). We blijven
+                // wél progress drainen tot het kind echt exit'ed.
+                if (ct.IsCancellationRequested && !cancelWritten)
+                {
+                    try { File.WriteAllText(cancelFlagPath, ""); } catch { }
+                    Helpers.Diagnostics.Log("install.log", "RUNNER CANCEL flag written");
+                    cancelWritten = true;
+                }
                 var exited = proc.HasExited;
                 processed = DrainProgress(progressPath, processed, byId, overall);
                 if (exited) break;
@@ -217,16 +232,44 @@ public static class ElevatedInstallRunner
             .Select(j => new AppModel { Name = j.Name, WingetId = j.Id, Source = j.Source })
             .ToList();
 
+        // Cancellation (v1.0.7): ouder schrijft cancel.flag in de workDir wanneer
+        // de user op Annuleren klikt; wij pollen 'm hier en cancelen onze CTS, wat
+        // door de hele install-stack propageert (WingetService killt z'n actieve
+        // winget-processen + de hele installer-tree die winget zelf spawnt).
+        var cancelFlagPath = Path.Combine(workDir, "cancel.flag");
+        using var innerCts = new CancellationTokenSource();
+        var monitor = Task.Run(async () =>
+        {
+            while (!innerCts.IsCancellationRequested)
+            {
+                try
+                {
+                    if (File.Exists(cancelFlagPath))
+                    {
+                        Helpers.Diagnostics.Log("install.log", "CHILD CANCEL flag detected, cancelling installs");
+                        innerCts.Cancel();
+                        break;
+                    }
+                    await Task.Delay(500, innerCts.Token);
+                }
+                catch { break; }
+            }
+        });
+
         try
         {
             using var writer = new ProgressFileWriter(progressPath);
-            await App.Winget.InstallAppsAsync(apps, writer, job.MaxParallelism);
+            await App.Winget.InstallAppsAsync(apps, writer, job.MaxParallelism, innerCts.Token);
             Helpers.Diagnostics.Log("install.log", $"CHILD EXIT ok apps={apps.Count} parallel={job.MaxParallelism}");
         }
         catch (Exception ex)
         {
             Helpers.Diagnostics.Log("install.log", $"CHILD EXIT exception: {ex.GetType().Name}: {ex.Message}");
             throw;
+        }
+        finally
+        {
+            innerCts.Cancel();   // stopt de monitor-task indien nog actief
         }
     }
 

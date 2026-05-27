@@ -8,7 +8,7 @@
     xmlns:dialogs="using:SetupToolbox.Dialogs"
     mc:Ignorable="d"
     Title="Install apps"
-    PrimaryButtonText="Close"
+    PrimaryButtonText="Sluiten"
     IsPrimaryButtonEnabled="False"
     DefaultButton="Primary"
     CornerRadius="8"
