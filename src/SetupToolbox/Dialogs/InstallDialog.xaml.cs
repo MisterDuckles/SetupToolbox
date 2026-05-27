@@ -105,10 +105,32 @@ public sealed partial class InstallDialog : ContentDialog
         ProgressHeader.Text = $"Installing {_wingetTotal} app{(_wingetTotal == 1 ? "" : "s")}{_parallelLabel}";
 
         var progress = new Progress<InstallProgress>(OnProgress);
-        await App.Winget.InstallAppsAsync(apps, progress, maxParallelism);
+
+        // Splitsing (v1.0.5):
+        //  - community-winget-apps → ge-eleveerde runner: ÉÉN UAC voor de hele
+        //    batch i.p.v. een prompt per machine-scope app. Bij geweigerde UAC
+        //    (of mislukte elevatie) vallen we terug op de in-process per-app flow
+        //    zodat de user niet vastzit (user-scope apps installeren dan alsnog).
+        //  - msstore-apps → blijven onge-eleveerd in-process: de Store-backend
+        //    werkt niet betrouwbaar onder elevatie en prompt toch zelden om UAC.
+        var community = apps.Where(a => !IsMsStore(a)).ToList();
+        var msstore = apps.Where(a => IsMsStore(a)).ToList();
+
+        if (community.Count > 0)
+        {
+            var result = await ElevatedInstallRunner.InstallAppsElevatedAsync(community, progress, maxParallelism);
+            if (result != ElevatedRunResult.Completed)
+                await App.Winget.InstallAppsAsync(community, progress, maxParallelism);
+        }
+
+        if (msstore.Count > 0)
+            await App.Winget.InstallAppsAsync(msstore, progress, maxParallelism);
 
         UpdateSummaryAndButtons();
     }
+
+    private static bool IsMsStore(AppModel a) =>
+        string.Equals(a.Source, "msstore", StringComparison.OrdinalIgnoreCase);
 
     // Samenvatting + knopstaat afgeleid uit _items (cumulatief over de initiële run
     // én retries). "Retry failed" verschijnt alleen als er nog winget-apps gefaald zijn.

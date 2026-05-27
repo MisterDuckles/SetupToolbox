@@ -110,6 +110,20 @@ public partial class App : Application
             return;
         }
 
+        // Ge-eleveerde install-runner (v1.0.5): wanneer de app relaunched wordt met
+        // "--install-runner <jobPath>" draaien we de winget-batch headless (ÉÉN UAC
+        // voor de hele batch) en streamen we de voortgang naar een JSONL-bestand dat
+        // het ouder-proces tailt. Geen window — net als de /autoupdate-tak.
+        if (cmdArgs.Length > 2 && ElevatedInstallRunner.IsRunnerArg(cmdArgs[1]))
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await ElevatedInstallRunner.RunChildAsync(cmdArgs[2]); }
+                finally { Environment.Exit(0); }
+            });
+            return;
+        }
+
         Window = new MainWindow();
         Window.Activate();
     }

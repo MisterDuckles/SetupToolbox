@@ -10,6 +10,17 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Voltooide versies
 
+### v1.0.5 — UAC eenmalig per batch (ge-eleveerde install-runner)
+
+De architecturaal grote uit de v1.0.4-roadmap: één UAC-prompt voor de héle install-batch i.p.v. een prompt per machine-scope app.
+
+- **Waarom een apart proces.** UAC triggeren vereist `Process.Start` met `Verb="runas"` + `UseShellExecute=true`, en dát verbiedt stdout-redirect — we kunnen de output van een elevated winget dus niet lezen zoals `WingetService` in-process doet. Oplossing: we relaunchen onze **eigen exe** ge-eleveerd in een headless `--install-runner <jobPath>`-modus (nieuwe tak in `App.OnLaunched`, vóór window-creatie, net als `/autoupdate`). Geen single-instance/AppInstance-redirectie in de app, dus de tweede elevated kopie draait zelfstandig.
+- **IPC via JSONL temp-bestand (geen named pipe).** Ouder schrijft `job.json` (`{ MaxParallelism, Apps:[{Id,Name,Source}] }`) naar `%TEMP%\SetupToolbox\runner-<guid>\`, start het elevated kind, en **tailt** `progress.jsonl` (~elke 250ms, `FileShare.ReadWrite`, splitst op `\n` en slaat de onvolledige trailing-regel over). Kind draait de bestaande `WingetService.InstallAppsAsync` met een thread-safe (lock'd) `IProgress`-writer die elke `InstallProgress` als JSON-regel append't. Ouder reconstrueert `InstallProgress` via een `wingetId→App`-lookup → exact dezelfde progress-stroom, **InstallDialog merkt geen verschil**. Bewust file-polling i.p.v. pipe: crash-robuust (partiële resultaten blijven leesbaar), geen pipe-ACL-gedoe tussen medium- en high-integrity processen.
+- **Drie install-lanes.** Manual-download (browser) → ouder, geen elevatie (al zo). **Community-winget** → ge-eleveerde runner (één UAC). **msstore** → blijft onge-eleveerd in-process (Store-backend werkt niet betrouwbaar elevated, prompt toch zelden). `InstallDialog.RunWingetInstallsAsync` splitst nu op `Source`.
+- **Fallback bij geweigerde UAC.** `Win32Exception` (1223 / elevatie onmogelijk) → `ElevatedRunResult.UacDeclined` → caller valt terug op de in-process per-app flow zodat de user niet vastzit (user-scope apps installeren dan alsnog; machine-scope her-prompten per app). Kind-crash → partiële progress blijft, rest = failed, de v1.0.4-retry-knop werkt nog (en gaat opnieuw via één UAC).
+
+> **Te verifiëren op de VM (echte UAC):** (1) één UAC-prompt voor een gemengde batch, (2) de ge-eleveerde **eigen exe** boot headless OK (WindowsAppSDK-bootstrapper onder elevatie is het voornaamste risico), (3) progress streamt vloeiend terug, (4) UAC-weigeren valt netjes terug op de per-app flow, (5) msstore-apps installeren nog onge-eleveerd. Lokaal alleen de opstart + dialog-flow getest (geen echte install getriggerd om niet ongevraagd software te installeren).
+
 ### v1.0.4 — Install-UX: "Al geïnstalleerd"-status, instelbaar parallelisme, retry-knop
 
 Drie gebundelde install-UX-verbeteringen na de VM-test:
@@ -18,7 +29,7 @@ Drie gebundelde install-UX-verbeteringen na de VM-test:
 - **Parallelisme instelbaar (1-4).** Bool `ParallelInstalls` → int **`MaxParallelInstalls`** (default 2). Settings toont nu een `NumberBox` (1-4) i.p.v. een toggle; de one-time prompt zet 2 (Yes) of 1 (No). `InstallDialog` leest de int; `InstallAppsAsync` capt sowieso op 4. MSI-installers serialiseren op de globale Windows-installer-mutex, dus hoger helpt vooral losse EXE-installers.
 - **"Retry failed"-knop.** Na een batch verschijnt — alleen bij gefaalde winget-apps — een Secondary-knop die alléén de gefaalde apps reset (`InstallItem.Reset()`) + opnieuw draait, zonder de dialog te sluiten. Run + samenvatting zijn nu herbruikbaar (`RunWingetInstallsAsync` / `UpdateSummaryAndButtons`) en cumulatief afgeleid uit de item-lijst. Handig bij tijdelijke fouten (UAC-cancel, VM-pauze, hash, parallel-botsing).
 
-> **Nog open (v1.0.5):** UAC eenmalig per batch — een elevated install-runner (relaunch in `--install-runner` headless mode via `runas`, één UAC) + IPC om progress terug te streamen. De architecturale grote; alleen op de VM met echte UAC volledig te verifiëren.
+> **✅ Opgepakt in v1.0.5:** UAC eenmalig per batch — ge-eleveerde install-runner (`--install-runner` headless via `runas`, één UAC) + JSONL-IPC om progress terug te streamen. Zie de v1.0.5-sectie hierboven.
 
 ### v1.0.3 — Icon-regressie fix + accurate install-foutmeldingen
 
