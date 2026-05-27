@@ -10,6 +10,29 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Voltooide versies
 
+### v1.0.6 — Hotfix: `app.manifest` asInvoker + runner-diagnostiek
+
+VM-test van v1.0.5 onthulde twee gerelateerde launch-failures, beide met dezelfde root cause: het `app.manifest` had **geen expliciete `requestedExecutionLevel`** declaratie. Combinatie met onze exe-naam (`SetupToolbox.exe` — begint met *"Setup"*) raakte Windows' UAC **Installer Detection** heuristiek → de exe werd stilzwijgend als "vereist admin" gestempeld.
+
+- **Bug #1 — Inno Setup's auto-launch faalt** met `CreateProcess failed; code 740` ("The requested operation requires elevation"): Inno Setup draait als asInvoker en kan een impliciet-elevation-gemarkeerde exe niet via CreateProcess starten. **Verklaart waarom de installer's "launch app"-stap brak op de VM.**
+- **Bug #2 — "This app can't run on your PC"** bij de v1.0.5 elevated install-runner: onze `ShellExecute` met `Verb="runas"` triggert UAC netjes, maar Windows probeert daarna een al-impliciet-elevation-gemarkeerde exe nóg eens te eleveren → bootstrapper-context raakt corrupt → kind crasht direct. **Verklaart waarom de v1.0.5 batch-UAC niet zichtbaar was: het kind faalde meteen na de UAC-prompt; mijn parent-code zag een proces dat "compleet" was met non-zero exit en runde geen fallback (alle apps bleven Pending).**
+
+**Fix** in `app.manifest` (één canonical XML-blok):
+```xml
+<trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+  <security>
+    <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+      <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+    </requestedPrivileges>
+  </security>
+</trustInfo>
+```
+`asInvoker` schakelt de Installer Detection heuristiek uit en zegt expliciet "draai op het level van wie me start". Resultaat: (1) Inno Setup kan de exe gewoon CreateProcessen na install, (2) onze v1.0.5 `ShellExecute runas` triggert nu één nette UAC + de elevated kind-exe start zonder bootstrapper-conflict. App blijft per-user, geen UAC bij normale launch — alleen wanneer v1.0.5 expliciet om elevatie vraagt voor de install-batch.
+
+**Runner-diagnostiek** in `install.log` om VM-debug te versnellen: parent logt `RUNNER START exe=… apps=N parallel=K`, daarna `RUNNER EXIT pid=X exitCode=0x… elapsed=Ns progressLines=N`. Kind logt `CHILD START job=… pid=X` en `CHILD EXIT ok …` (of exception). Nu kun je in één blik in de log zien: kreeg de parent het kind ge-eleveerd? Heeft het kind überhaupt z'n job gelezen? Kwamen er progress-regels door?
+
+> **Niet meegenomen, los oppakken:** de `0x8A150006` / `0x80004004` install-failures in de v1.0.5-VM-log zijn een aparte categorie (installer-conflicts onder elevation + parallel-botsingen + msstore-bron stuk op VM + één `0x8A150105` DISK_FULL voor Proton Drive). Eerst v1.0.6 verifiëren — pas dán zinvol om hier dieper in te duiken.
+
 ### v1.0.5 — UAC eenmalig per batch (ge-eleveerde install-runner)
 
 De architecturaal grote uit de v1.0.4-roadmap: één UAC-prompt voor de héle install-batch i.p.v. een prompt per machine-scope app.

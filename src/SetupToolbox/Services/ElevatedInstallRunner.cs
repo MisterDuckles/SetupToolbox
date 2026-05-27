@@ -66,7 +66,11 @@ public static class ElevatedInstallRunner
         var exePath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exePath)) { TryCleanup(workDir); return ElevatedRunResult.Failed; }
 
+        Helpers.Diagnostics.Log("install.log",
+            $"RUNNER START exe={exePath} apps={apps.Count} parallel={maxParallelism} workDir={workDir}");
+
         Process? proc;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             proc = Process.Start(new ProcessStartInfo
@@ -78,20 +82,30 @@ public static class ElevatedInstallRunner
                 WindowStyle = ProcessWindowStyle.Hidden
             });
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception ex)
         {
             // UAC geweigerd (1223) of elevatie niet mogelijk → caller valt terug
             // op de in-process per-app flow zodat de user niet vastzit.
+            Helpers.Diagnostics.Log("install.log",
+                $"RUNNER FAIL UAC declined / elevation impossible (Win32 {ex.NativeErrorCode}: {ex.Message})");
             TryCleanup(workDir);
             return ElevatedRunResult.UacDeclined;
         }
-        catch
+        catch (Exception ex)
         {
+            Helpers.Diagnostics.Log("install.log", $"RUNNER FAIL start exception: {ex.GetType().Name}: {ex.Message}");
             TryCleanup(workDir);
             return ElevatedRunResult.Failed;
         }
 
-        if (proc == null) { TryCleanup(workDir); return ElevatedRunResult.Failed; }
+        if (proc == null)
+        {
+            Helpers.Diagnostics.Log("install.log", "RUNNER FAIL Process.Start returned null");
+            TryCleanup(workDir);
+            return ElevatedRunResult.Failed;
+        }
+
+        var pid = TryGetPid(proc);
 
         var byId = new Dictionary<string, AppModel>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in apps) byId[a.WingetId] = a;
@@ -107,15 +121,25 @@ public static class ElevatedInstallRunner
                 await Task.Delay(250);
             }
             // Belt-and-suspenders: regels die ná de exit-check nog landden.
-            DrainProgress(progressPath, processed, byId, overall);
+            processed = DrainProgress(progressPath, processed, byId, overall);
         }
         finally
         {
+            sw.Stop();
+            int exitCode = -1;
+            try { exitCode = proc.ExitCode; } catch { /* mag falen als proc al disposed/uitgesloten */ }
+            Helpers.Diagnostics.Log("install.log",
+                $"RUNNER EXIT pid={pid} exitCode=0x{unchecked((uint)exitCode):X8} elapsed={sw.Elapsed.TotalSeconds:F1}s progressLines={processed}");
             proc.Dispose();
             TryCleanup(workDir);
         }
 
         return ElevatedRunResult.Completed;
+    }
+
+    private static int TryGetPid(Process p)
+    {
+        try { return p.Id; } catch { return -1; }
     }
 
     /// <summary>
@@ -164,13 +188,27 @@ public static class ElevatedInstallRunner
 
     public static async Task RunChildAsync(string jobPath)
     {
+        Helpers.Diagnostics.Log("install.log", $"CHILD START job={jobPath} pid={Environment.ProcessId}");
+
         InstallJob? job;
         try { job = JsonSerializer.Deserialize<InstallJob>(File.ReadAllText(jobPath)); }
-        catch { return; }
-        if (job?.Apps == null || job.Apps.Count == 0) return;
+        catch (Exception ex)
+        {
+            Helpers.Diagnostics.Log("install.log", $"CHILD EXIT could not read job: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+        if (job?.Apps == null || job.Apps.Count == 0)
+        {
+            Helpers.Diagnostics.Log("install.log", "CHILD EXIT empty/invalid job");
+            return;
+        }
 
         var workDir = Path.GetDirectoryName(jobPath);
-        if (string.IsNullOrEmpty(workDir)) return;
+        if (string.IsNullOrEmpty(workDir))
+        {
+            Helpers.Diagnostics.Log("install.log", "CHILD EXIT no workDir");
+            return;
+        }
         var progressPath = Path.Combine(workDir, "progress.jsonl");
 
         // Alleen Name/WingetId/Source zetten — NIET App.IconImage aanraken (lazy
@@ -179,8 +217,17 @@ public static class ElevatedInstallRunner
             .Select(j => new AppModel { Name = j.Name, WingetId = j.Id, Source = j.Source })
             .ToList();
 
-        using var writer = new ProgressFileWriter(progressPath);
-        await App.Winget.InstallAppsAsync(apps, writer, job.MaxParallelism);
+        try
+        {
+            using var writer = new ProgressFileWriter(progressPath);
+            await App.Winget.InstallAppsAsync(apps, writer, job.MaxParallelism);
+            Helpers.Diagnostics.Log("install.log", $"CHILD EXIT ok apps={apps.Count} parallel={job.MaxParallelism}");
+        }
+        catch (Exception ex)
+        {
+            Helpers.Diagnostics.Log("install.log", $"CHILD EXIT exception: {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
     }
 
     // Synchronous, thread-safe IProgress: parallelle installs rapporteren vanaf

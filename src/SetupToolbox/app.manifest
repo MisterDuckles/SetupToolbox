@@ -16,4 +16,20 @@
       <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
     </windowsSettings>
   </application>
+
+  <!-- Expliciet asInvoker (v1.0.6). Zonder deze declaratie raakt onze exe-naam
+       ("SetupToolbox.exe" — begint met "Setup") Windows' UAC Installer Detection
+       heuristiek en wordt 'ie als installer-die-admin-nodig-heeft gemarkeerd.
+       Gevolg: (1) Inno Setup's post-install CreateProcess faalt met code 740,
+       (2) onze eigen ShellExecute-runas (v1.0.5 elevated install-runner) krijgt
+       een double-elevation conflict → "This app can't run on your PC".
+       Met asInvoker schakelt Windows die heuristiek uit en kan de exe nét zo
+       gewoon vanuit een elevated context gestart worden als vanuit een normale. -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
 </assembly>
