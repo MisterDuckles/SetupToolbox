@@ -145,20 +145,20 @@ public sealed partial class InstallDialog : ContentDialog
 
         if (community.Count > 0)
         {
-            var result = await ElevatedInstallRunner.InstallAppsElevatedAsync(community, progress, maxParallelism, _cancelCts.Token);
+            // finalMessages bevat de definitieve uitkomst per app, gesynchroniseerd
+            // geschreven in DrainProgress vóór de DispatcherQueue-dispatch. Gebruik
+            // dit voor retry-scans i.p.v. _items: die worden bijgewerkt via
+            // TryEnqueue (async) en kunnen nog pending zijn bij snelle batches.
+            var (result, finalMessages) = await ElevatedInstallRunner.InstallAppsElevatedAsync(community, progress, maxParallelism, _cancelCts.Token);
             if (result == ElevatedRunResult.Completed)
             {
                 // B (v1.0.7): apps die elevation weigerden (typisch Spotify, exit
                 // 0x8A150056) krijgen automatisch een tweede pass in-process onge-
-                // eleveerd. Detectie via de sentinel-message — geen hardcoded
-                // blocklist; werkt voor elke huidige/toekomstige app met dit gedrag.
+                // eleveerd. Detectie via finalMessages (sync) — geen _items-scan.
                 var retryApps = community.Where(a =>
-                {
-                    var it = _items.FirstOrDefault(i => i.WingetId == a.WingetId);
-                    return it != null
-                        && it.State == InstallItemState.Failed
-                        && it.Message == WingetService.RequiresUnelevatedMessage;
-                }).ToList();
+                    finalMessages.TryGetValue(a.WingetId, out var msg) &&
+                    msg == WingetService.RequiresUnelevatedMessage
+                ).ToList();
 
                 if (retryApps.Count > 0 && !_cancelCts.IsCancellationRequested)
                 {
@@ -174,15 +174,11 @@ public sealed partial class InstallDialog : ContentDialog
                 }
 
                 // E1: apps die een installatielocatie vereisen → pad-dialog → in-process
-                // retry met --location. Per app een aparte dialog zodat de user voor
-                // elke app een eigen pad kan kiezen (of kan overslaan).
+                // retry met --location. Scan via finalMessages (sync) — zelfde reden als B.
                 var locationApps = community.Where(a =>
-                {
-                    var it = _items.FirstOrDefault(i => i.WingetId == a.WingetId);
-                    return it != null
-                        && it.State == InstallItemState.Failed
-                        && it.Message == WingetService.RequiresLocationMessage;
-                }).ToList();
+                    finalMessages.TryGetValue(a.WingetId, out var msg) &&
+                    msg == WingetService.RequiresLocationMessage
+                ).ToList();
 
                 if (locationApps.Count > 0 && !_cancelCts.IsCancellationRequested)
                 {

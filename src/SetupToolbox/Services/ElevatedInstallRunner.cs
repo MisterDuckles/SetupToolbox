@@ -36,13 +36,20 @@ public static class ElevatedInstallRunner
     // Parent-kant: schrijf job → start elevated kind → tail de progress-file.
     // ---------------------------------------------------------------------
 
-    public static async Task<ElevatedRunResult> InstallAppsElevatedAsync(
+    // Returnt naast de run-status ook de definitieve message per app.
+    // Dit is de enige betrouwbare manier om na de run te weten welke apps
+    // REJECT-ADMIN / LOCATION-REQUIRED kregen: _items in InstallDialog wordt
+    // bijgewerkt via DispatcherQueue.TryEnqueue (async), zodat een scan op
+    // _items een race conditie geeft bij snelle batches (Spotify-only klaar
+    // in <1s: de TryEnqueue-callbacks zijn nog niet verwerkt als de scan loopt).
+    public static async Task<(ElevatedRunResult status, Dictionary<string, string> finalMessages)> InstallAppsElevatedAsync(
         IReadOnlyList<AppModel> apps,
         IProgress<InstallProgress>? overall,
         int maxParallelism,
         CancellationToken ct = default)
     {
-        if (apps.Count == 0) return ElevatedRunResult.Completed;
+        var finalMessages = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (apps.Count == 0) return (ElevatedRunResult.Completed, finalMessages);
 
         var workDir = Path.Combine(Path.GetTempPath(), "SetupToolbox", "runner-" + Guid.NewGuid().ToString("N"));
         var jobPath = Path.Combine(workDir, "job.json");
@@ -63,11 +70,11 @@ public static class ElevatedInstallRunner
         catch
         {
             TryCleanup(workDir);
-            return ElevatedRunResult.Failed;
+            return (ElevatedRunResult.Failed, finalMessages);
         }
 
         var exePath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(exePath)) { TryCleanup(workDir); return ElevatedRunResult.Failed; }
+        if (string.IsNullOrEmpty(exePath)) { TryCleanup(workDir); return (ElevatedRunResult.Failed, finalMessages); }
 
         Helpers.Diagnostics.Log("install.log",
             $"RUNNER START exe={exePath} apps={apps.Count} parallel={maxParallelism} workDir={workDir}");
@@ -92,20 +99,20 @@ public static class ElevatedInstallRunner
             Helpers.Diagnostics.Log("install.log",
                 $"RUNNER FAIL UAC declined / elevation impossible (Win32 {ex.NativeErrorCode}: {ex.Message})");
             TryCleanup(workDir);
-            return ElevatedRunResult.UacDeclined;
+            return (ElevatedRunResult.UacDeclined, finalMessages);
         }
         catch (Exception ex)
         {
             Helpers.Diagnostics.Log("install.log", $"RUNNER FAIL start exception: {ex.GetType().Name}: {ex.Message}");
             TryCleanup(workDir);
-            return ElevatedRunResult.Failed;
+            return (ElevatedRunResult.Failed, finalMessages);
         }
 
         if (proc == null)
         {
             Helpers.Diagnostics.Log("install.log", "RUNNER FAIL Process.Start returned null");
             TryCleanup(workDir);
-            return ElevatedRunResult.Failed;
+            return (ElevatedRunResult.Failed, finalMessages);
         }
 
         var pid = TryGetPid(proc);
@@ -131,12 +138,12 @@ public static class ElevatedInstallRunner
                     cancelWritten = true;
                 }
                 var exited = proc.HasExited;
-                processed = DrainProgress(progressPath, processed, byId, overall);
+                processed = DrainProgress(progressPath, processed, byId, overall, finalMessages);
                 if (exited) break;
                 await Task.Delay(250);
             }
             // Belt-and-suspenders: regels die ná de exit-check nog landden.
-            processed = DrainProgress(progressPath, processed, byId, overall);
+            processed = DrainProgress(progressPath, processed, byId, overall, finalMessages);
         }
         finally
         {
@@ -149,7 +156,7 @@ public static class ElevatedInstallRunner
             TryCleanup(workDir);
         }
 
-        return ElevatedRunResult.Completed;
+        return (ElevatedRunResult.Completed, finalMessages);
     }
 
     private static int TryGetPid(Process p)
@@ -166,7 +173,8 @@ public static class ElevatedInstallRunner
     private static int DrainProgress(
         string path, int processed,
         Dictionary<string, AppModel> byId,
-        IProgress<InstallProgress>? overall)
+        IProgress<InstallProgress>? overall,
+        Dictionary<string, string> finalMessages)
     {
         string content;
         try
@@ -187,7 +195,19 @@ public static class ElevatedInstallRunner
             try { line = JsonSerializer.Deserialize<InstallProgressLine>(raw); }
             catch { continue; }
             if (line == null || !byId.TryGetValue(line.WingetId, out var app)) continue;
-            overall?.Report(new InstallProgress(line.Index, line.Total, app, (InstallPhase)line.Phase, line.Message));
+
+            var phase = (InstallPhase)line.Phase;
+
+            // Sla de definitieve uitkomst per app SYNCHRONOUSLY op, vóór overall.Report.
+            // overall.Report gaat via Progress<T> → mogelijk DispatcherQueue.TryEnqueue
+            // (async). De scan voor B-retry / E1-location in InstallDialog mag NIET op
+            // die async state leunen — bij snelle batches (Spotify-only) kunnen de
+            // TryEnqueue-callbacks nog pending zijn op het moment dat de scan loopt.
+            if (phase is InstallPhase.Success or InstallPhase.AlreadyInstalled
+                      or InstallPhase.OpenedInStore or InstallPhase.Failed)
+                finalMessages[line.WingetId] = line.Message;
+
+            overall?.Report(new InstallProgress(line.Index, line.Total, app, phase, line.Message));
         }
         return complete < processed ? processed : complete;
     }

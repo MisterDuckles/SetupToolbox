@@ -31,9 +31,14 @@ Vier gebundelde install-UX-verbeteringen uit de v1.0.6 VM-test (v1.0.6 fix werkt
 > - ✅ **C (NumberBox):** Werkt.
 > - ✅ **D (msstore):** Werkt op frisse Windows-install — Apple Music (`9PFHDD62MXS1`) en `XP8JNQFBQH6PVF` allebei OK via elevated runner.
 
-## Open voor v1.0.9
+## Open voor v1.1.0
 
-- **E3. Battle.net → `downloadUrl`** *(lager prioriteit)* — Battle.net's installer respecteert `--silent` niet; zelfs met E1's `--location` hangt 'ie op interactieve dialogs. Fix: `downloadUrl` in `apps.json` → bestaande manual-download flow (browser naar battle.net). Geen nieuwe code nodig.
+*(geen open patches meer — volgende milestone)*
+
+### v1.0.9 — B-retry race-conditie fix + Battle.net downloadUrl (E3)
+
+- **B-retry race-conditie fix** — `_items` wordt bijgewerkt via `DispatcherQueue.TryEnqueue` (async); bij een snelle batch (Spotify-only, ~1s) kon de scan al lopen vóór de TryEnqueue-callbacks verwerkt waren → geen retry. Fix: `ElevatedInstallRunner.InstallAppsElevatedAsync` retourneert nu naast de `ElevatedRunResult` ook een `Dictionary<string, string> finalMessages` (wingetId → definitieve message), gesynchroniseerd gevuld in `DrainProgress` vóór de dispatch. `InstallDialog` scant voortaan op `finalMessages` i.p.v. `_items` voor zowel de B-retry (REJECT-ADMIN) als de E1-location retry. Zelfde fix voor E1 locatie-scan meegenomen.
+- **E3. Battle.net → `downloadUrl`** — `"downloadUrl": "https://www.blizzard.com/en-us/apps/battle.net/desktop"` toegevoegd aan `apps.json`. Battle.net's winget-installer respecteert `--silent` niet en hangt op interactieve dialogs; de bestaande manual-download flow (browser opent de downloadpagina) is de betere UX. Geen nieuwe code — `wingetId` behouden voor het icoon-pad.
 
 ### v1.0.8 — B-retry UI-feedback (F1) + install-location dialog (E1)
 
