@@ -64,6 +64,31 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+
+        // Globale vangnet: zonder dit kill een onbehandelde exception op de UI-thread
+        // de héle app stilzwijgend (geen window, geen log). Dat zagen we bij een
+        // install die wél slaagde maar waar een transiente WinUI binding-/layout-fout
+        // in een Progress-callback de app deed verdwijnen vóór de runner z'n EXIT-regel
+        // kon loggen. We loggen de volledige stack en houden de app in leven.
+        UnhandledException += OnUnhandledException;
+    }
+
+    private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            Helpers.Diagnostics.Log("crash.log",
+                $"UNHANDLED {e.Message}{Environment.NewLine}{e.Exception}");
+            Helpers.Diagnostics.Log("install.log",
+                $"UNHANDLED-UI {e.Exception?.GetType().Name}: {e.Message}");
+        }
+        catch { /* logging mag nooit zelf crashen */ }
+
+        // Handled=true voorkomt de fatale app-terminatie voor herstelbare managed
+        // exceptions (bv. een binding-update tijdens layout). Niet elke WinUI-fout is
+        // herstelbaar, maar voor de progress-callback-categorie wel — en we hebben nu
+        // sowieso de stack in crash.log voor diagnose.
+        e.Handled = true;
     }
 
     /// <summary>

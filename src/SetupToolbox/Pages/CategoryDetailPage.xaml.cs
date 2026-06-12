@@ -258,7 +258,11 @@ public sealed partial class CategoryDetailPage : Page
 
         await Helpers.ParallelInstallsPrompt.MaybeShowAsync(this.XamlRoot);
 
-        var dialog = new InstallDialog(selected) { XamlRoot = this.XamlRoot };
+        // Locatie-paden vooraf vragen — moet vóór InstallDialog (zelf een ContentDialog):
+        // WinUI staat geen tweede open ContentDialog toe, dus binnenin zou het crashen.
+        var locationPaths = await Helpers.LocationPrompt.CollectAsync(selected, this.XamlRoot);
+
+        var dialog = new InstallDialog(selected, locationPaths) { XamlRoot = this.XamlRoot };
         await dialog.ShowAsync();
 
         foreach (var app in selected) app.IsSelected = false;

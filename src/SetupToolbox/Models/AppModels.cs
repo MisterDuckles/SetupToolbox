@@ -109,6 +109,21 @@ public class App : INotifyPropertyChanged
     [JsonPropertyName("downloadUrl")]
     public string? DownloadUrl { get; set; }
 
+    // Apps waarvan de installer weigert in een ge-eleveerde (admin) context te
+    // draaien — typisch Spotify. Die zouden in de ge-eleveerde batch falen met een
+    // generieke/hash-fout i.p.v. een nette "prohibits elevation"-code, waardoor
+    // detectie-achteraf onbetrouwbaar is. Met deze vlag worden ze proactief
+    // in-process ONGE-eleveerd geïnstalleerd (zoals msstore-apps), nooit via de batch.
+    [JsonPropertyName("requiresUnelevated")]
+    public bool RequiresUnelevated { get; set; }
+
+    // Apps waarvan de installer een expliciete installatielocatie vereist — typisch
+    // Battle.net. Met deze vlag toont InstallDialog proactief een pad-dialog en draait
+    // `winget install --location <pad>`, i.p.v. winget eerst te laten falen en de
+    // fouttekst te parsen (fragiel, taal-/manifest-afhankelijk).
+    [JsonPropertyName("requiresLocation")]
+    public bool RequiresLocation { get; set; }
+
     [JsonIgnore]
     public bool IsManualDownload => !string.IsNullOrWhiteSpace(DownloadUrl);
 

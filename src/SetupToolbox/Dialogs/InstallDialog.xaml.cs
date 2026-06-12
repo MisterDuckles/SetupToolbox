@@ -18,6 +18,11 @@ public sealed partial class InstallDialog : ContentDialog
 {
     private readonly ObservableCollection<InstallItem> _items = new();
     private readonly IReadOnlyList<AppModel> _apps;
+
+    // Vooraf gekozen installatiepaden voor requiresLocation-apps (Battle.net),
+    // verzameld door LocationPrompt.CollectAsync vóór deze dialog opende. WinUI
+    // staat geen geneste ContentDialog toe, dus we kunnen het pad niet hier vragen.
+    private readonly IReadOnlyDictionary<string, string>? _locationPaths;
     private bool _installFinished;
     private int _completedCount;
     private int _wingetTotal;
@@ -35,10 +40,11 @@ public sealed partial class InstallDialog : ContentDialog
     // failed of alle skipped).
     public bool HadSuccessfulInstall { get; private set; }
 
-    public InstallDialog(IReadOnlyList<AppModel> apps)
+    public InstallDialog(IReadOnlyList<AppModel> apps, IReadOnlyDictionary<string, string>? locationPaths = null)
     {
         InitializeComponent();
         _apps = apps;
+        _locationPaths = locationPaths;
 
         foreach (var app in apps)
             _items.Add(new InstallItem(app.Name, app.WingetId));
@@ -133,15 +139,23 @@ public sealed partial class InstallDialog : ContentDialog
 
         var progress = new Progress<InstallProgress>(OnProgress);
 
-        // Splitsing (v1.0.5):
-        //  - community-winget-apps → ge-eleveerde runner: ÉÉN UAC voor de hele
-        //    batch i.p.v. een prompt per machine-scope app. Bij geweigerde UAC
-        //    (of mislukte elevatie) vallen we terug op de in-process per-app flow
-        //    zodat de user niet vastzit (user-scope apps installeren dan alsnog).
-        //  - msstore-apps → blijven onge-eleveerd in-process: de Store-backend
-        //    werkt niet betrouwbaar onder elevatie en prompt toch zelden om UAC.
-        var community = apps.Where(a => !IsMsStore(a)).ToList();
-        var msstore = apps.Where(a => IsMsStore(a)).ToList();
+        // Splitsing (v1.0.10):
+        //  - requiresUnelevated apps (Spotify) → PROACTIEF in-process onge-eleveerd.
+        //    Hun installer weigert admin-context en faalt dan met een generieke/hash-
+        //    fout i.p.v. een nette 0x8A150056 "prohibits elevation"-code, dus detectie-
+        //    achteraf is onbetrouwbaar. Daarom nooit via de batch; meteen onge-eleveerd.
+        //  - requiresLocation apps (Battle.net) → PROACTIEF pad-dialog + --location.
+        //    Winget eerst laten falen en de fouttekst parsen is te fragiel (taal-/
+        //    manifest-afhankelijk), dus we vragen de locatie vooraf.
+        //  - overige community-winget-apps → ge-eleveerde runner: ÉÉN UAC voor de hele
+        //    batch i.p.v. een prompt per machine-scope app. Bij geweigerde UAC vallen
+        //    we terug op de in-process per-app flow zodat de user niet vastzit.
+        //  - msstore-apps → blijven onge-eleveerd in-process: de Store-backend werkt
+        //    niet betrouwbaar onder elevatie en prompt toch zelden om UAC.
+        var msstore = apps.Where(IsMsStore).ToList();
+        var unelevated = apps.Where(a => !IsMsStore(a) && a.RequiresUnelevated).ToList();
+        var locationRequired = apps.Where(a => !IsMsStore(a) && !a.RequiresUnelevated && a.RequiresLocation).ToList();
+        var community = apps.Where(a => !IsMsStore(a) && !a.RequiresUnelevated && !a.RequiresLocation).ToList();
 
         if (community.Count > 0)
         {
@@ -152,9 +166,9 @@ public sealed partial class InstallDialog : ContentDialog
             var (result, finalMessages) = await ElevatedInstallRunner.InstallAppsElevatedAsync(community, progress, maxParallelism, _cancelCts.Token);
             if (result == ElevatedRunResult.Completed)
             {
-                // B (v1.0.7): apps die elevation weigerden (typisch Spotify, exit
-                // 0x8A150056) krijgen automatisch een tweede pass in-process onge-
-                // eleveerd. Detectie via finalMessages (sync) — geen _items-scan.
+                // Vangnet-B: een community-app die de batch tóch met de prohibits-
+                // elevation sentinel (0x8A150056) verliet → onge-eleveerd herproberen.
+                // De bekende user-scope apps zitten al in `unelevated`; dit dekt de rest.
                 var retryApps = community.Where(a =>
                     finalMessages.TryGetValue(a.WingetId, out var msg) &&
                     msg == WingetService.RequiresUnelevatedMessage
@@ -173,73 +187,29 @@ public sealed partial class InstallDialog : ContentDialog
                     await App.Winget.InstallAppsAsync(retryApps, progress, maxParallelism, _cancelCts.Token);
                 }
 
-                // E1: apps die een installatielocatie vereisen → pad-dialog → in-process
-                // retry met --location. Scan via finalMessages (sync) — zelfde reden als B.
-                var locationApps = community.Where(a =>
-                    finalMessages.TryGetValue(a.WingetId, out var msg) &&
-                    msg == WingetService.RequiresLocationMessage
-                ).ToList();
-
-                if (locationApps.Count > 0 && !_cancelCts.IsCancellationRequested)
-                {
-                    foreach (var a in locationApps)
-                    {
-                        if (_cancelCts.IsCancellationRequested) break;
-
-                        var item = _items.First(i => i.WingetId == a.WingetId);
-                        var defaultPath = System.IO.Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                            "Programs", a.Name);
-
-                        var pathBox = new TextBox { Text = defaultPath, Width = 400, Header = "Installatiepad" };
-                        var locationDialog = new ContentDialog
-                        {
-                            Title = $"Installatielocatie vereist — {a.Name}",
-                            Content = new StackPanel
-                            {
-                                Spacing = 8,
-                                Children =
-                                {
-                                    new TextBlock { Text = "Deze app vereist een installatielocatie. Kies een map:", TextWrapping = TextWrapping.Wrap },
-                                    pathBox
-                                }
-                            },
-                            PrimaryButtonText = "Installeren",
-                            CloseButtonText = "Overslaan",
-                            DefaultButton = ContentDialogButton.Primary,
-                            XamlRoot = XamlRoot
-                        };
-
-                        var dlgResult = await locationDialog.ShowAsync();
-                        if (dlgResult != ContentDialogResult.Primary) continue;
-
-                        var chosenPath = pathBox.Text.Trim();
-                        if (string.IsNullOrEmpty(chosenPath)) continue;
-
-                        item.Reset();
-                        item.State = InstallItemState.Installing;
-                        item.AdvanceStage(1);
-                        item.Message = "Installeert op opgegeven locatie...";
-                        _completedCount -= 1;
-
-                        var locationProgress = new Progress<string>(msg =>
-                            OnProgress(new InstallProgress(0, _wingetTotal, a, InstallPhase.Running, msg)));
-
-                        var (locSuccess, locMessage) = await App.Winget.InstallAppAsync(
-                            a.WingetId, locationProgress, a.Source, _cancelCts.Token, chosenPath);
-
-                        var locPhase = !locSuccess ? InstallPhase.Failed
-                            : locMessage == WingetService.AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
-                            : InstallPhase.Success;
-                        OnProgress(new InstallProgress(0, _wingetTotal, a, locPhase, locMessage));
-                    }
-                }
+                // NB: géén location-vangnet ná de batch — een pad-dialog tonen terwijl
+                // deze ContentDialog open staat crasht WinUI ("only a single ContentDialog
+                // can be open"). Apps die een locatie nodig hebben moeten in apps.json
+                // `requiresLocation: true` krijgen; LocationPrompt vraagt het pad dan vooraf
+                // (vóór deze dialog opent) en geeft het door via `_locationPaths`.
             }
             else
             {
                 // UAC geweigerd / elevatie mislukt → terugvallen op in-process flow.
                 await App.Winget.InstallAppsAsync(community, progress, maxParallelism, _cancelCts.Token);
             }
+        }
+
+        // Spotify e.a.: proactief in-process onge-eleveerd installeren.
+        if (unelevated.Count > 0 && !_cancelCts.IsCancellationRequested)
+            await App.Winget.InstallAppsAsync(unelevated, progress, maxParallelism, _cancelCts.Token);
+
+        // Battle.net e.a.: installeren met het vooraf gekozen pad (LocationPrompt
+        // draaide vóór deze dialog open ging). Geen pad gekozen → app overslaan.
+        foreach (var a in locationRequired)
+        {
+            if (_cancelCts.IsCancellationRequested) break;
+            await InstallWithLocationAsync(a);
         }
 
         if (msstore.Count > 0)
@@ -252,6 +222,42 @@ public sealed partial class InstallDialog : ContentDialog
         PrimaryButtonText = "Sluiten";
 
         UpdateSummaryAndButtons();
+    }
+
+    // E1: installeert een requiresLocation-app in-process met `--location <pad>`.
+    // Het pad is vooraf gekozen via LocationPrompt (vóór deze dialog open ging — WinUI
+    // staat geen geneste ContentDialog toe). Geen pad in _locationPaths = user heeft
+    // overgeslagen → app als Skipped markeren. Deze apps gaan nooit door de elevated
+    // batch, dus ze zijn nog niet geteld; we tellen ze hier exact één keer.
+    private async Task InstallWithLocationAsync(AppModel a)
+    {
+        var item = _items.First(i => i.WingetId == a.WingetId);
+
+        if (_locationPaths == null
+            || !_locationPaths.TryGetValue(a.WingetId, out var chosenPath)
+            || string.IsNullOrWhiteSpace(chosenPath))
+        {
+            item.State = InstallItemState.Skipped;
+            item.Message = "Overgeslagen — geen locatie gekozen";
+            _completedCount++;
+            ProgressHeader.Text = $"Installing — {_completedCount} of {_wingetTotal} done{_parallelLabel}";
+            return;
+        }
+
+        item.State = InstallItemState.Installing;
+        item.AdvanceStage(1);
+        item.Message = "Installeert op opgegeven locatie...";
+
+        var locationProgress = new Progress<string>(msg =>
+            OnProgress(new InstallProgress(0, _wingetTotal, a, InstallPhase.Running, msg)));
+
+        var (locSuccess, locMessage) = await App.Winget.InstallAppAsync(
+            a.WingetId, locationProgress, a.Source, _cancelCts!.Token, chosenPath);
+
+        var locPhase = !locSuccess ? InstallPhase.Failed
+            : locMessage == WingetService.AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
+            : InstallPhase.Success;
+        OnProgress(new InstallProgress(0, _wingetTotal, a, locPhase, locMessage));
     }
 
     private static bool IsMsStore(AppModel a) =>
@@ -327,6 +333,24 @@ public sealed partial class InstallDialog : ContentDialog
     }
 
     private void ApplyProgress(InstallProgress p)
+    {
+        // Progress-callbacks lopen via Progress<T>.Post op de UI-thread. Een exception
+        // hier (transiente WinUI binding-/layout-fout bij snelle property-updates) is
+        // anders ONGEVANGEN: ze propageert niet terug naar de drain-loop maar kilt de
+        // app — precies het TreeSize-crash-patroon (install slaagde, app verdween vóór
+        // RUNNER EXIT). Inkapselen + loggen zodat een UI-hik nooit een install nekt.
+        try
+        {
+            ApplyProgressCore(p);
+        }
+        catch (Exception ex)
+        {
+            Helpers.Diagnostics.Log("install.log",
+                $"APPLYPROGRESS-EX {p.App.WingetId} phase={p.Phase}: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void ApplyProgressCore(InstallProgress p)
     {
         var item = _items.FirstOrDefault(i => i.WingetId == p.App.WingetId);
         if (item == null) return;

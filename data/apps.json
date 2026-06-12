@@ -500,7 +500,8 @@
               "name": "Spotify",
               "wingetId": "Spotify.Spotify",
               "description": "Music streaming service",
-              "popular": true
+              "popular": true,
+              "requiresUnelevated": true
             },
             {
               "name": "Apple Music",
@@ -575,7 +576,7 @@
           "name": "Battle.net",
           "wingetId": "Blizzard.BattleNet",
           "description": "Blizzard launcher (WoW, Diablo, Overwatch)",
-          "downloadUrl": "https://www.blizzard.com/en-us/apps/battle.net/desktop"
+          "requiresLocation": true
         },
         {
           "name": "Ubisoft Connect",

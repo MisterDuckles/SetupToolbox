@@ -35,6 +35,30 @@ Vier gebundelde install-UX-verbeteringen uit de v1.0.6 VM-test (v1.0.6 fix werkt
 
 *(geen open patches meer — volgende milestone)*
 
+### v1.0.11 — Globale crash-vangnet + crash-safe progress-callbacks
+
+VM-test van v1.0.10: Battle.net (location-popup) en Spotify (onge-eleveerd) werken. Maar **TreeSize Free installeren deed de hele app verdwijnen** terwijl de install zélf slaagde (`OK JAMSoftware.TreeSize.Free` in de log). Diagnose via `install.log`: de runner-regel `RUNNER EXIT` ontbrak voor die run terwijl elke andere run 'm wél had → de UI-parent stierf vóór z'n `finally`-block.
+
+- **Root cause.** `ElevatedInstallRunner.DrainProgress` rapporteert voortgang via `Progress<T>.Report`, die `OnProgress` **async post** op de UI-thread. Een exception in die callback (transiente WinUI binding-/layout-fout bij snelle property-updates) propageert NIET terug naar de drain-loop maar landt als onbehandelde exception op de UI-message-pump. De app had **geen `UnhandledException`-handler**, dus het hele proces werd stilzwijgend gekilld — geen window, geen log, install al geslaagd.
+- **Fix 1 — globale vangnet.** `App` registreert nu `UnhandledException` → logt volledige stack naar `crash.log` + een regel naar `install.log`, en zet `e.Handled = true` zodat herstelbare managed exceptions de app niet meer nekken.
+- **Fix 2 — crash-safe progress.** `InstallDialog.ApplyProgress` is opgesplitst: de eigenlijke UI-update zit nu in `ApplyProgressCore` met een `try/catch` eromheen die naar `install.log` logt (`APPLYPROGRESS-EX <id> phase=…`). Een UI-hik tijdens een geslaagde install kan die install niet meer omverhalen, en we krijgen de exacte fase + exception-type in de log.
+
+> Bewust defensief i.p.v. één specifieke regel patchen: de crash was niet-deterministisch (TreeSize wél, TeamViewer niet, beide Success). De handler + try/catch maken de progress-pijplijn robuust én leveren bij een volgende hit een concrete stack op.
+
+### v1.0.10 — Spotify proactief onge-eleveerd + Battle.net location-popup (proactieve install-lanes)
+
+VM-test van v1.0.9 onthulde dat de detectie-achteraf aanpak (B-retry + E1) **niet betrouwbaar triggert**. Root cause: beide leunden op het parsen van winget's fout-uitkomst ná een gefaalde install in de ge-eleveerde batch, en die uitkomst is taal-/manifest-afhankelijk.
+
+- **Spotify retry'de niet.** De B-retry vuurt alleen op de sentinel `RequiresUnelevatedMessage`, die enkel ontstaat bij exit `0x8A150056` ("installer prohibits elevation"). Spotify's winget-manifest zet die elevation-flag niet betrouwbaar → in admin-context faalt de installer met een **generieke/hash-fout** i.p.v. een nette prohibits-elevation-code. De sentinel ontstond dus nooit, `finalMessages` kreeg een gewone failure-message, en de retry-scan vond niets. De v1.0.9 race-fix was correct maar irrelevant — de sentinel was er nooit om te vinden.
+- **Location-popup verscheen niet.** Zelfde fragiliteit: `IsLocationRequired` parst winget's fouttekst ná een gefaalde batch-install. Bovendien was Battle.net in v1.0.9 een `downloadUrl` geworden, dus die raakte winget niet eens meer.
+
+**Fix — proactieve install-lanes o.b.v. apps.json-vlaggen** (geen fout-detectie meer nodig):
+- Twee nieuwe `App`-properties: `RequiresUnelevated` (`requiresUnelevated`) en `RequiresLocation` (`requiresLocation`).
+- `apps.json`: Spotify → `requiresUnelevated: true`; Battle.net → `downloadUrl` verwijderd, `requiresLocation: true`.
+- `InstallDialog.RunWingetInstallsAsync` splitst nu in **vier lanes**: `community` (ge-eleveerde batch, één UAC) → `unelevated` (Spotify, proactief in-process onge-eleveerd) → `locationRequired` (Battle.net, install met `--location`) → `msstore` (in-process). Spotify gaat dus **nooit** meer door de batch; bij een Spotify-only batch is er zelfs geen UAC.
+- **Crash-fix (Battle.net):** InstallDialog is zélf een `ContentDialog`, en WinUI 3 staat maar één open ContentDialog tegelijk toe — een pad-dialog binnen InstallDialog tonen gooide *"Only a single ContentDialog can be open at any time"* → app-crash zodra je Battle.net selecteerde. Opgelost door het pad **vooraf** te vragen: nieuwe helper `Helpers.LocationPrompt.CollectAsync(apps, xamlRoot)` draait in de calling page (AppsPage + CategoryDetailPage), vóór `new InstallDialog`, en geeft een `Dictionary<wingetId,pad>` door aan de constructor. InstallDialog installeert location-apps met dat vooraf gekozen pad via `InstallWithLocationAsync` (geen dialog meer); geen pad gekozen → app als `Skipped`.
+- De B-retry op `RequiresUnelevatedMessage` blijft als **vangnet** (geen dialog, dus veilig). De E1-detectie-achteraf (location-sentinel na de batch) is **verwijderd**: een pad-dialog mid-batch kan niet zonder crash, dus `requiresLocation` in apps.json is de enige bron van waarheid voor locatie-apps.
+
 ### v1.0.9 — B-retry race-conditie fix + Battle.net downloadUrl (E3)
 
 - **B-retry race-conditie fix** — `_items` wordt bijgewerkt via `DispatcherQueue.TryEnqueue` (async); bij een snelle batch (Spotify-only, ~1s) kon de scan al lopen vóór de TryEnqueue-callbacks verwerkt waren → geen retry. Fix: `ElevatedInstallRunner.InstallAppsElevatedAsync` retourneert nu naast de `ElevatedRunResult` ook een `Dictionary<string, string> finalMessages` (wingetId → definitieve message), gesynchroniseerd gevuld in `DrainProgress` vóór de dispatch. `InstallDialog` scant voortaan op `finalMessages` i.p.v. `_items` voor zowel de B-retry (REJECT-ADMIN) als de E1-location retry. Zelfde fix voor E1 locatie-scan meegenomen.
