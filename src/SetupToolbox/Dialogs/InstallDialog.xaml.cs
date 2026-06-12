@@ -163,9 +163,80 @@ public sealed partial class InstallDialog : ContentDialog
                 if (retryApps.Count > 0 && !_cancelCts.IsCancellationRequested)
                 {
                     foreach (var a in retryApps)
-                        _items.First(i => i.WingetId == a.WingetId).Reset();
+                    {
+                        var it = _items.First(i => i.WingetId == a.WingetId);
+                        it.Reset();
+                        it.State = InstallItemState.Installing;
+                        it.Message = "Herprobeert zonder admin...";
+                    }
                     _completedCount -= retryApps.Count;   // worden opnieuw geteld in OnProgress
                     await App.Winget.InstallAppsAsync(retryApps, progress, maxParallelism, _cancelCts.Token);
+                }
+
+                // E1: apps die een installatielocatie vereisen → pad-dialog → in-process
+                // retry met --location. Per app een aparte dialog zodat de user voor
+                // elke app een eigen pad kan kiezen (of kan overslaan).
+                var locationApps = community.Where(a =>
+                {
+                    var it = _items.FirstOrDefault(i => i.WingetId == a.WingetId);
+                    return it != null
+                        && it.State == InstallItemState.Failed
+                        && it.Message == WingetService.RequiresLocationMessage;
+                }).ToList();
+
+                if (locationApps.Count > 0 && !_cancelCts.IsCancellationRequested)
+                {
+                    foreach (var a in locationApps)
+                    {
+                        if (_cancelCts.IsCancellationRequested) break;
+
+                        var item = _items.First(i => i.WingetId == a.WingetId);
+                        var defaultPath = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "Programs", a.Name);
+
+                        var pathBox = new TextBox { Text = defaultPath, Width = 400, Header = "Installatiepad" };
+                        var locationDialog = new ContentDialog
+                        {
+                            Title = $"Installatielocatie vereist — {a.Name}",
+                            Content = new StackPanel
+                            {
+                                Spacing = 8,
+                                Children =
+                                {
+                                    new TextBlock { Text = "Deze app vereist een installatielocatie. Kies een map:", TextWrapping = TextWrapping.Wrap },
+                                    pathBox
+                                }
+                            },
+                            PrimaryButtonText = "Installeren",
+                            CloseButtonText = "Overslaan",
+                            DefaultButton = ContentDialogButton.Primary,
+                            XamlRoot = XamlRoot
+                        };
+
+                        var dlgResult = await locationDialog.ShowAsync();
+                        if (dlgResult != ContentDialogResult.Primary) continue;
+
+                        var chosenPath = pathBox.Text.Trim();
+                        if (string.IsNullOrEmpty(chosenPath)) continue;
+
+                        item.Reset();
+                        item.State = InstallItemState.Installing;
+                        item.AdvanceStage(1);
+                        item.Message = "Installeert op opgegeven locatie...";
+                        _completedCount -= 1;
+
+                        var locationProgress = new Progress<string>(msg =>
+                            OnProgress(new InstallProgress(0, _wingetTotal, a, InstallPhase.Running, msg)));
+
+                        var (locSuccess, locMessage) = await App.Winget.InstallAppAsync(
+                            a.WingetId, locationProgress, a.Source, _cancelCts.Token, chosenPath);
+
+                        var locPhase = !locSuccess ? InstallPhase.Failed
+                            : locMessage == WingetService.AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
+                            : InstallPhase.Success;
+                        OnProgress(new InstallProgress(0, _wingetTotal, a, locPhase, locMessage));
+                    }
                 }
             }
             else

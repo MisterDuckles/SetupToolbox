@@ -477,7 +477,12 @@ public sealed class WingetService
     // (healthy) of via de Store-app zelf in de achtergrond (broken).
     public const string MsStoreOpenedMessage = "Geopend in Microsoft Store";
 
-    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget", CancellationToken ct = default)
+    // Sentinel (E1): winget geeft aan dat de installer een installatielocatie
+    // vereist. InstallDialog toont een pad-dialog en herprobeert in-process
+    // met --location <gekozen pad>.
+    public const string RequiresLocationMessage = "Installatielocatie vereist";
+
+    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget", CancellationToken ct = default, string? location = null)
     {
         try
         {
@@ -501,6 +506,8 @@ public sealed class WingetService
             else
             {
                 args = $"install --id {wingetId} --exact --silent --source winget --accept-source-agreements --accept-package-agreements";
+                if (!string.IsNullOrEmpty(location))
+                    args += $" --location \"{location.Replace("\"", "\\\"")}\"";
             }
 
             LogInstall($"START {wingetId} (source={source}) -> winget {args}");
@@ -545,6 +552,16 @@ public sealed class WingetService
                 LogInstall($"REJECT-ADMIN {wingetId} exit=0x{exitCode:X8} — needs unelevated retry");
                 progress?.Report(RequiresUnelevatedMessage);
                 return (false, RequiresUnelevatedMessage);
+            }
+
+            // E1: installer vereist een expliciete installatielocatie. Sentinel geeft
+            // InstallDialog het sein een pad-dialog te tonen en in-process te herproberen
+            // met --location <gekozen pad>.
+            if (string.IsNullOrEmpty(location) && IsLocationRequired(exitCode, error + output))
+            {
+                LogInstall($"LOCATION-REQUIRED {wingetId} exit=0x{exitCode:X8}");
+                progress?.Report(RequiresLocationMessage);
+                return (false, RequiresLocationMessage);
             }
 
             // v1.0.7 D: msstore cert-error (0x8A15005E) — winget's IPC-pad naar de
@@ -690,6 +707,14 @@ public sealed class WingetService
         return combined.Contains("cannot be run from an administrator context", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("must not be run as administrator", StringComparison.OrdinalIgnoreCase);
     }
+
+    // E1: installer vereist een installatielocatie. Tekst-detectie primair (taal-
+    // onafhankelijke exit-code voor dit geval is niet gedocumenteerd in winget-cli).
+    private static bool IsLocationRequired(int exitCode, string combined) =>
+        combined.Contains("requires install location", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("install location is required", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("requires an installation location", StringComparison.OrdinalIgnoreCase)
+        || combined.Contains("location is required", StringComparison.OrdinalIgnoreCase);
 
     // v1.0.7 D: msstore cert-pin error. winget's `source update` werkt vaak nog
     // (CDN-laag oké), maar de install-IPC naar de Store-app valt op een aparte

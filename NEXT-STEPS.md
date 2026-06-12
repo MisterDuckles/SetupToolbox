@@ -25,11 +25,20 @@ Vier gebundelde install-UX-verbeteringen uit de v1.0.6 VM-test (v1.0.6 fix werkt
 - **C. NumberBox-prompt voor parallelisme.** De one-time prompt vroeg eerder Yes (=2) / No (=1) — user wilde direct 1-4 kunnen kiezen. Vervangen door een ContentDialog met `NumberBox` (Min=1, Max=4, default 2, Compact spin-buttons + integer-formatter zodat NL-locale geen "2,0" laat zien). Cancel via dialog-X bewaart niets (komt volgende keer terug); OK slaat `MaxParallelInstalls` op en zet `ParallelInstallsAsked=true`.
 - **D. msstore cert-error → Store-app fallback.** VM-diagnose bracht aan het licht: `winget source update` werkt (CDN-laag oké) maar `winget install` voor msstore-products faalt op een **aparte cert-pin in de winget→Store-IPC** (`0x8A15005E` "server certificate did not match"). Reset van de source helpt vaak niet — komt ook voor op stale Windows-installs / corporate proxies / AV-interferentie buiten VMs. **Fix:** in `WingetService.InstallAppAsync` detecteren we `0x8A15005E` specifiek voor `source=="msstore"` apps + openen via `Process.Start` het `ms-windows-store://pdp/?productid=<id>` URI → Store-app gaat direct naar de productpagina, user klikt 1× op "Halen". Updates lopen daarna gewoon mee: via winget op gezonde machines, of via de Store-app's eigen auto-update op de achtergrond. Nieuwe sentinel `WingetService.MsStoreOpenedMessage`, nieuwe `InstallPhase.OpenedInStore` + `InstallItemState.OpenedInStore` (gele caution-badge "Geopend in Store", patroon mirror van de bestaande manual-download flow). `HadSuccessfulInstall` telt deze als success. Bij Stores die ook stuk zijn faalt `Process.Start` netjes → terugval op de bestaande `FriendlyError`.
 
-> **Niet meegenomen, los oppakken:** de massa `0x8A150006` / `0x80004004` / `0x8A150011` failures uit de VM-log zijn nog steeds een aparte categorie (parallel-botsingen onder elevation + sommige installers die zelf-elevation verwachten). Eerst v1.0.7 op de VM verifiëren — pas dán zinvol om hier dieper in te duiken.
+> **VM-test v1.0.7 bevestigd (2026-06-12):**
+> - ✅ **A (Abort):** `RUNNER CANCEL flag written → CHILD CANCEL flag detected → CANCEL Blizzard.BattleNet` — perfect.
+> - ⚠️ **B (Spotify B-retry):** Mechanisme werkt correct (in-process retry na elevated batch, geen nieuwe RUNNER START). Twee resterende issues → v1.0.8 F1: (1) geen UI-feedback tijdens retry, (2) Spotify faalt in de unelevated retry met `0x8A150011` (hash-mismatch — winget-catalogus-bug, lost zich vanzelf op).
+> - ✅ **C (NumberBox):** Werkt.
+> - ✅ **D (msstore):** Werkt op frisse Windows-install — Apple Music (`9PFHDD62MXS1`) en `XP8JNQFBQH6PVF` allebei OK via elevated runner.
 
-> **Open voor v1.0.8** (uit Battle.net-observatie tijdens v1.0.7-test):
-> - **E1. Silent auto-retry met `--location`** wanneer winget faalt met *"requires install location"* (portable-type apps). Default `%LOCALAPPDATA%\Programs\<wingetId>`. Detectie via output-text (geen vaste exit-code documented voor dit geval). Mirror van het v1.0.7 B-pattern (sentinel + retry).
-> - **E3. Catalogus-fix Battle.net + soortgelijke notorisch-non-silent apps** → `downloadUrl` naar vendor-site i.p.v. winget-poging (gebruikt de bestaande manual-download flow). Battle.net's installer-EXE respecteert `--silent` niet betrouwbaar; zelfs met E1's `--location` blijft 'ie hangen op interactieve dialogs. Voor v1.0.8: minimaal Battle.net; eventueel andere kandidaten uit de v1.0.7-VM-test pas catalogeren als ze hetzelfde gedrag tonen.
+## Open voor v1.0.9
+
+- **E3. Battle.net → `downloadUrl`** *(lager prioriteit)* — Battle.net's installer respecteert `--silent` niet; zelfs met E1's `--location` hangt 'ie op interactieve dialogs. Fix: `downloadUrl` in `apps.json` → bestaande manual-download flow (browser naar battle.net). Geen nieuwe code nodig.
+
+### v1.0.8 — B-retry UI-feedback (F1) + install-location dialog (E1)
+
+- **F1. B-retry UI-feedback** — Na `Reset()` en vóór de unelevated `InstallAppsAsync`-call wordt `item.State = Installing` + `item.Message = "Herprobeert zonder admin..."` gezet. User ziet nu een duidelijke "Herprobeert..." melding i.p.v. een stille `Failed → Pending → Installing` flicker. (~5 regels in `InstallDialog.xaml.cs`)
+- **E1. Install-location dialog** — Nieuwe sentinel `WingetService.RequiresLocationMessage` + `IsLocationRequired`-detectie (tekst-gebaseerd). Wanneer de elevated batch een app als "locatie vereist" teruggeeft, toont `InstallDialog` een `ContentDialog` met `TextBox` (default `%LOCALAPPDATA%\Programs\<AppName>`). Na bevestiging herstart de install in-process met `--location "<gekozen pad>"` via de nieuwe optionele `location`-param op `InstallAppAsync`. Overslaan laat de app als Failed staan. De detectie-sentinel voorkomt een infinite loop (alleen gefired als `location == null`). (~55 regels)
 
 ### v1.0.6 — Hotfix: `app.manifest` asInvoker + runner-diagnostiek
 
