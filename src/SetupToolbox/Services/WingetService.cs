@@ -22,6 +22,12 @@ public sealed class WingetService
     private HashSet<string>? _installedIdsCache;
     private readonly SemaphoreSlim _appsListLock = new(1, 1);
 
+    // MSI-serialisatie-gate (process-wide): apps met SerializeInstall=true (zie
+    // App.SerializeInstall / apps.json "serializeInstall") botsen op de globale
+    // Windows Installer-mutex als ze parallel draaien. Deze gate laat er altijd
+    // maar één tegelijk de winget-call in; losse EXE-installers blijven parallel.
+    private static readonly SemaphoreSlim _serialInstallGate = new(1, 1);
+
     public async Task<bool> IsWingetAvailableAsync()
     {
         try
@@ -660,19 +666,41 @@ public sealed class WingetService
                 return;
             }
 
-            overall?.Report(new InstallProgress(index, total, app, InstallPhase.Starting, $"Starting {app.Name}"));
+            // MSI-serialisatie: serialize-apps draaien nooit gelijktijdig met elkaar.
+            // De gate zit BINNEN de parallelisme-semaphore, dus EXE-installers lopen
+            // ondertussen gewoon door — alleen de serialize-apps wachten op elkaar.
+            var serialize = app.SerializeInstall;
+            if (serialize)
+            {
+                try { await _serialInstallGate.WaitAsync(ct); }
+                catch (OperationCanceledException)
+                {
+                    results[app.WingetId] = (false, CancelledMessage);
+                    overall?.Report(new InstallProgress(index, total, app, InstallPhase.Failed, CancelledMessage));
+                    return;
+                }
+            }
 
-            var perApp = new Progress<string>(msg =>
-                overall?.Report(new InstallProgress(index, total, app, InstallPhase.Running, msg)));
+            try
+            {
+                overall?.Report(new InstallProgress(index, total, app, InstallPhase.Starting, $"Starting {app.Name}"));
 
-            var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source, ct);
-            results[app.WingetId] = (success, message);
+                var perApp = new Progress<string>(msg =>
+                    overall?.Report(new InstallProgress(index, total, app, InstallPhase.Running, msg)));
 
-            var phase = !success ? InstallPhase.Failed
-                : message == AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
-                : message == MsStoreOpenedMessage ? InstallPhase.OpenedInStore
-                : InstallPhase.Success;
-            overall?.Report(new InstallProgress(index, total, app, phase, message));
+                var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source, ct);
+                results[app.WingetId] = (success, message);
+
+                var phase = !success ? InstallPhase.Failed
+                    : message == AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled
+                    : message == MsStoreOpenedMessage ? InstallPhase.OpenedInStore
+                    : InstallPhase.Success;
+                overall?.Report(new InstallProgress(index, total, app, phase, message));
+            }
+            finally
+            {
+                if (serialize) _serialInstallGate.Release();
+            }
         }
         finally
         {

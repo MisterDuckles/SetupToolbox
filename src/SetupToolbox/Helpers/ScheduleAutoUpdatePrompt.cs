@@ -34,13 +34,13 @@ internal static class ScheduleAutoUpdatePrompt
             XamlRoot = xamlRoot
         };
 
-        var result = await dialog.ShowAsync();
+        var result = await DialogService.ShowAsync(dialog);
 
         switch (result)
         {
             case ContentDialogResult.Primary:
                 var schedule = new ScheduleDialog { XamlRoot = xamlRoot };
-                await schedule.ShowAsync();
+                await DialogService.ShowAsync(schedule);
                 break;
             case ContentDialogResult.Secondary:
                 App.Settings.DontAskAboutScheduling = true;

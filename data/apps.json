@@ -162,7 +162,8 @@
             {
               "name": "VirtualBox",
               "wingetId": "Oracle.VirtualBox",
-              "description": "Free open-source virtualization"
+              "description": "Free open-source virtualization",
+              "serializeInstall": true
             },
             {
               "name": "VMware Workstation Pro",
@@ -180,12 +181,14 @@
             {
               "name": "MySQL Workbench",
               "wingetId": "Oracle.MySQLWorkbench",
-              "description": "Visual MySQL database design tool"
+              "description": "Visual MySQL database design tool",
+              "serializeInstall": true
             },
             {
               "name": "PostgreSQL",
               "wingetId": "PostgreSQL.PostgreSQL.17",
-              "description": "Open source relational database"
+              "description": "Open source relational database",
+              "serializeInstall": true
             }
           ]
         },

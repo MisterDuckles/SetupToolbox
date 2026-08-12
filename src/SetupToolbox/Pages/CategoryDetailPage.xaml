@@ -158,7 +158,7 @@
                                                             CornerRadius="4"
                                                             Padding="6,2"
                                                             VerticalAlignment="Center"
-                                                            Visibility="{x:Bind IsInstalled}">
+                                                            Visibility="{x:Bind IsInstalled, Mode=OneWay}">
                                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                                             <FontIcon Glyph="&#xE73E;"
                                                                       FontSize="10"

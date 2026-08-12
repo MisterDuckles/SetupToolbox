@@ -263,7 +263,7 @@ public sealed partial class CategoryDetailPage : Page
         var locationPaths = await Helpers.LocationPrompt.CollectAsync(selected, this.XamlRoot);
 
         var dialog = new InstallDialog(selected, locationPaths) { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
+        await Helpers.DialogService.ShowAsync(dialog);
 
         foreach (var app in selected) app.IsSelected = false;
         await RefreshInstalledStateAsync(forceRefresh: true);

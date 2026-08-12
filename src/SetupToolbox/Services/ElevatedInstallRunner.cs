@@ -62,7 +62,7 @@ public static class ElevatedInstallRunner
             var job = new InstallJob
             {
                 MaxParallelism = maxParallelism,
-                Apps = apps.Select(a => new InstallJobItem { Id = a.WingetId, Name = a.Name, Source = a.Source }).ToList()
+                Apps = apps.Select(a => new InstallJobItem { Id = a.WingetId, Name = a.Name, Source = a.Source, Serialize = a.SerializeInstall }).ToList()
             };
             File.WriteAllText(jobPath, JsonSerializer.Serialize(job));
             File.WriteAllText(progressPath, string.Empty); // zodat de tail-reader 'm meteen kan openen
@@ -249,7 +249,7 @@ public static class ElevatedInstallRunner
         // Alleen Name/WingetId/Source zetten — NIET App.IconImage aanraken (lazy
         // BitmapImage = UI-object, bestaat niet in dit headless proces).
         var apps = job.Apps
-            .Select(j => new AppModel { Name = j.Name, WingetId = j.Id, Source = j.Source })
+            .Select(j => new AppModel { Name = j.Name, WingetId = j.Id, Source = j.Source, SerializeInstall = j.Serialize })
             .ToList();
 
         // Cancellation (v1.0.7): ouder schrijft cancel.flag in de workDir wanneer
@@ -342,6 +342,7 @@ public static class ElevatedInstallRunner
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Source { get; set; } = "winget";
+        public bool Serialize { get; set; }
     }
 
     private sealed class InstallProgressLine

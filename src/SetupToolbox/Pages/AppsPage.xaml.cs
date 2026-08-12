@@ -118,13 +118,28 @@ public sealed partial class AppsPage : Page
         var locationPaths = await Helpers.LocationPrompt.CollectAsync(selected, this.XamlRoot);
 
         var dialog = new InstallDialog(selected, locationPaths) { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
+        await Helpers.DialogService.ShowAsync(dialog);
 
         foreach (var app in selected) app.IsSelected = false;
         UpdateSelectionFooter();
 
         if (dialog.HadSuccessfulInstall)
+        {
+            await RefreshInstalledStateAsync();
             await Helpers.ScheduleAutoUpdatePrompt.MaybeShowAsync(this.XamlRoot);
+        }
+    }
+
+    private async Task RefreshInstalledStateAsync()
+    {
+        if (_db == null) return;
+        var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh: true);
+        var allApps = _db.Categories.SelectMany(c =>
+            (c.Apps ?? Enumerable.Empty<AppModel>())
+            .Concat((c.Subcategories ?? Enumerable.Empty<SubCategory>())
+                .SelectMany(s => s.Apps)));
+        foreach (var app in allApps)
+            app.IsInstalled = installedIds.Contains(app.WingetId);
     }
 
     private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)

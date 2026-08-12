@@ -124,6 +124,16 @@ public class App : INotifyPropertyChanged
     [JsonPropertyName("requiresLocation")]
     public bool RequiresLocation { get; set; }
 
+    // Apps met een MSI-based installer die op de globale Windows Installer-mutex
+    // botsen als ze parallel draaien — typisch VirtualBox, PostgreSQL en MySQL
+    // Workbench (alle drie met een VCRedist-dependency). Winget meldt dan "Waiting
+    // for another install/uninstall to complete..." en faalt uiteindelijk met
+    // 0x8A150006 / 0x8A150102. Met deze vlag serialiseert WingetService ze: ze
+    // draaien nooit gelijktijdig met een andere serialize-app, terwijl losse
+    // EXE-installers gewoon parallel blijven lopen.
+    [JsonPropertyName("serializeInstall")]
+    public bool SerializeInstall { get; set; }
+
     [JsonIgnore]
     public bool IsManualDownload => !string.IsNullOrWhiteSpace(DownloadUrl);
 

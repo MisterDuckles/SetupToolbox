@@ -62,7 +62,7 @@ internal static class LocationPrompt
                 XamlRoot = xamlRoot
             };
 
-            var result = await dialog.ShowAsync();
+            var result = await DialogService.ShowAsync(dialog);
             if (result != ContentDialogResult.Primary) continue;
 
             var chosen = pathBox.Text.Trim();

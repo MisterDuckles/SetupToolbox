@@ -65,7 +65,7 @@ internal static class ParallelInstallsPrompt
             XamlRoot = xamlRoot
         };
 
-        var result = await dialog.ShowAsync();
+        var result = await DialogService.ShowAsync(dialog);
 
         // Alleen opslaan + asked-flag zetten bij OK; bij dialog-X (None) krijgt
         // user gewoon volgende keer opnieuw de prompt.

@@ -31,6 +31,19 @@ Vier gebundelde install-UX-verbeteringen uit de v1.0.6 VM-test (v1.0.6 fix werkt
 > - ✅ **C (NumberBox):** Werkt.
 > - ✅ **D (msstore):** Werkt op frisse Windows-install — Apple Music (`9PFHDD62MXS1`) en `XP8JNQFBQH6PVF` allebei OK via elevated runner.
 
+### v1.0.12 — ContentDialog-gate (post-install prompt-crash) + MSI-serialisatie
+
+VM-test van v1.0.11 (install-batch van ~50 apps over meerdere categorieën). Twee problemen uit `crash.log` + `install.log`:
+
+- **ContentDialog-crash (crash.log 09:13:10).** `ScheduleAutoUpdatePrompt.MaybeShowAsync` (de post-install "Schedule auto-updates?"-prompt) gooide `COMException: Only a single ContentDialog can be open at any time`. WinUI 3 staat per thread maar één open ContentDialog toe — en de race treedt óók op bij twee dialogs vlák ná elkaar: zodra de `await InstallDialog.ShowAsync()` voltooit ben je terug in de continuation, maar WinUI heeft de InstallDialog-popup dan nog niet uit de visual tree gehaald, dus de direct-volgende `ScheduleAutoUpdatePrompt.ShowAsync()` botst erop. Het v1.0.11-vangnet ving de crash op (app overleeft), maar de prompt verscheen alsnog niet.
+  - **Fix — centrale `Helpers.DialogService.ShowAsync(dialog)`-gate.** Serialiseert alle dialogs die er doorheen gaan (`SemaphoreSlim`, één tegelijk) én vangt de teardown-race op: bij de COMException krijgt de UI-thread een low-priority tick om de vorige popup op te ruimen, daarna retry (max 10×). De hele install-knop-flow loopt nu via de gate: `ParallelInstallsPrompt` → `LocationPrompt` → `InstallDialog` → `ScheduleAutoUpdatePrompt` (+ de `ScheduleDialog` daarbinnen), in zowel `AppsPage` als `CategoryDetailPage`.
+- **MSI-lock-botsingen (install.log).** VirtualBox, PostgreSQL en MySQL Workbench (alle drie MSI met VCRedist-dependency) draaiden parallel (`parallel=4`) in de ge-eleveerde batch → botsten op de globale Windows Installer-mutex (`Waiting for another install/uninstall to complete...`) → faalden met `0x8A150006` / `0x8A150102`. Een tweede poging hielp deels (MySQL Workbench daarna `SKIP already installed`), maar VirtualBox + PostgreSQL bleven falen.
+  - **Fix — proactieve serialisatie via apps.json-vlag** (zelfde patroon als `requiresUnelevated` / `requiresLocation`): nieuwe `App.SerializeInstall` (`serializeInstall: true`). `WingetService` heeft een process-wide `_serialInstallGate` (`SemaphoreSlim(1,1)`); serialize-apps moeten die gate BINNEN de parallelisme-semaphore nemen → ze draaien nooit gelijktijdig met elkaar, terwijl losse EXE-installers gewoon parallel doorlopen. De vlag propageert door de ge-eleveerde runner (job → kind). Getagd: `Oracle.VirtualBox`, `PostgreSQL.PostgreSQL.17`, `Oracle.MySQLWorkbench`. Eén UAC blijft behouden (geen tweede prompt zoals een retry-achteraf zou kosten).
+
+> **Niet (door de fix) opgelost — losse installer-problemen, geen SetupToolbox-bug:** RoboForm (`0x8A150011` enterprise-MSI), NordVPN (`0x8A150110`), Microsoft.Office (`0x8A150006`, winget-Office is notoir), Proton Drive (`0x8A150102`), Foxit (`0x8A150006`). Firefox/Vivaldi faalden eerder op `0x80072F05` (transiente netwerk/SSL) en slaagden bij herpoging — daar is de bestaande retry-knop voor.
+
+> **Lokaal getest (2026-08-12):** ContentDialog-gate (install → schedule-prompt keten, geen crash meer) en MSI-serialisatie (VirtualBox + PostgreSQL + MySQL Workbench in 1 batch, 1 UAC, geen lock-botsingen) — beide bevestigd werkend.
+
 ## Open voor v1.1.0
 
 *(geen open patches meer — volgende milestone)*
