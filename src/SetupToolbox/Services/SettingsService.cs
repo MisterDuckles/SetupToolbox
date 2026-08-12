@@ -234,6 +234,21 @@ public sealed class SettingsService
         }
     }
 
+    // Toasts rond de geplande winget auto-update (v1.0.13): "Zoeken naar updates…"
+    // en het resultaat. Default true — de run is onzichtbaar zonder melding, dus
+    // zonder toast weet user niet dat 'ie draait. Uit te zetten voor wie geen
+    // dagelijkse popup wil. ToastHelper leest deze gate voor élke toast.
+    public bool UpdateNotificationsEnabled
+    {
+        get => _data.UpdateNotificationsEnabled;
+        set
+        {
+            if (_data.UpdateNotificationsEnabled == value) return;
+            _data.UpdateNotificationsEnabled = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -304,5 +319,8 @@ public sealed class SettingsService
 
         [JsonPropertyName("errorLoggingEnabled")]
         public bool ErrorLoggingEnabled { get; set; } = true;
+
+        [JsonPropertyName("updateNotificationsEnabled")]
+        public bool UpdateNotificationsEnabled { get; set; } = true;
     }
 }

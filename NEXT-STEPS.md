@@ -48,6 +48,39 @@ VM-test van v1.0.11 (install-batch van ~50 apps over meerdere categorieën). Twe
 
 *(geen open patches meer — volgende milestone)*
 
+### v1.0.13 — Toast-notificaties rond de auto-update
+
+User-wens: Windows-toasts rechtsonder rond de geplande `winget upgrade`-run — bij inschakelen, tijdens het zoeken, en mét de namen van de bijgewerkte apps.
+
+**Waarom er werk nodig was.** De toast-infra stond er al (`Microsoft.Toolkit.Uwp.Notifications` 7.x), maar er was **één** toast, alleen aan het eind, generiek: *"All apps have been updated."* De oorzaak zat een laag dieper: `UpdateAllAppsAsync()` draaide `winget upgrade --all --silent` en **gooide de output weg** (`var (exitCode, _, _)`) → alleen een bool. Daardoor waren app-namen onbekend en was "niets te updaten" niet te onderscheiden van "5 apps bijgewerkt".
+
+**Twee-fasen auto-update (`WingetService`).** `upgrade --all` is vervangen door:
+1. `GetUpgradableAppsAsync()` — `winget upgrade` als list-only. Hergebruikt `ParseListOutput` (die de `Available`-kolom al kende, want de upgrade-tabel heeft exact dezelfde kolommen als `winget list`) met `ParseSimpleIds` als locale-fallback. Non-zero exit + lege output → throw, zodat een kapotte bron als fout gemeld wordt i.p.v. als "alles up-to-date".
+2. Per app `upgrade --id <id> --exact --silent`, met `--source` uit de parse-entry (zonder pin raakt winget óók de msstore-bron — zie v1.0.1). Exit 0 → bijgewerkt; `IsAlreadyInstalled` → stil overslaan; anders `FriendlyError` als reden. Per-app try/catch zodat één kapotte app de run niet stopt.
+
+Nieuwe records `AutoUpdateResult(Updated, Failed, ListError)` + `AutoUpdateFailure(Name, Reason)`, met `HasListError` / `NothingToDo` zodat de toast-tekst geen eigen logica hoeft.
+
+**Eén zelf-overschrijvende toast (`ToastHelper`, herschreven).** Alle toasts gaan door één private `Show(tag, build)` die de setting-gate, de `Tag`/`Group`, de klik-actie en de logging op één plek regelt. Gelijke Tag + Group ⇒ Windows **vervangt** de vorige toast, dus "Zoeken naar updates…" wórdt het resultaat i.p.v. een tweede melding — bij een dagelijkse run blijft het Action Center schoon. Teksten: `Zoeken naar updates…` → `Alles is up-to-date.` / `X, Y en Z zijn bijgewerkt.` Nederlandse opsomming via `JoinDutch`; boven 5 namen `… en N andere` zodat een run van 30 apps de toast niet onleesbaar maakt. Bij één mislukking de reden erbij, bij meerdere alleen de namen (reden past dan niet meer).
+
+**Overige onderdelen:**
+- **N1** — `ScheduleDialog` toont na `CreateTaskResult.Success` een toast met dezelfde schedule-omschrijving als de InfoBar.
+- **Setting** `UpdateNotificationsEnabled` (default aan) — toggle in Settings → Auto-updates, binnen de bestaande card (geen `Grid.Row`-hernummering nodig). `ToastHelper` leest 'm voor élke toast.
+- **Klik opent de app — via een eigen URI-protocol, niet via de COM-activator.** De toolkit registreert netjes een COM-activator (AUMID + `CustomActivator` + `LocalServer32`, alle drie geverifieerd correct in het register), maar op een **unpackaged** app routeert Windows de klik daar niet naartoe zolang er geen Start Menu-snelkoppeling met de `System.AppUserModel.ToastActivatorCLSID`-eigenschap bestaat. Gemeten: klik liet de toast verdwijnen maar startte de exe niet — géén `LAUNCH`-regel in `install.log`, geen DCOM-fout, geen crash. De enige aanwezige snelkoppeling was die van de Inno Setup-installer, zónder die eigenschap; dus ook de release-build zou hierop stukgelopen zijn.
+  - **Fix:** nieuwe `Helpers/ToastProtocol` registreert `setuptoolbox:` in HKCU (`shell\open\command` → `"<exe>" "%1"`, idempotent, geen admin) en de toast krijgt `SetProtocolActivation(new Uri("setuptoolbox:open"))`. Windows doet dan een gewone ShellExecute — een normale proces-start, geen COM. Werkt identiek in dev- en release-build en heeft geen snelkoppeling nodig.
+  - `App.OnLaunched` vangt de `setuptoolbox:`-tak af en haalt via `TryFocusExistingInstance()` (`ShowWindow` + `SetForegroundWindow`) een al draaiend venster naar voren i.p.v. een tweede te openen. Bewust een gerichte check alléén voor deze tak: de app doet elders géén AppInstance-redirectie, omdat de ge-eleveerde install-runner zichzelf juist als tweede proces moet kunnen starten. Processen zonder `MainWindowHandle` (de headless takken) worden overgeslagen.
+  - De `ToastNotificationManagerCompat.OnActivated`-subscriptie blijft staan: die houdt de toolkit-registratie (AUMID, weergavenaam, icoon) in stand. Hij vuurt in de praktijk niet meer.
+- **Diagnostiek** — `App.OnLaunched` logt bij élke start een `LAUNCH args=[…]`-regel. Dat was precies wat de toast-activatie-diagnose besliste (start Windows de exe überhaupt?) en blijft nuttig voor de headless takken.
+- **`/updatecheck` debug-switch** — draait alléén de inventarisatie-fase en logt wat er bijgewerkt zóu worden. Installeert niets; bedoeld om parser + toast-tekst te verifiëren zonder een echte run van tientallen apps los te laten. `/toasttest` toont nu de volledige twee-staps flow met nepdata.
+
+> **Lokaal geverifieerd (2026-08-12):**
+> - `/toasttest` → 2× `Show() OK tag=autoupdate`, tweede toast vervángt de eerste (user-bevestigd).
+> - `/updatecheck` op een machine met 23 pending upgrades → **22 entries correct geparsed** met juiste IDs, display-namen én bron (incl. `XP89DCGQ3K6VLD` / msstore voor PowerToys).
+> - Klik op een toast met de app **gesloten** → `LAUNCH args=[setuptoolbox:open]` en de app opent (user-bevestigd). Tweede klik met de app open → focust de bestaande instantie i.p.v. een tweede venster.
+
+> **Bekende beperking:** winget zet pakketten die "explicit targeting" vereisen in een **tweede tabel** met eigen kolombreedtes; die rijen vallen door de lengte-check van `ParseListOutput` en worden overgeslagen (op de testmachine: Discord). Dat is gelijk aan wat `upgrade --all` deed — geen regressie, maar wel een gemiste kans, want mét `--id --exact` zouden we ze juist wél kunnen bijwerken. Kandidaat voor een vervolgpatch.
+
+> **Nog te verifiëren op de VM:** de scheduled task draait met `/rl highest` (**elevated**), en alle tests hierboven draaiden **niet** elevated. Toasts vanuit een elevated proces zijn een bekend twijfelgeval — dat moet met een echte task-run bevestigd worden. De task bestond bij aanvang niet meer op deze machine (ooit aangemaakt volgens `SetupToolbox_schtasks.log`, sindsdien verwijderd), dus opnieuw aanmaken om te testen.
+
 ### v1.0.11 — Globale crash-vangnet + crash-safe progress-callbacks
 
 VM-test van v1.0.10: Battle.net (location-popup) en Spotify (onge-eleveerd) werken. Maar **TreeSize Free installeren deed de hele app verdwijnen** terwijl de install zélf slaagde (`OK JAMSoftware.TreeSize.Free` in de log). Diagnose via `install.log`: de runner-regel `RUNNER EXIT` ontbrak voor die run terwijl elke andere run 'm wél had → de UI-parent stierf vóór z'n `finally`-block.

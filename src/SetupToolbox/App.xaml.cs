@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
@@ -16,6 +18,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Xaml.Shapes;
+using Microsoft.Toolkit.Uwp.Notifications;
 using SetupToolbox.Services;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -71,6 +74,32 @@ public partial class App : Application
         // in een Progress-callback de app deed verdwijnen vóór de runner z'n EXIT-regel
         // kon loggen. We loggen de volledige stack en houden de app in leven.
         UnhandledException += OnUnhandledException;
+
+        // Houdt de toolkit-registratie in stand (AUMID + weergavenaam + icoon van de
+        // toast). Onze toasts activeren via het URI-protocol, niet via deze COM-route
+        // — zie Helpers/ToastProtocol — dus in de praktijk vuurt deze handler niet.
+        // Blijft staan als vangnet voor een toast die ooit zónder protocol-activatie
+        // verstuurd wordt.
+        ToastNotificationManagerCompat.OnActivated += OnToastActivated;
+    }
+
+    private static void OnToastActivated(ToastNotificationActivatedEventArgsCompat e)
+    {
+        try
+        {
+            // Headless modes (/autoupdate, --install-runner) hebben geen window —
+            // dan valt er niets te activeren.
+            var window = Window;
+            if (window == null) return;
+
+            // OnActivated komt van een achtergrond-thread; Activate() moet op de UI-thread.
+            window.DispatcherQueue.TryEnqueue(() => window.Activate());
+        }
+        catch (Exception ex)
+        {
+            Helpers.Diagnostics.Log("SetupToolbox_toast.log",
+                $"OnActivated FAILED: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
@@ -97,23 +126,54 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        // When launched by the scheduled task with "/autoupdate", run winget
-        // upgrade --all silently, post een toast naar Action Center, en exit —
-        // geen window, geen UI behalve de notificatie. Korte sleep na Show()
-        // geeft het OS tijd om de toast door te geven voor het proces stopt.
+        // Gestart door de scheduled task met "/autoupdate": draai de winget-upgrades
+        // stil, post de toasts naar Action Center, en exit — geen window, geen UI
+        // behalve de notificatie. Korte sleep na Show() geeft het OS tijd om de toast
+        // door te geven voordat het proces stopt.
+        //
+        // Klik op een toast terwijl de app niet draait → Windows start deze exe met
+        // "-ToastActivated". Dat matcht geen enkele tak hieronder en valt dus door
+        // naar de normale window-creatie: precies het gewenste "open de app"-gedrag.
         var cmdArgs = Environment.GetCommandLineArgs();
+
+        // Launch-trace: laat in de log zien met welke argumenten dit proces start.
+        // Onmisbaar bij het diagnosticeren van toast-activatie (start Windows de exe
+        // überhaupt bij een klik?) en van de headless takken hieronder.
+        Helpers.Diagnostics.Log("install.log",
+            $"LAUNCH args=[{string.Join(" ", cmdArgs.Skip(1))}]");
+
+        // Klik op een toast start ons via "setuptoolbox:open" (v1.0.13). Draait er al
+        // een instantie met een venster, breng die dan naar voren en stop — anders
+        // krijgt user een tweede venster. Bewust een gerichte check alleen voor deze
+        // tak: de app doet elders géén AppInstance-redirectie, omdat de ge-eleveerde
+        // install-runner zichzelf juist als tweede proces moet kunnen starten.
+        if (cmdArgs.Length > 1 && Helpers.ToastProtocol.IsOpenArg(cmdArgs[1]) && TryFocusExistingInstance())
+        {
+            Environment.Exit(0);
+            return;
+        }
+
         if (cmdArgs.Length > 1 && IsAutoUpdateArg(cmdArgs[1]))
         {
             _ = Task.Run(async () =>
             {
-                var success = false;
+                // v1.0.13: "Zoeken naar updates…" eerst, daarna vervangt het resultaat
+                // diezelfde toast (gelijke Tag/Group) — één melding per run.
+                Helpers.ToastHelper.ShowAutoUpdateSearching();
                 try
                 {
-                    success = await Winget.UpdateAllAppsAsync();
+                    var result = await Winget.UpdateAllAppsAsync();
+                    Helpers.ToastHelper.ShowAutoUpdateResult(result);
+                }
+                catch (Exception ex)
+                {
+                    // UpdateAllAppsAsync vangt per-app fouten zelf al af; dit is het
+                    // vangnet zodat er sowieso een melding komt i.p.v. een stille run.
+                    Helpers.Diagnostics.Log("install.log", $"AUTOUPDATE-EX {ex.GetType().Name}: {ex.Message}");
+                    Helpers.ToastHelper.ShowAutoUpdateFailed(ex.Message);
                 }
                 finally
                 {
-                    Helpers.ToastHelper.ShowAutoUpdateResult(success);
                     await Task.Delay(3000);
                     Environment.Exit(0);
                 }
@@ -121,16 +181,60 @@ public partial class App : Application
             return;
         }
 
-        // Debug switch — toast tonen zonder eerst minuten op winget upgrade --all
-        // te wachten. Handig om in dev te verifiëren dat AppNotificationManager
-        // registratie + Show effectief landen in Action Center.
+        // Debug switch — de volledige toast-flow tonen zonder eerst minuten op winget
+        // te wachten. Verifieert ook dat de tweede toast de eerste vervángt i.p.v.
+        // er een tweede melding naast te zetten.
         if (cmdArgs.Length > 1 && cmdArgs[1].Equals("/toasttest", StringComparison.OrdinalIgnoreCase))
         {
             _ = Task.Run(async () =>
             {
-                Helpers.ToastHelper.ShowAutoUpdateResult(true);
+                Helpers.ToastHelper.ShowAutoUpdateSearching();
+                await Task.Delay(2500);
+                Helpers.ToastHelper.ShowAutoUpdateResult(new AutoUpdateResult(
+                    new[] { "Vivaldi", "VLC media player" },
+                    new[] { new AutoUpdateFailure("Notion", "Installer mislukte. Probeer opnieuw.") },
+                    null));
                 await Task.Delay(3000);
                 Environment.Exit(0);
+            });
+            return;
+        }
+
+        // Debug switch — alléén de inventarisatie-fase van de auto-update draaien en
+        // tonen wát er bijgewerkt zóu worden. Installeert niets. Bedoeld om de parser
+        // en de toast-tekst te verifiëren zonder een echte run van tientallen apps
+        // los te laten op de machine.
+        if (cmdArgs.Length > 1 && cmdArgs[1].Equals("/updatecheck", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Task.Run(async () =>
+            {
+                Helpers.ToastHelper.ShowAutoUpdateSearching();
+                try
+                {
+                    var pending = await Winget.GetUpgradableAppsAsync();
+                    foreach (var entry in pending)
+                        Helpers.Diagnostics.Log("install.log",
+                            $"UPDATECHECK {entry.Id} name=\"{entry.Name}\" source={entry.Source}");
+                    Helpers.Diagnostics.Log("install.log", $"UPDATECHECK total={pending.Count}");
+
+                    // Zelfde tekst-opbouw als een echte run, met de gevonden apps als
+                    // "bijgewerkt" — zo zie je exact hoe de melding eruit gaat zien.
+                    var names = pending
+                        .Select(e => string.IsNullOrWhiteSpace(e.Name) ? e.Id : e.Name)
+                        .ToList();
+                    Helpers.ToastHelper.ShowAutoUpdateResult(
+                        new AutoUpdateResult(names, Array.Empty<AutoUpdateFailure>(), null));
+                }
+                catch (Exception ex)
+                {
+                    Helpers.Diagnostics.Log("install.log", $"UPDATECHECK-EX {ex.GetType().Name}: {ex.Message}");
+                    Helpers.ToastHelper.ShowAutoUpdateFailed(ex.Message);
+                }
+                finally
+                {
+                    await Task.Delay(3000);
+                    Environment.Exit(0);
+                }
             });
             return;
         }
@@ -151,6 +255,49 @@ public partial class App : Application
 
         Window = new MainWindow();
         Window.Activate();
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SW_RESTORE = 9;
+
+    // Zoekt een al draaiende instantie met een venster en brengt die naar voren.
+    // Processen zonder MainWindowHandle worden overgeslagen: dat zijn de headless
+    // takken (/autoupdate, --install-runner) of een instantie die z'n venster nog
+    // aan het opbouwen is. False => caller opent gewoon een nieuw venster.
+    private static bool TryFocusExistingInstance()
+    {
+        try
+        {
+            using var me = Process.GetCurrentProcess();
+            foreach (var other in Process.GetProcessesByName(me.ProcessName))
+            {
+                using (other)
+                {
+                    if (other.Id == me.Id) continue;
+
+                    var hwnd = other.MainWindowHandle;
+                    if (hwnd == IntPtr.Zero) continue;
+
+                    ShowWindow(hwnd, SW_RESTORE);
+                    SetForegroundWindow(hwnd);
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: bij twijfel liever een tweede venster dan geen venster.
+            Helpers.Diagnostics.Log("SetupToolbox_toast.log",
+                $"focus bestaande instantie FAILED: {ex.GetType().Name}: {ex.Message}");
+        }
+        return false;
     }
 
     private static bool IsAutoUpdateArg(string arg) =>

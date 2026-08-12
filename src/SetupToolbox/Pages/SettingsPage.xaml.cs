@@ -30,6 +30,7 @@ public sealed partial class SettingsPage : Page
         LeftoverToggle.IsOn = App.Settings.ScanLeftoversAfterUninstall;
         DeepCleanRestoreToggle.IsOn = App.Settings.RestorePointBeforeDeepClean;
         DebloatRestoreToggle.IsOn = App.Settings.RestorePointBeforeDebloat;
+        UpdateNotificationsToggle.IsOn = App.Settings.UpdateNotificationsEnabled;
         UpdateCheckToggle.IsOn = App.Settings.CheckForUpdatesOnStartup;
         WelcomeBannerToggle.IsOn = App.Settings.ShowWelcomeBanner;
         ErrorLoggingToggle.IsOn = App.Settings.ErrorLoggingEnabled;
@@ -384,6 +385,14 @@ public sealed partial class SettingsPage : Page
         TweakProfileResultBar.Title = title;
         TweakProfileResultBar.Message = message;
         TweakProfileResultBar.IsOpen = true;
+    }
+
+    // Toasts rond de geplande winget auto-update (v1.0.13). ToastHelper leest deze
+    // gate voor élke toast, dus uit = geen enkele melding meer van de geplande run.
+    private void UpdateNotificationsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToggleEvent) return;
+        App.Settings.UpdateNotificationsEnabled = UpdateNotificationsToggle.IsOn;
     }
 
     // ── APP-UPDATES (self-update, v0.10.1) ──

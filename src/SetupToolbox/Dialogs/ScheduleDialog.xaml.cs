@@ -44,11 +44,13 @@ public sealed partial class ScheduleDialog : ContentDialog
                     // wordt disabled, Close-tekst wordt "Done" zodat de exit-knop
                     // duidelijk is.
                     args.Cancel = true;
-                    ShowInfo(InfoBarSeverity.Success,
-                        "Scheduled task created",
-                        BuildScheduleDescription(scheduleType, timeString));
+                    var description = BuildScheduleDescription(scheduleType, timeString);
+                    ShowInfo(InfoBarSeverity.Success, "Scheduled task created", description);
                     IsPrimaryButtonEnabled = false;
                     CloseButtonText = "Done";
+                    // Ook buiten de app bevestigen (v1.0.13) — meteen een voorproefje
+                    // van de meldingen die de geplande run straks geeft.
+                    Helpers.ToastHelper.ShowScheduleEnabled(description);
                     break;
 
                 case CreateTaskResult.UserCancelled:

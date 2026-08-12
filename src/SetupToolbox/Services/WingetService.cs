@@ -303,20 +303,94 @@ public sealed class WingetService
     }
 
     /// <summary>
-    /// Upgrades all installed apps via winget. Used by the scheduled auto-update task.
+    /// Welke apps hebben een update beschikbaar? Draait `winget upgrade` als
+    /// list-only (installeert niets) en hergebruikt exact dezelfde parsers als
+    /// GetInstalledAppsListAsync — de upgrade-tabel heeft dezelfde kolommen plus
+    /// "Available", en ParseListOutput houdt daar al rekening mee. Locale-fallback
+    /// op ParseSimpleIds; in dat geval is Name gelijk aan de Id.
     /// </summary>
-    public async Task<bool> UpdateAllAppsAsync()
+    public async Task<List<WingetListEntry>> GetUpgradableAppsAsync()
     {
+        var (exitCode, output, error) = await RunWingetCommandAsync(
+            "upgrade --accept-source-agreements --disable-interactivity");
+
+        // Non-zero exit én geen bruikbare output = de bron zelf is stuk (winget
+        // ontbreekt, certfout, geen netwerk). Dat moet de caller als fout kunnen
+        // melden i.p.v. als "niets te updaten" — vandaar een throw, geen lege lijst.
+        if (exitCode != 0 && string.IsNullOrWhiteSpace(output))
+            throw new InvalidOperationException(FriendlyError(error, output, exitCode, "winget upgrade"));
+
+        var rich = ParseListOutput(output);
+        return rich.Count > 0 ? rich : ParseSimpleIds(output);
+    }
+
+    /// <summary>
+    /// Auto-update run voor de scheduled task (v1.0.13). Twee fasen: eerst
+    /// inventariseren wélke apps een update hebben, daarna elke app apart upgraden.
+    /// Bewust niet `upgrade --all`: die geeft één globale exit-code terug, waarmee
+    /// we noch de app-namen noch de per-app uitkomst kunnen rapporteren — en precies
+    /// dat heeft de notificatie nodig.
+    /// </summary>
+    public async Task<AutoUpdateResult> UpdateAllAppsAsync()
+    {
+        List<WingetListEntry> upgradable;
         try
         {
-            var (exitCode, _, _) = await RunWingetCommandAsync(
-                "upgrade --all --silent --accept-source-agreements --accept-package-agreements");
-            return exitCode == 0;
+            upgradable = await GetUpgradableAppsAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            LogInstall($"AUTOUPDATE list FAILED: {ex.Message}");
+            return new AutoUpdateResult(Array.Empty<string>(), Array.Empty<AutoUpdateFailure>(), ex.Message);
         }
+
+        LogInstall($"AUTOUPDATE start count={upgradable.Count}");
+
+        var updated = new List<string>();
+        var failed = new List<AutoUpdateFailure>();
+
+        foreach (var entry in upgradable)
+        {
+            var name = string.IsNullOrWhiteSpace(entry.Name) ? entry.Id : entry.Name;
+
+            // --source meegeven wanneer bekend: zonder pin doorzoekt winget óók de
+            // msstore-bron, die op sommige machines een certfout geeft (zie v1.0.1).
+            var sourceArg = string.IsNullOrWhiteSpace(entry.Source) ? "" : $" --source {entry.Source}";
+            var args = $"upgrade --id \"{entry.Id}\" --exact --silent --disable-interactivity"
+                     + " --accept-source-agreements --accept-package-agreements" + sourceArg;
+
+            try
+            {
+                var (exitCode, output, error) = await RunWingetCommandAsync(args);
+
+                if (exitCode == 0)
+                {
+                    updated.Add(name);
+                    LogInstall($"AUTOUPDATE OK {entry.Id}");
+                }
+                else if (IsAlreadyInstalled(exitCode, error + output))
+                {
+                    // Tussen inventarisatie en upgrade al bijgewerkt, of winget vindt
+                    // toch niets nieuwers. Geen fout — maar ook niet claimen dat wij
+                    // 'm hebben bijgewerkt.
+                    LogInstall($"AUTOUPDATE SKIP {entry.Id} exit=0x{exitCode:X8}");
+                }
+                else
+                {
+                    failed.Add(new AutoUpdateFailure(name, FriendlyError(error, output, exitCode, entry.Id)));
+                    LogInstall($"AUTOUPDATE FAIL {entry.Id} exit=0x{exitCode:X8}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Eén kapotte app mag de rest van de run niet stoppen.
+                failed.Add(new AutoUpdateFailure(name, ex.Message));
+                LogInstall($"AUTOUPDATE EX {entry.Id}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        LogInstall($"AUTOUPDATE done updated={updated.Count} failed={failed.Count}");
+        return new AutoUpdateResult(updated, failed, null);
     }
 
     /// <summary>
@@ -954,3 +1028,18 @@ public readonly record struct UninstallProgress(
 // terugvindt; apps met Source=msstore staan alleen in de Store; lege Source = pure
 // registry entry waarvoor winget geen match vond.
 public sealed record WingetListEntry(string Name, string Id, string Version, string Source);
+
+// Uitkomst van een auto-update run (v1.0.13). Updated/Failed dragen display-namen
+// zodat de toast ze direct kan noemen. ListError is gevuld wanneer de inventarisatie
+// zélf faalde (winget ontbreekt / bronfout) — dan is "alles up-to-date" een leugen
+// en moet de notificatie een fout melden i.p.v. een geruststelling.
+public sealed record AutoUpdateResult(
+    IReadOnlyList<string> Updated,
+    IReadOnlyList<AutoUpdateFailure> Failed,
+    string? ListError)
+{
+    public bool HasListError => ListError != null;
+    public bool NothingToDo => ListError == null && Updated.Count == 0 && Failed.Count == 0;
+}
+
+public sealed record AutoUpdateFailure(string Name, string Reason);

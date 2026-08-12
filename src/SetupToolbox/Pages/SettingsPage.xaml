@@ -55,50 +55,81 @@
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="20,16">
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <StackPanel Spacing="12">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <FontIcon Grid.Column="0"
-                              Glyph="&#xE823;"
-                              FontSize="20"
-                              VerticalAlignment="Center"
-                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xE823;"
+                                  FontSize="20"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Scheduled auto-updates"
-                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock x:Name="ScheduleStatusText"
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Text="Checking status..." />
-                    </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Scheduled auto-updates"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Name="ScheduleStatusText"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Checking status..." />
+                        </StackPanel>
 
-                    <StackPanel Grid.Column="2"
-                                Orientation="Horizontal"
-                                Spacing="8"
-                                VerticalAlignment="Center">
-                        <Button x:Name="DisableButton"
-                                Click="DisableButton_Click"
-                                Visibility="Collapsed">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                                <TextBlock Text="Disable" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="ScheduleButton"
-                                Click="ScheduleButton_Click"
-                                Style="{ThemeResource AccentButtonStyle}">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE787;" FontSize="14" />
-                                <TextBlock x:Name="ScheduleButtonText" Text="Set up" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Grid>
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center">
+                            <Button x:Name="DisableButton"
+                                    Click="DisableButton_Click"
+                                    Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                    <TextBlock Text="Disable" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="ScheduleButton"
+                                    Click="ScheduleButton_Click"
+                                    Style="{ThemeResource AccentButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE787;" FontSize="14" />
+                                    <TextBlock x:Name="ScheduleButtonText" Text="Set up" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Notificaties rond de geplande run (v1.0.13) -->
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xEA8F;"
+                                  FontSize="20"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Notificaties bij automatische updates"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Toont rechtsonder een melding wanneer de geplande run naar updates zoekt, en daarna welke apps zijn bijgewerkt. Klik op de melding om de app te openen." />
+                        </StackPanel>
+
+                        <ToggleSwitch x:Name="UpdateNotificationsToggle"
+                                      Grid.Column="2"
+                                      VerticalAlignment="Center"
+                                      Toggled="UpdateNotificationsToggle_Toggled" />
+                    </Grid>
+                </StackPanel>
             </Border>
 
             <TextBlock Grid.Row="3"
