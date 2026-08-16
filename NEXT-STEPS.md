@@ -20,7 +20,28 @@ Geverifieerd (2026-08-16): **er is nul lokalisatie-infra.** Geen `.resw`-bestand
 
 **Belangrijk om te weten vóór je begint:** de UI is nu feitelijk **half Nederlands, half Engels** — een organisch gegroeid mengsel. Settings toont "Scheduled auto-updates" / "Set up" / "Check for updates now" naast Nederlandse teksten, en dialogs mengen het door elkaar ("Schedule auto-updates?" met daaronder Nederlandse knoppen). Een NL/EN-toggle bouwen betekent dus niet alleen infra toevoegen, maar ook **alle bestaande strings inventariseren en van een consistente vertaling voorzien in beide talen** — dat is het grootste deel van het werk, niet de toggle zelf.
 
-Uit te werken vóór implementatie: `.resw` + `x:Uid` (het WinUI-standaardpad, maar vereist aanpassing van élk XAML-element met tekst) versus een eigen string-tabel-service (minder idiomatisch, makkelijker vanuit code-behind aan te roepen — en deze app zet veel tekst vanuit code-behind). Plus: live wisselen of pas na herstart?
+**Besloten (2026-08-16, user): brontaal wordt Engels, Nederlands is de tweede taal.** Daarmee is de belangrijkste openstaande vraag beantwoord — zonder één canonieke taal was "vertalen" niet eens gedefinieerd.
+
+**Wat dat besluit concreet betekent — het werk loopt twee kanten op.** Engels als brontaal betekent níét dat alleen de Nederlandse strings werk zijn. Een inventarisatie (2026-08-16) laat zien dat de bestaande tekst per laag verschilt, en soms zelfs *binnen één record*:
+
+| Bron | Huidige taal | Werk onder Engels-als-brontaal |
+| --- | --- | --- |
+| `data/apps.json` — 144 `name` + 144 `description` | **Al Engels** | Alleen een NL-vertaling toevoegen (of bewust overslaan — zie hieronder) |
+| `TweakService.BuildAll()` — 117 tweaks | **Gemengd binnen één record**: `name` is Engels ("Show file extensions"), maar `description` en `useCase` zijn Nederlands | ~234 Engelse bronteksten **schrijven** die er nog niet zijn, en de huidige NL-tekst wordt de vertaling |
+| XAML — ~624 tekstdragende attributen over 19 bestanden | Gemengd; knoppen vaak Nederlands ("Sluiten", "Toepassen", "Opslaan profiel") | Engelse bron schrijven voor de NL-delen, NL-vertaling voor de EN-delen |
+| Code-behind (Pages / Dialogs / Helpers) | Overwegend Nederlands | Engelse bron schrijven |
+| `BloatwareItem.CuratedMetadata` — 68 entries | Grotendeels Engels | NL-vertaling toevoegen |
+| `TweakCategory` — 12 × Name + Blurb + CountLabel | Gemengd | Beide kanten |
+
+De 117 tweak-`description`/`useCase`-velden zijn veruit het grootste blok, en het is **auteurswerk, geen vertaalwerk**: die Engelse zinnen bestaan nog niet.
+
+**Nog te beslissen vóór implementatie:**
+- **Infra:** `.resw` + `x:Uid` (het WinUI-standaardpad, maar vereist aanpassing van élk XAML-element met tekst) versus een eigen string-tabel-service (minder idiomatisch, makkelijker vanuit code-behind aan te roepen). Weeg mee dat de meerderheid van de strings in **C#** zit, niet in XAML — `x:Uid` dekt alleen die ~624 XAML-attributen en doet niets voor de tweak-definities, de dialogs en de code-behind.
+- **Live wisselen of pas na herstart?**
+- **Valt de catalogus binnen scope?** `apps.json` is data, geen code. 144 beschrijvingen vertalen is een aparte klus die je ook kunt uitstellen zonder de toggle te blokkeren.
+- **Wat is de default voor een nieuwe gebruiker?** Systeemtaal volgen met Engels als fallback ligt voor de hand, maar is niet besloten.
+
+**Valkuil:** `ToastHelper.JoinDutch` bouwt "X, Y en Z" — dat is Nederlandse grammatica, geen string. Zulke opmaak-helpers moeten per taal bestaan; alleen de losse strings vervangen is niet genoeg.
 
 ### v1.2.3 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
