@@ -2,6 +2,8 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Security;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace SetupToolbox.Services;
@@ -25,19 +27,28 @@ public sealed class TaskSchedulerService
         if (string.IsNullOrEmpty(exePath))
             return new CreateTaskOutcome(CreateTaskResult.Failed, "ProcessPath onbekend — kon de huidige exe niet bepalen.");
 
-        var trigger = scheduleType switch
+        // v1.0.14: task aanmaken via een eigen XML-definitie i.p.v. losse schtasks-
+        // vlaggen. Reden: `schtasks /create` zet **DisallowStartIfOnBatteries** en
+        // **StopIfGoingOnBatteries** standaard AAN. Op accustroom start Windows de
+        // task dan domweg niet — mét `LastTaskResult = 0` en een bijgewerkte
+        // LastRunTime, dus volledig stil en niet te onderscheiden van een geslaagde
+        // run. Op een laptop draaiden de auto-updates daardoor feitelijk nooit.
+        // Gemeten en bevestigd op 2026-08-16; alleen via /xml zijn die vlaggen te zetten.
+        string xmlPath;
+        try
         {
-            UpdateScheduleType.Daily => $"/sc daily /st {customTime ?? "09:00"}",
-            UpdateScheduleType.Weekly => $"/sc weekly /d MON /st {customTime ?? "09:00"}",
-            UpdateScheduleType.OnStartup => "/sc onlogon",
-            _ => "/sc daily /st 09:00"
-        };
+            xmlPath = WriteTaskXml(exePath, scheduleType, customTime);
+        }
+        catch (Exception ex)
+        {
+            return new CreateTaskOutcome(CreateTaskResult.Failed,
+                $"Kon de task-definitie niet wegschrijven: {ex.Message}");
+        }
 
         // Wrap in cmd.exe zodat we stdout+stderr kunnen redirecten naar een
         // tmp-logfile — dat kan niet wanneer UseShellExecute=true (vereist voor
-        // Verb=runas → UAC). Format: cmd /c "schtasks ... > log 2>&1". De inner
-        // quoting van /tr (escaped exe-pad) blijft gerespecteerd door cmd.
-        var schtasksArgs = $"/create /tn \"{TaskName}\" {trigger} /tr \"\\\"{exePath}\\\" /autoupdate\" /f /rl highest";
+        // Verb=runas → UAC). Format: cmd /c "schtasks ... > log 2>&1".
+        var schtasksArgs = $"/create /tn \"{TaskName}\" /xml \"{xmlPath}\" /f";
         var logPath = LogPath;
         TryDelete(logPath);
         var cmdArgs = $"/c \"schtasks.exe {schtasksArgs} > \"{logPath}\" 2>&1\"";
@@ -76,7 +87,93 @@ public sealed class TaskSchedulerService
         {
             return new CreateTaskOutcome(CreateTaskResult.Failed, $"Process kon niet starten: {ex.Message}");
         }
+        finally
+        {
+            // De XML is alleen nodig tijdens /create; schtasks heeft 'm daarna
+            // ingelezen in z'n eigen store.
+            TryDelete(xmlPath);
+        }
     }
+
+    /// <summary>
+    /// Schrijft een Task Scheduler XML-definitie naar %TEMP% en geeft het pad terug.
+    /// Bewust expliciet over de settings die `schtasks` anders ongevraagd invult:
+    /// de accu-vlaggen uit (anders draait de task nooit op een laptop) en
+    /// StartWhenAvailable aan (haalt een gemiste run in als de machine sliep).
+    /// </summary>
+    private static string WriteTaskXml(string exePath, UpdateScheduleType scheduleType, string? customTime)
+    {
+        var time = customTime ?? "09:00";
+
+        // StartBoundary vereist een volledige datum+tijd. Voor een terugkerende
+        // trigger doet de datum zelf er niet toe, zolang 'ie in het verleden ligt.
+        var start = $"2020-01-01T{time}:00";
+
+        var trigger = scheduleType switch
+        {
+            UpdateScheduleType.Weekly =>
+                $"<CalendarTrigger><StartBoundary>{start}</StartBoundary><Enabled>true</Enabled>"
+                + "<ScheduleByWeek><DaysOfWeek><Monday /></DaysOfWeek><WeeksInterval>1</WeeksInterval></ScheduleByWeek>"
+                + "</CalendarTrigger>",
+            UpdateScheduleType.OnStartup =>
+                "<LogonTrigger><Enabled>true</Enabled></LogonTrigger>",
+            _ =>
+                $"<CalendarTrigger><StartBoundary>{start}</StartBoundary><Enabled>true</Enabled>"
+                + "<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>"
+                + "</CalendarTrigger>"
+        };
+
+        var user = Escape($@"{Environment.UserDomainName}\{Environment.UserName}");
+        var command = Escape(exePath);
+
+        // RunOnlyIfNetworkAvailable bewust op false: een run zonder netwerk faalt
+        // netjes en meldt dat via een notificatie, terwijl een niet-gestarte task
+        // volledig stil is — en precies dat stille falen is de bug die we hier fixen.
+        var xml =
+            "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n"
+            + "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n"
+            + "  <RegistrationInfo>\n"
+            + "    <Description>Setup Toolbox — werkt geinstalleerde apps bij via winget.</Description>\n"
+            + "  </RegistrationInfo>\n"
+            + $"  <Triggers>{trigger}</Triggers>\n"
+            + "  <Principals>\n"
+            + "    <Principal id=\"Author\">\n"
+            + $"      <UserId>{user}</UserId>\n"
+            + "      <LogonType>InteractiveToken</LogonType>\n"
+            + "      <RunLevel>HighestAvailable</RunLevel>\n"
+            + "    </Principal>\n"
+            + "  </Principals>\n"
+            + "  <Settings>\n"
+            + "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\n"
+            + "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\n"
+            + "    <StartWhenAvailable>true</StartWhenAvailable>\n"
+            + "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>\n"
+            + "    <AllowStartOnDemand>true</AllowStartOnDemand>\n"
+            + "    <Enabled>true</Enabled>\n"
+            + "    <Hidden>false</Hidden>\n"
+            + "    <WakeToRun>false</WakeToRun>\n"
+            + "    <AllowHardTerminate>true</AllowHardTerminate>\n"
+            + "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n"
+            + "    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>\n"
+            + "    <IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>\n"
+            + "  </Settings>\n"
+            + "  <Actions Context=\"Author\">\n"
+            + "    <Exec>\n"
+            + $"      <Command>{command}</Command>\n"
+            + "      <Arguments>/autoupdate</Arguments>\n"
+            + "    </Exec>\n"
+            + "  </Actions>\n"
+            + "</Task>\n";
+
+        var path = Path.Combine(Path.GetTempPath(), $"SetupToolbox_task_{Guid.NewGuid():N}.xml");
+
+        // schtasks verwacht UTF-16 wanneer de declaratie dat zegt; Encoding.Unicode
+        // schrijft UTF-16 LE met BOM.
+        File.WriteAllText(path, xml, Encoding.Unicode);
+        return path;
+    }
+
+    private static string Escape(string value) => SecurityElement.Escape(value) ?? value;
 
     private static void TryDelete(string path)
     {

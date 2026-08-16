@@ -22,9 +22,9 @@
          AssemblyVersion + FileVersion gelijk zodat assembly metadata, exe
          properties en eventuele toekomstige in-app version-display match. -->
     <AssemblyName>SetupToolbox</AssemblyName>
-    <Version>1.0.13</Version>
-    <AssemblyVersion>1.0.13</AssemblyVersion>
-    <FileVersion>1.0.13</FileVersion>
+    <Version>1.0.14</Version>
+    <AssemblyVersion>1.0.14</AssemblyVersion>
+    <FileVersion>1.0.14</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -74,11 +74,18 @@
   <ItemGroup>
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="*" />
-    <!-- Pin op 1.8.* — Version="*" haalt 2.x op, maar dat vereist een aparte
-         WinAppRuntime 2.x install op de target machine ("Required components
-         of the Windows App Runtime are missing — Version 2.x"). 1.8 wordt
-         systeembreed gebruikt en self-contained gepublished naar exe. -->
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <!-- EXACT gepind, niet 1.8.* — zie hieronder waarom beide delen nodig zijn.
+         (1) Niet Version="*": dat haalt 2.x op, wat een aparte WinAppRuntime 2.x
+             install op de target machine vereist ("Required components of the
+             Windows App Runtime are missing — Version 2.x").
+         (2) Ook niet 1.8.*: dat zweeft binnen 1.8.x. Op 2026-08-16 trok een
+             restore ongevraagd 1.8.260804001 binnen, die runtime-package
+             >= 8000.946.1701.0 eist terwijl de machine 8000.921.1539.0 had.
+             Gevolg: de app startte niet meer ("Required components ... Version
+             1.8"), en omdat het proces sterft vóór onze eerste regel code was er
+             geen enkele logregel of crash.log — een lastig te herkennen fout.
+         Bump dus bewust, en test daarna of de app nog start. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260710003" />
     <!-- ToastContentBuilder voor unpackaged Win32/WinUI apps. WinAppSDK's
          eigen Microsoft.Windows.AppNotifications faalt met "Class not
          registered" zonder een COM activator class. Dit toolkit-pakket

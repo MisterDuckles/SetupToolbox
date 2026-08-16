@@ -320,8 +320,51 @@ public sealed class WingetService
         if (exitCode != 0 && string.IsNullOrWhiteSpace(output))
             throw new InvalidOperationException(FriendlyError(error, output, exitCode, "winget upgrade"));
 
-        var rich = ParseListOutput(output);
+        var rich = ParseUpgradeTables(output);
         return rich.Count > 0 ? rich : ParseSimpleIds(output);
+    }
+
+    /// <summary>
+    /// `winget upgrade` levert soms TWEE tabellen: de gewone lijst, plus een tweede
+    /// met pakketten die "explicit targeting" vereisen — mét eigen kolombreedtes.
+    /// ParseListOutput rekent met de kolomposities van één header, dus die tweede
+    /// tabel viel volledig weg (rijen korter dan de eerste versie-kolom). We knippen
+    /// de output daarom eerst in blokken per header en draaien de bestaande parser
+    /// per blok; die parser wordt ook door GetInstalledAppsListAsync gebruikt en
+    /// blijft dus ongemoeid. Dedup op Id, want een pakket hoort in één tabel thuis.
+    ///
+    /// "Explicit targeting" is precies wat onze per-app-lus doet (`--id … --exact`),
+    /// dus deze pakketten zijn wel degelijk bij te werken — `upgrade --all` sloeg ze
+    /// alleen over.
+    /// </summary>
+    private static List<WingetListEntry> ParseUpgradeTables(string output)
+    {
+        var lines = output.Split('\n');
+
+        var headers = new List<int>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].TrimEnd('\r');
+            if (line.StartsWith("Name", StringComparison.Ordinal)
+                && line.Contains("Id", StringComparison.Ordinal))
+                headers.Add(i);
+        }
+
+        var results = new List<WingetListEntry>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var h = 0; h < headers.Count; h++)
+        {
+            var from = headers[h];
+            var to = h + 1 < headers.Count ? headers[h + 1] : lines.Length;
+            var block = string.Join("\n", lines[from..to]);
+
+            foreach (var entry in ParseListOutput(block))
+                if (seen.Add(entry.Id))
+                    results.Add(entry);
+        }
+
+        return results;
     }
 
     /// <summary>

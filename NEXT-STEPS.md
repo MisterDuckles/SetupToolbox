@@ -46,7 +46,41 @@ VM-test van v1.0.11 (install-batch van ~50 apps over meerdere categorieën). Twe
 
 ## Open voor v1.1.0
 
-*(geen open patches meer — volgende milestone)*
+### Onderzoek — MSIX-bundle als distributievorm i.p.v. exe-installer?
+
+Te onderzoeken (user-wens, 2026-08-16): kunnen we Setup Toolbox shippen als **MSIX** in plaats van de huidige Inno Setup-exe? MSIX is de moderne Windows-packaging-vorm: schone install/uninstall zonder restanten, ingebouwde update-mechaniek (App Installer / Store) en een gecontaineriseerde runtime.
+
+**Wat het zou opleveren:**
+- Geen eigen installer + geen eigen self-update-flow meer; `.appinstaller` doet de updates.
+- Echte package-identity → toasts werken nátief via `AppNotificationManager`, zonder de COM-activator-ellende en zonder het URI-protocol dat we in v1.0.13 moesten bouwen.
+- Uninstall laat gegarandeerd niets achter.
+
+**Wat het onderzoek moet uitwijzen — dit zijn géén details maar mogelijke blokkers:**
+1. **Elevatie.** Een MSIX-app kan zichzelf niet als admin herstarten zoals wij doen (`ShellExecute` met `runas` → `--install-runner`, één UAC per batch, v1.0.5). Zonder een werkend alternatief valt de kern van de install-flow om.
+2. **Registry- en filesystem-virtualisatie.** MSIX draait in een container waarin schrijfacties omgeleid kunnen worden naar een package-private hive. Dat botst frontaal met wat deze app *is*: Tweaks schrijft bewust naar HKCU/HKLM, Debloat verwijdert AppX-pakketten, Deep Clean wist systeemmappen. Moet uitgezocht worden wat `runFullTrust` hier precies wél en niet toestaat.
+3. **Code signing.** MSIX moet ondertekend zijn. Een self-signed certificaat betekent dat elke gebruiker eerst handmatig het certificaat installeert — voor publieke distributie onwerkbaar. Een echt certificaat kost geld.
+4. **Store-distributie** ligt waarschijnlijk sowieso niet voor de hand: een tool die systeeminstellingen wijzigt en apps verwijdert past slecht bij het Store-beleid. Sideload via `.appinstaller` is dan het realistische pad.
+
+**Aanpak:** eerst punt 1 en 2 uitzoeken met een wegwerp-proof-of-concept — als elevatie of registry-schrijven niet werkt, zijn 3 en 4 niet meer relevant. Pas daarna een keuze maken. De huidige Inno Setup-flow werkt en blijft tot dan de standaard.
+
+### v1.0.14 — Auto-update draait niet op accu + explicit targeting + WindowsAppSDK gepind
+
+Drie bevindingen uit de elevated-verificatie van v1.0.13 (2026-08-16).
+
+- **De geplande auto-update draaide niet op accustroom.** `TaskSchedulerService.CreateUpdateTaskAsync` maakte de task met `schtasks.exe /create`, en dat zet standaard **`DisallowStartIfOnBatteries = True`** (plus `StopIfGoingOnBatteries`). Gemeten op een laptop op accu: Task Scheduler meldt `LastTaskResult = 0` en werkt `LastRunTime` bij, maar start **geen proces** — volledig stil en niet te onderscheiden van een geslaagde run. Pas na het uitzetten van die vlag startte dezelfde task wél. Op een laptop draaiden de auto-updates dus feitelijk nooit, zonder enig signaal.
+  - **Fix:** task aanmaken via `schtasks /create /xml` met een eigen definitie (`WriteTaskXml`), waarin beide accu-vlaggen op `false` staan. Meteen ook `StartWhenAvailable=true` (haalt een gemiste run in als de machine sliep — juist op een laptop relevant), `ExecutionTimeLimit=PT2H` (default was 72 uur) en `MultipleInstancesPolicy=IgnoreNew`. Eén UAC blijft behouden; de XML gaat als UTF-16 naar `%TEMP%` en wordt na `/create` opgeruimd.
+  - **`RunOnlyIfNetworkAvailable` bewust op `false`.** Een run zonder netwerk faalt netjes en meldt dat via een notificatie; een niet-gestarte task is volledig stil — en precies dat stille falen is de bug die we hier fixen. Geen tweede zwijgende voorwaarde erbij.
+- **Pakketten die "explicit targeting" vereisen werden overgeslagen.** winget zet die in een **tweede tabel** met eigen kolombreedtes; `ParseListOutput` rekent met de kolomposities van één header, dus die rijen vielen door de lengte-check.
+  - **Fix:** nieuwe `ParseUpgradeTables` knipt de output in blokken per header en draait de bestaande `ParseListOutput` per blok, met dedup op Id. De parser zelf blijft ongemoeid — die wordt ook door `GetInstalledAppsListAsync` gebruikt. "Explicit targeting" is precies wat onze per-app-lus al doet (`--id … --exact`), dus deze pakketten zijn wel degelijk bij te werken.
+  - **Nog te volgen:** bij zulke pakketten kan winget de geïnstalleerde versie soms niet betrouwbaar vaststellen, waardoor het elke run opnieuw "bijwerkt" → de app zou dan dagelijks in de melding verschijnen. Een paar runs meekijken in `install.log`.
+- **WindowsAppSDK exact gepind (`1.8.260710003`, was `1.8.*`).** Tijdens deze sessie trok een gewone rebuild ongevraagd `1.8.260804001` binnen, die runtime-package `>= 8000.946.1701.0` eist terwijl de machine `8000.921.1539.0` had. Gevolg: **de app startte niet meer** — en omdat het proces sterft vóór de eerste regel eigen code was er geen `LAUNCH`-regel, geen `crash.log`, niets. Alleen een OS-dialoog "Required components of the Windows App Runtime are missing". Dat kostte een half uur zoeken in de verkeerde hoek. Nu gepind, dus builds zijn reproduceerbaar en een SDK-bump is een bewuste actie die je daarna test.
+
+> **Geverifieerd (2026-08-16):**
+> - Task via de app aangemaakt → `DisallowStartIfOnBatteries=False`, `StopIfGoingOnBatteries=False`, `StartWhenAvailable=True`, `ExecutionTimeLimit=PT2H`, `RunLevel=Highest`, actie `…\SetupToolbox.exe /autoupdate`, dagelijks 09:00. Dat een task mét die vlag uit wél start op accu was al aangetoond met de `SetupToolbox_ToastTest`-run.
+> - `/updatecheck` levert nu **24** entries i.p.v. 22 — `Discord.Discord` staat erbij, geparsed uit de tweede tabel.
+> - App start weer normaal na de SDK-pin.
+>
+> De task is **niet** echt gedraaid: dat zou 24 apps daadwerkelijk bijwerken. Let op dat een task die je vanuit de dev-build aanmaakt naar `bin\Debug\…` wijst — voor dagelijks gebruik opnieuw aanmaken vanuit de geïnstalleerde app.
 
 ### v1.0.13 — Toast-notificaties rond de auto-update
 
@@ -79,7 +113,7 @@ Nieuwe records `AutoUpdateResult(Updated, Failed, ListError)` + `AutoUpdateFailu
 
 > **Bekende beperking:** winget zet pakketten die "explicit targeting" vereisen in een **tweede tabel** met eigen kolombreedtes; die rijen vallen door de lengte-check van `ParseListOutput` en worden overgeslagen (op de testmachine: Discord). Dat is gelijk aan wat `upgrade --all` deed — geen regressie, maar wel een gemiste kans, want mét `--id --exact` zouden we ze juist wél kunnen bijwerken. Kandidaat voor een vervolgpatch.
 
-> **Nog te verifiëren op de VM:** de scheduled task draait met `/rl highest` (**elevated**), en alle tests hierboven draaiden **niet** elevated. Toasts vanuit een elevated proces zijn een bekend twijfelgeval — dat moet met een echte task-run bevestigd worden. De task bestond bij aanvang niet meer op deze machine (ooit aangemaakt volgens `SetupToolbox_schtasks.log`, sindsdien verwijderd), dus opnieuw aanmaken om te testen.
+> **Elevated-verificatie afgerond (2026-08-16).** Het openstaande risico — werken toasts vanuit een high-integrity proces? — is opgelost: **ja**. Getest met een tijdelijke task `SetupToolbox_ToastTest` (`/rl highest`, `LogonType Interactive`) die `/toasttest` draaide: `LAUNCH args=[/toasttest]` + 2× `Show() OK`. Ook een directe verhoogde start (`Start-Process -Verb RunAs`) logde en toonde correct. De verificatie legde wél een aparte bug bloot — zie v1.0.14 (accu-restrictie).
 
 ### v1.0.11 — Globale crash-vangnet + crash-safe progress-callbacks
 
