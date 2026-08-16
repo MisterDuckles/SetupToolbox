@@ -102,6 +102,16 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 
 **Roadmap-hernummering:** de openstaande items zijn meegenummerd, `v1.0.15`–`v1.0.18` → **`v1.2.1`–`v1.2.4`** (MSIX-onderzoek, config-backup, multi-language, website). Inhoudelijk ongewijzigd.
 
+> **Geverifieerd (2026-08-16):**
+> - Release **live**: https://github.com/MisterDuckles/SetupToolbox/releases/tag/v1.2.0 — geen draft, geen pre-release, asset `SetupToolbox-v1.2.0.exe` (69,0 MB, `state=uploaded`).
+> - **Self-update-pad nagespeeld tegen de live API** met exact de filterlogica uit `GitHubService` (draft/prerelease overslaan → asset matchen op `^SetupToolbox-v.*\.exe$` → `TryParseTag` → hoogste versie winnen). Uitkomst: hoogste kandidaat **v1.2.0**; een gebruiker op v1.0.0 én op v1.0.14 krijgt de update aangeboden, op v1.2.0 niet. Dit was het hele doel van de milestone, dus niet op gegokt.
+> - Release-build **start daadwerkelijk** (venster "Setup Toolbox"), `FileVersion = 1.2.0`. Bewust gecontroleerd omdat v1.0.14 liet zien dat een niet-startende build geen enkel spoor achterlaat.
+> - `origin/main` staat op de release-commit; de acht commits v1.0.8 t/m v1.2.0 zijn gepusht.
+>
+> **Niet getest:** de installer zelf (install → self-update → herstart) is niet op een schone VM gedraaid. De Inno Setup-flow is sinds v0.10.0 ongewijzigd, dus het risico is laag, maar het is geen bewijs.
+>
+> **Omgevings-hobbel, geen projectbug:** de 1Password SSH-agent weigerde tijdens deze sessie de push (`communication with agent failed`) terwijl het ondertekenen via `op-ssh-sign.exe` — een andere code-route — wél werkte. Gepusht via HTTPS met `gh` als credential-helper voor die ene aanroep; geen blijvende config-wijziging.
+
 ### v1.0.14 — Auto-update draait niet op accu + explicit targeting + WindowsAppSDK gepind
 
 Drie bevindingen uit de elevated-verificatie van v1.0.13 (2026-08-16).
