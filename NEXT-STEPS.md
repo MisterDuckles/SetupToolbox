@@ -1,52 +1,18 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.0** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.0** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
+>
+> **Let op bij het lezen van tags:** de WinUI-lijn staat sinds 2026-08-16 op **v1.2.0** en overlapt daarmee numeriek met de oude WPF-nummering. De WPF-tags zijn te herkennen aan het `wpf-final-`-voorvoegsel; alles zonder voorvoegsel (`v1.0.0`, `v1.2.0`) is WinUI. **v1.1.0 wordt bewust overgeslagen** — dat nummer is in het WPF-tijdperk al eens vergeven en de release is later verwijderd, dus hergebruik zou de historie dubbelzinnig maken.
 
 **Stack:** .NET 10 + Windows App SDK 1.8 + WinUI 3 + unpackaged exe. Mica backdrop, native `Microsoft.UI.Xaml` controls. **Distributie:** publieke GitHub-repo (restrictieve/proprietary licentie) + per-user Inno Setup installer als release-asset; self-update via de GitHub releases-API. `apps.json` is gebundeld met de exe (geen live fetch).
 
 ---
 
-## Voltooide versies
+## Open
 
-### v1.0.7 — Install-UX vervolg na v1.0.6 VM-test: abort, elevation-refused auto-retry, NumberBox-prompt, msstore Store-app fallback
-
-Vier gebundelde install-UX-verbeteringen uit de v1.0.6 VM-test (v1.0.6 fix werkt: één UAC voor de batch, geen *"can't run on your PC"* meer). Maar de test legde meerdere pijnpunten bloot — alle in deze patch opgelost.
-
-- **A. Abort-knop** voor een lopende batch. Battle.net liet zien hoe pijnlijk de oude situatie was: één hangende winget-installer maakte de hele app onbruikbaar (alleen taakbeheer als uitweg). Nu: tijdens een batch is de Primary-knop **"Annuleren"** (een nieuwe `PrimaryButtonClick`-handler cancelt een `CancellationTokenSource` en houdt de dialog open via `args.Cancel = true`). De CTS propageert door de hele install-stack:
-  - In-process flow → nieuwe `CancellationToken` parameter in `WingetService.InstallAppsAsync` / `InstallOneInBatchAsync` / `InstallAppAsync` / `RunWingetCommandAsync`. `RunWingetCommandAsync` registreert `ct.Register(() => process.Kill(entireProcessTree: true))` zodat niet alleen `winget.exe` maar ook **de installer die winget zelf spawnt** (MSI / setup.exe) sterft. Resterende apps die nog niet aan de semaphore zaten krijgen `CancelledMessage` ("Geannuleerd") en gaan via `InstallPhase.Failed` door de progress-stroom. De v1.0.4-retry-knop ziet ze daarna als gewone failures en kan ze opnieuw oppakken.
-  - Elevated runner → medium-IL parent kan een high-IL kind niet betrouwbaar killen (integriteits-check). Oplossing: **`cancel.flag` file-IPC**. Parent schrijft `cancel.flag` in de workDir bij CTS-cancel; kind pollt 'm elke 500ms (`Task.Run` monitor naast de install-task) en cancelt z'n eigen `innerCts` → propageert weer door de install-stack in het kind. Self-cancel via flag = de schone weg.
-  - UI: na cancel wordt de Primary "Annuleren..." (disabled) tot de wind-down klaar is, daarna normaal "Sluiten".
-- **B. `0x8A150056` auto-retry onge-eleveerd.** Sommige installers (Spotify is de bekendste; exit code `0x8A150056` *"The installer cannot be run from an administrator context"*) **weigeren** elevated te draaien — in v1.0.4 werkten ze omdat onze parent unelevated was; vanaf v1.0.5's elevated runner faalden ze. Fix is exit-code-based, geen hardcoded blocklist:
-  - `WingetService.IsAdminContextRefused(exitCode, output)` checkt `0x8A150056` taal-onafhankelijk + de Engelstalige tekst als vangnet.
-  - Nieuwe sentinel `WingetService.RequiresUnelevatedMessage` — `InstallAppAsync` returnt deze i.p.v. `FriendlyError` (dus de log toont `REJECT-ADMIN … needs unelevated retry` i.p.v. een misleidende "install mislukt").
-  - `InstallDialog.RunWingetInstallsAsync` ná de elevated batch: scant `_items` op deze sentinel-message → reset die items → roept `App.Winget.InstallAppsAsync` *in-process* (onge-eleveerd) nog een keer aan met alleen die apps. `_completedCount` wordt vooraf gedecrementeerd zodat de `OnProgress`-teller niet dubbelt. Volledig automatisch + silent (user's keuze in de Q&A); brief flicker Failed → Pending → Installing → Success.
-- **C. NumberBox-prompt voor parallelisme.** De one-time prompt vroeg eerder Yes (=2) / No (=1) — user wilde direct 1-4 kunnen kiezen. Vervangen door een ContentDialog met `NumberBox` (Min=1, Max=4, default 2, Compact spin-buttons + integer-formatter zodat NL-locale geen "2,0" laat zien). Cancel via dialog-X bewaart niets (komt volgende keer terug); OK slaat `MaxParallelInstalls` op en zet `ParallelInstallsAsked=true`.
-- **D. msstore cert-error → Store-app fallback.** VM-diagnose bracht aan het licht: `winget source update` werkt (CDN-laag oké) maar `winget install` voor msstore-products faalt op een **aparte cert-pin in de winget→Store-IPC** (`0x8A15005E` "server certificate did not match"). Reset van de source helpt vaak niet — komt ook voor op stale Windows-installs / corporate proxies / AV-interferentie buiten VMs. **Fix:** in `WingetService.InstallAppAsync` detecteren we `0x8A15005E` specifiek voor `source=="msstore"` apps + openen via `Process.Start` het `ms-windows-store://pdp/?productid=<id>` URI → Store-app gaat direct naar de productpagina, user klikt 1× op "Halen". Updates lopen daarna gewoon mee: via winget op gezonde machines, of via de Store-app's eigen auto-update op de achtergrond. Nieuwe sentinel `WingetService.MsStoreOpenedMessage`, nieuwe `InstallPhase.OpenedInStore` + `InstallItemState.OpenedInStore` (gele caution-badge "Geopend in Store", patroon mirror van de bestaande manual-download flow). `HadSuccessfulInstall` telt deze als success. Bij Stores die ook stuk zijn faalt `Process.Start` netjes → terugval op de bestaande `FriendlyError`.
-
-> **VM-test v1.0.7 bevestigd (2026-06-12):**
-> - ✅ **A (Abort):** `RUNNER CANCEL flag written → CHILD CANCEL flag detected → CANCEL Blizzard.BattleNet` — perfect.
-> - ⚠️ **B (Spotify B-retry):** Mechanisme werkt correct (in-process retry na elevated batch, geen nieuwe RUNNER START). Twee resterende issues → v1.0.8 F1: (1) geen UI-feedback tijdens retry, (2) Spotify faalt in de unelevated retry met `0x8A150011` (hash-mismatch — winget-catalogus-bug, lost zich vanzelf op).
-> - ✅ **C (NumberBox):** Werkt.
-> - ✅ **D (msstore):** Werkt op frisse Windows-install — Apple Music (`9PFHDD62MXS1`) en `XP8JNQFBQH6PVF` allebei OK via elevated runner.
-
-### v1.0.12 — ContentDialog-gate (post-install prompt-crash) + MSI-serialisatie
-
-VM-test van v1.0.11 (install-batch van ~50 apps over meerdere categorieën). Twee problemen uit `crash.log` + `install.log`:
-
-- **ContentDialog-crash (crash.log 09:13:10).** `ScheduleAutoUpdatePrompt.MaybeShowAsync` (de post-install "Schedule auto-updates?"-prompt) gooide `COMException: Only a single ContentDialog can be open at any time`. WinUI 3 staat per thread maar één open ContentDialog toe — en de race treedt óók op bij twee dialogs vlák ná elkaar: zodra de `await InstallDialog.ShowAsync()` voltooit ben je terug in de continuation, maar WinUI heeft de InstallDialog-popup dan nog niet uit de visual tree gehaald, dus de direct-volgende `ScheduleAutoUpdatePrompt.ShowAsync()` botst erop. Het v1.0.11-vangnet ving de crash op (app overleeft), maar de prompt verscheen alsnog niet.
-  - **Fix — centrale `Helpers.DialogService.ShowAsync(dialog)`-gate.** Serialiseert alle dialogs die er doorheen gaan (`SemaphoreSlim`, één tegelijk) én vangt de teardown-race op: bij de COMException krijgt de UI-thread een low-priority tick om de vorige popup op te ruimen, daarna retry (max 10×). De hele install-knop-flow loopt nu via de gate: `ParallelInstallsPrompt` → `LocationPrompt` → `InstallDialog` → `ScheduleAutoUpdatePrompt` (+ de `ScheduleDialog` daarbinnen), in zowel `AppsPage` als `CategoryDetailPage`.
-- **MSI-lock-botsingen (install.log).** VirtualBox, PostgreSQL en MySQL Workbench (alle drie MSI met VCRedist-dependency) draaiden parallel (`parallel=4`) in de ge-eleveerde batch → botsten op de globale Windows Installer-mutex (`Waiting for another install/uninstall to complete...`) → faalden met `0x8A150006` / `0x8A150102`. Een tweede poging hielp deels (MySQL Workbench daarna `SKIP already installed`), maar VirtualBox + PostgreSQL bleven falen.
-  - **Fix — proactieve serialisatie via apps.json-vlag** (zelfde patroon als `requiresUnelevated` / `requiresLocation`): nieuwe `App.SerializeInstall` (`serializeInstall: true`). `WingetService` heeft een process-wide `_serialInstallGate` (`SemaphoreSlim(1,1)`); serialize-apps moeten die gate BINNEN de parallelisme-semaphore nemen → ze draaien nooit gelijktijdig met elkaar, terwijl losse EXE-installers gewoon parallel doorlopen. De vlag propageert door de ge-eleveerde runner (job → kind). Getagd: `Oracle.VirtualBox`, `PostgreSQL.PostgreSQL.17`, `Oracle.MySQLWorkbench`. Eén UAC blijft behouden (geen tweede prompt zoals een retry-achteraf zou kosten).
-
-> **Niet (door de fix) opgelost — losse installer-problemen, geen SetupToolbox-bug:** RoboForm (`0x8A150011` enterprise-MSI), NordVPN (`0x8A150110`), Microsoft.Office (`0x8A150006`, winget-Office is notoir), Proton Drive (`0x8A150102`), Foxit (`0x8A150006`). Firefox/Vivaldi faalden eerder op `0x80072F05` (transiente netwerk/SSL) en slaagden bij herpoging — daar is de bestaande retry-knop voor.
-
-> **Lokaal getest (2026-08-12):** ContentDialog-gate (install → schedule-prompt keten, geen crash meer) en MSI-serialisatie (VirtualBox + PostgreSQL + MySQL Workbench in 1 batch, 1 UAC, geen lock-botsingen) — beide bevestigd werkend.
-
-## Open voor v1.1.0
-
-### Onderzoek — MSIX-bundle als distributievorm i.p.v. exe-installer?
+### v1.2.1 — MSIX-bundle als distributievorm i.p.v. exe-installer?
 
 Te onderzoeken (user-wens, 2026-08-16): kunnen we Setup Toolbox shippen als **MSIX** in plaats van de huidige Inno Setup-exe? MSIX is de moderne Windows-packaging-vorm: schone install/uninstall zonder restanten, ingebouwde update-mechaniek (App Installer / Store) en een gecontaineriseerde runtime.
 
@@ -62,6 +28,79 @@ Te onderzoeken (user-wens, 2026-08-16): kunnen we Setup Toolbox shippen als **MS
 4. **Store-distributie** ligt waarschijnlijk sowieso niet voor de hand: een tool die systeeminstellingen wijzigt en apps verwijdert past slecht bij het Store-beleid. Sideload via `.appinstaller` is dan het realistische pad.
 
 **Aanpak:** eerst punt 1 en 2 uitzoeken met een wegwerp-proof-of-concept — als elevatie of registry-schrijven niet werkt, zijn 3 en 4 niet meer relevant. Pas daarna een keuze maken. De huidige Inno Setup-flow werkt en blijft tot dan de standaard.
+
+### v1.2.2 — Eén-klik volledige config-backup (apps + tweaks + settings)
+
+Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een nieuwe of andere pc.
+
+**Wat er al is** (dus niet opnieuw bouwen): `SelectionImportExportService` exporteert de app-selectie, `TweakProfileService` (v0.9.20) exporteert een tweak-profiel — beide los, beide via de file-picker. `SnapshotService` (registry-undo vóór elke Tweaks-Apply) en `RestorePointService` (System Restore Points vóór Deep Clean / Debloat) zijn veiligheidsnetten voor ándere doeleinden en horen hier niet bij.
+
+**Wat ontbreekt:**
+- De voorkeuren in `SettingsService` (`%LOCALAPPDATA%\SetupToolbox\settings.json` — parallelisme, notificatie-toggles, restore-point-keuzes, logging) zijn **nergens** exporteerbaar.
+- Er is geen gebundelde export: je moet nu twee losse bestanden apart maken en apart weer importeren.
+
+**Scope:** één "Configuratie exporteren"-knop → één JSON met de drie onderdelen (app-selectie + tweak-profiel + settings), en één "Importeren" die ze samen terugzet. Uit te werken vóór implementatie: versie-veld voor forward-compat, wat te doen bij een deels-onbekende catalogus op de doelmachine (bestaande import-flows melden dat al per app/tweak), en of settings selectief overslaan mogelijk moet zijn (bv. wél je tweak-profiel, níét je logging-voorkeur).
+
+### v1.2.3 — Multi-language (NL/EN)
+
+Geverifieerd (2026-08-16): **er is nul lokalisatie-infra.** Geen `.resw`-bestanden, geen `x:Uid`-attributen, geen `ResourceLoader`-gebruik; `Package.appxmanifest` heeft alleen de WinUI-template-default. Alle UI-tekst is hardcoded.
+
+**Belangrijk om te weten vóór je begint:** de UI is nu feitelijk **half Nederlands, half Engels** — een organisch gegroeid mengsel. Settings toont "Scheduled auto-updates" / "Set up" / "Check for updates now" naast Nederlandse teksten, en dialogs mengen het door elkaar ("Schedule auto-updates?" met daaronder Nederlandse knoppen). Een NL/EN-toggle bouwen betekent dus niet alleen infra toevoegen, maar ook **alle bestaande strings inventariseren en van een consistente vertaling voorzien in beide talen** — dat is het grootste deel van het werk, niet de toggle zelf.
+
+Uit te werken vóór implementatie: `.resw` + `x:Uid` (het WinUI-standaardpad, maar vereist aanpassing van élk XAML-element met tekst) versus een eigen string-tabel-service (minder idiomatisch, makkelijker vanuit code-behind aan te roepen — en deze app zet veel tekst vanuit code-behind). Plus: live wisselen of pas na herstart?
+
+### v1.2.4 — Website professionaliseren + bijwerken
+
+De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
+
+> Correctie op mijn eigen audit van 2026-08-16: een geautomatiseerde fetch kreeg **403 Forbidden** op zowel de pagina als de bare domain, waaruit ik concludeerde dat de site niet gedeployed was. Dat was fout — user bevestigt dat 'ie gewoon online is. De 403 is vrijwel zeker bot-/WAF-blokkering op de hosting. **Niet opnieuw als "offline" diagnosticeren op basis van een fetch.**
+
+**Wat er moet gebeuren:** de site is gebouwd in mei 2026 bij v1.0.0 en is sindsdien niet meer bijgewerkt, terwijl het project 14 patches verder is (toast-notificaties, install-lanes, deep clean-uitbreidingen, accu-fix). Twee doelen: (1) **professioneler uiterlijk**, (2) **inhoud synchroon met wat de app nu daadwerkelijk kan**. Versie + downloadlink komen al live uit de GitHub-API, dus die lopen automatisch mee — maar alleen als er ook echt een nieuwe Release gepubliceerd wordt (zie de release-cadans-notitie hieronder).
+
+Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zodat je in één keer een actueel verhaal kunt neerzetten.
+
+### v1.2.5 — Kwetsbare transitieve dependency: `System.Drawing.Common` 4.7.0
+
+Opgemerkt tijdens de v1.2.0-releasebuild (2026-08-16): elke `dotnet restore` geeft **`warning NU1904: Package 'System.Drawing.Common' 4.7.0 has a known critical severity vulnerability`** ([GHSA-rxg9-xrhp-64gj](https://github.com/advisories/GHSA-rxg9-xrhp-64gj)).
+
+Het pakket staat **niet** als `PackageReference` in de csproj — het komt transitief binnen, vrijwel zeker via `Microsoft.Toolkit.Uwp.Notifications` 7.x (de toast-library). Bewust **niet** meegenomen in v1.2.0: een dependency-wissel vlak vóór een release is precies het soort verandering dat je daarna wilt testen, niet ongetest uitleveren.
+
+**Uit te zoeken:** (1) waar het vandaan komt — `dotnet nuget why` of `dotnet list package --include-transitive`; (2) of een directe `PackageReference` op een gepatchte versie het weg-pint zonder de toast-flow te breken; (3) of `Microsoft.Toolkit.Uwp.Notifications` (inmiddels vervangen door `CommunityToolkit.WinUI.Notifications`) sowieso een upgrade verdient — let op dat de hele toast-infra uit v1.0.13 daarop leunt, inclusief de COM-activator-registratie die we bewust omzeilen via het `setuptoolbox:`-protocol.
+
+### Zonder versienummer — release-cadans
+
+**Besloten op 2026-08-16: v1.2.0 is gecut** en als GitHub Release gepubliceerd — zie de v1.2.0-sectie onder *Voltooide versies*. Daarmee is de achterstand weg: self-update levert nu alles uit v1.0.1 t/m v1.0.14 in één keer af. Het openstaande besluit ("wanneer komt de volgende milestone?") is hiermee beantwoord voor deze ronde.
+
+**Wat blijft staan als werkafspraak:** patches (v1.2.1, v1.2.2, …) krijgen géén eigen Release — dat blijft de CLAUDE.md-regel. Maar de les uit deze ronde is dat 14 patches opsparen te lang was: geïnstalleerde gebruikers zaten ruim twee maanden op v1.0.0 zonder de crash-fixes uit v1.0.11/v1.0.12 en zonder de accu-fix uit v1.0.14. **Vuistregel voortaan: cut een milestone zodra er een gebruikers-zichtbare crash- of dataverlies-fix in de patchstapel zit, en anders uiterlijk na een handvol patches** — niet wachten tot de stapel "af" voelt.
+
+### Ideeën — nog niet gescoped
+
+Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
+
+- **Plugin-systeem voor custom app-sources** + **custom app-repositories** — hetzelfde onderliggende gat, dus samengevoegd. `AppDatabaseService` leest precies één gebundelde `data/apps.json`; geen source-abstractie, geen UI om een extra bron toe te voegen.
+- **Cloud sync voor settings/selecties** — let op het verschil met v1.2.2 hierboven: dát is een handmatig bestand dat je zelf meeneemt, dit zou **automatische** synchronisatie tussen machines zijn. Vereist een transport (OneDrive-map? eigen backend? account-systeem?) dat nu nergens bestaat.
+- **CLI interface** (bv. `install --profile gaming`) — `App.OnLaunched` heeft al 5 herkende command-line-argumenten, maar die zijn stuk voor stuk interne/headless plumbing voor een specifieke feature (`/autoupdate`, `/toasttest`, `/updatecheck`, `--install-runner <pad>`, `setuptoolbox:open`) — geen ervan accepteert een vrije app-naam of profielnaam. Wel een bruikbaar precedent: het dispatch-patroon in `OnLaunched` is uit te breiden, dus lager effort dan vanaf nul.
+
+---
+
+## Voltooide versies
+
+### v1.2.0 — Milestone-release: v1.0.1 t/m v1.0.14 uitgeleverd
+
+**Geen nieuwe functionaliteit — dit is een release-cut.** De enige code-wijziging is de versiebump in `SetupToolbox.csproj` (`1.0.14` → `1.2.0`, incl. `AssemblyVersion` + `FileVersion`). Alles wat hier uitgeleverd wordt staat inhoudelijk beschreven in de v1.0.1 t/m v1.0.14-secties hieronder.
+
+**Waarom nu.** Sinds v1.0.0 (21 mei) was er geen GitHub Release meer, terwijl de code 14 patches verder liep. `GitHubService` vergelijkt de `AssemblyVersion` met de nieuwste stabiele release die een `SetupToolbox-v*.exe`-asset heeft — zonder Release ziet self-update dus letterlijk niets. Geïnstalleerde gebruikers zaten ruim twee maanden op v1.0.0, inclusief de bugs die daarna gefixt zijn.
+
+**Waarom v1.2.0 en niet v1.1.0.** v1.1.0 is in het WPF-tijdperk al eens als Release gepubliceerd en later bij de opschoning verwijderd. Dat nummer hergebruiken zou de tag-historie dubbelzinnig maken, dus overgeslagen.
+
+**Wat gebruikers hiermee binnenkrijgen** (de zwaarste posten uit de stapel):
+- **De app crasht niet meer weg tijdens een geslaagde install** — globaal `UnhandledException`-vangnet + crash-safe progress-callbacks (v1.0.11), en de `ContentDialog`-gate die de post-install prompt-crash oploste (v1.0.12).
+- **Geplande auto-updates draaiden nooit op een laptop op accu** — stil, zonder enig signaal (v1.0.14). Dit is de fix die het cutten van deze milestone urgent maakte.
+- **Eén UAC-prompt per install-batch** i.p.v. per app (v1.0.5/v1.0.6), plus de abort-knop voor een hangende batch (v1.0.7).
+- **Toast-notificaties rond de auto-update** met de namen van de bijgewerkte apps (v1.0.13).
+- Install-lanes voor apps die niet in de standaard-batch passen: Spotify onge-eleveerd, Battle.net met locatiekeuze (v1.0.10), MSI-serialisatie tegen lock-botsingen (v1.0.12).
+
+**Roadmap-hernummering:** de openstaande items zijn meegenummerd, `v1.0.15`–`v1.0.18` → **`v1.2.1`–`v1.2.4`** (MSIX-onderzoek, config-backup, multi-language, website). Inhoudelijk ongewijzigd.
 
 ### v1.0.14 — Auto-update draait niet op accu + explicit targeting + WindowsAppSDK gepind
 
@@ -106,14 +145,39 @@ Nieuwe records `AutoUpdateResult(Updated, Failed, ListError)` + `AutoUpdateFailu
 - **Diagnostiek** — `App.OnLaunched` logt bij élke start een `LAUNCH args=[…]`-regel. Dat was precies wat de toast-activatie-diagnose besliste (start Windows de exe überhaupt?) en blijft nuttig voor de headless takken.
 - **`/updatecheck` debug-switch** — draait alléén de inventarisatie-fase en logt wat er bijgewerkt zóu worden. Installeert niets; bedoeld om parser + toast-tekst te verifiëren zonder een echte run van tientallen apps los te laten. `/toasttest` toont nu de volledige twee-staps flow met nepdata.
 
-> **Lokaal geverifieerd (2026-08-12):**
-> - `/toasttest` → 2× `Show() OK tag=autoupdate`, tweede toast vervángt de eerste (user-bevestigd).
-> - `/updatecheck` op een machine met 23 pending upgrades → **22 entries correct geparsed** met juiste IDs, display-namen én bron (incl. `XP89DCGQ3K6VLD` / msstore voor PowerToys).
-> - Klik op een toast met de app **gesloten** → `LAUNCH args=[setuptoolbox:open]` en de app opent (user-bevestigd). Tweede klik met de app open → focust de bestaande instantie i.p.v. een tweede venster.
+### v1.0.7 — Install-UX vervolg na v1.0.6 VM-test: abort, elevation-refused auto-retry, NumberBox-prompt, msstore Store-app fallback
 
-> **Bekende beperking:** winget zet pakketten die "explicit targeting" vereisen in een **tweede tabel** met eigen kolombreedtes; die rijen vallen door de lengte-check van `ParseListOutput` en worden overgeslagen (op de testmachine: Discord). Dat is gelijk aan wat `upgrade --all` deed — geen regressie, maar wel een gemiste kans, want mét `--id --exact` zouden we ze juist wél kunnen bijwerken. Kandidaat voor een vervolgpatch.
+Vier gebundelde install-UX-verbeteringen uit de v1.0.6 VM-test (v1.0.6 fix werkt: één UAC voor de batch, geen *"can't run on your PC"* meer). Maar de test legde meerdere pijnpunten bloot — alle in deze patch opgelost.
 
-> **Elevated-verificatie afgerond (2026-08-16).** Het openstaande risico — werken toasts vanuit een high-integrity proces? — is opgelost: **ja**. Getest met een tijdelijke task `SetupToolbox_ToastTest` (`/rl highest`, `LogonType Interactive`) die `/toasttest` draaide: `LAUNCH args=[/toasttest]` + 2× `Show() OK`. Ook een directe verhoogde start (`Start-Process -Verb RunAs`) logde en toonde correct. De verificatie legde wél een aparte bug bloot — zie v1.0.14 (accu-restrictie).
+- **A. Abort-knop** voor een lopende batch. Battle.net liet zien hoe pijnlijk de oude situatie was: één hangende winget-installer maakte de hele app onbruikbaar (alleen taakbeheer als uitweg). Nu: tijdens een batch is de Primary-knop **"Annuleren"** (een nieuwe `PrimaryButtonClick`-handler cancelt een `CancellationTokenSource` en houdt de dialog open via `args.Cancel = true`). De CTS propageert door de hele install-stack:
+  - In-process flow → nieuwe `CancellationToken` parameter in `WingetService.InstallAppsAsync` / `InstallOneInBatchAsync` / `InstallAppAsync` / `RunWingetCommandAsync`. `RunWingetCommandAsync` registreert `ct.Register(() => process.Kill(entireProcessTree: true))` zodat niet alleen `winget.exe` maar ook **de installer die winget zelf spawnt** (MSI / setup.exe) sterft. Resterende apps die nog niet aan de semaphore zaten krijgen `CancelledMessage` ("Geannuleerd") en gaan via `InstallPhase.Failed` door de progress-stroom. De v1.0.4-retry-knop ziet ze daarna als gewone failures en kan ze opnieuw oppakken.
+  - Elevated runner → medium-IL parent kan een high-IL kind niet betrouwbaar killen (integriteits-check). Oplossing: **`cancel.flag` file-IPC**. Parent schrijft `cancel.flag` in de workDir bij CTS-cancel; kind pollt 'm elke 500ms (`Task.Run` monitor naast de install-task) en cancelt z'n eigen `innerCts` → propageert weer door de install-stack in het kind. Self-cancel via flag = de schone weg.
+  - UI: na cancel wordt de Primary "Annuleren..." (disabled) tot de wind-down klaar is, daarna normaal "Sluiten".
+- **B. `0x8A150056` auto-retry onge-eleveerd.** Sommige installers (Spotify is de bekendste; exit code `0x8A150056` *"The installer cannot be run from an administrator context"*) **weigeren** elevated te draaien — in v1.0.4 werkten ze omdat onze parent unelevated was; vanaf v1.0.5's elevated runner faalden ze. Fix is exit-code-based, geen hardcoded blocklist:
+  - `WingetService.IsAdminContextRefused(exitCode, output)` checkt `0x8A150056` taal-onafhankelijk + de Engelstalige tekst als vangnet.
+  - Nieuwe sentinel `WingetService.RequiresUnelevatedMessage` — `InstallAppAsync` returnt deze i.p.v. `FriendlyError` (dus de log toont `REJECT-ADMIN … needs unelevated retry` i.p.v. een misleidende "install mislukt").
+  - `InstallDialog.RunWingetInstallsAsync` ná de elevated batch: scant `_items` op deze sentinel-message → reset die items → roept `App.Winget.InstallAppsAsync` *in-process* (onge-eleveerd) nog een keer aan met alleen die apps. `_completedCount` wordt vooraf gedecrementeerd zodat de `OnProgress`-teller niet dubbelt. Volledig automatisch + silent (user's keuze in de Q&A); brief flicker Failed → Pending → Installing → Success.
+- **C. NumberBox-prompt voor parallelisme.** De one-time prompt vroeg eerder Yes (=2) / No (=1) — user wilde direct 1-4 kunnen kiezen. Vervangen door een ContentDialog met `NumberBox` (Min=1, Max=4, default 2, Compact spin-buttons + integer-formatter zodat NL-locale geen "2,0" laat zien). Cancel via dialog-X bewaart niets (komt volgende keer terug); OK slaat `MaxParallelInstalls` op en zet `ParallelInstallsAsked=true`.
+- **D. msstore cert-error → Store-app fallback.** VM-diagnose bracht aan het licht: `winget source update` werkt (CDN-laag oké) maar `winget install` voor msstore-products faalt op een **aparte cert-pin in de winget→Store-IPC** (`0x8A15005E` "server certificate did not match"). Reset van de source helpt vaak niet — komt ook voor op stale Windows-installs / corporate proxies / AV-interferentie buiten VMs. **Fix:** in `WingetService.InstallAppAsync` detecteren we `0x8A15005E` specifiek voor `source=="msstore"` apps + openen via `Process.Start` het `ms-windows-store://pdp/?productid=<id>` URI → Store-app gaat direct naar de productpagina, user klikt 1× op "Halen". Updates lopen daarna gewoon mee: via winget op gezonde machines, of via de Store-app's eigen auto-update op de achtergrond. Nieuwe sentinel `WingetService.MsStoreOpenedMessage`, nieuwe `InstallPhase.OpenedInStore` + `InstallItemState.OpenedInStore` (gele caution-badge "Geopend in Store", patroon mirror van de bestaande manual-download flow). `HadSuccessfulInstall` telt deze als success. Bij Stores die ook stuk zijn faalt `Process.Start` netjes → terugval op de bestaande `FriendlyError`.
+
+> **VM-test v1.0.7 bevestigd (2026-06-12):**
+> - ✅ **A (Abort):** `RUNNER CANCEL flag written → CHILD CANCEL flag detected → CANCEL Blizzard.BattleNet` — perfect.
+> - ⚠️ **B (Spotify B-retry):** Mechanisme werkt correct (in-process retry na elevated batch, geen nieuwe RUNNER START). Twee resterende issues → v1.0.8 F1: (1) geen UI-feedback tijdens retry, (2) Spotify faalt in de unelevated retry met `0x8A150011` (hash-mismatch — winget-catalogus-bug, lost zich vanzelf op).
+> - ✅ **C (NumberBox):** Werkt.
+> - ✅ **D (msstore):** Werkt op frisse Windows-install — Apple Music (`9PFHDD62MXS1`) en `XP8JNQFBQH6PVF` allebei OK via elevated runner.
+
+### v1.0.12 — ContentDialog-gate (post-install prompt-crash) + MSI-serialisatie
+
+VM-test van v1.0.11 (install-batch van ~50 apps over meerdere categorieën). Twee problemen uit `crash.log` + `install.log`:
+
+- **ContentDialog-crash (crash.log 09:13:10).** `ScheduleAutoUpdatePrompt.MaybeShowAsync` (de post-install "Schedule auto-updates?"-prompt) gooide `COMException: Only a single ContentDialog can be open at any time`. WinUI 3 staat per thread maar één open ContentDialog toe — en de race treedt óók op bij twee dialogs vlák ná elkaar: zodra de `await InstallDialog.ShowAsync()` voltooit ben je terug in de continuation, maar WinUI heeft de InstallDialog-popup dan nog niet uit de visual tree gehaald, dus de direct-volgende `ScheduleAutoUpdatePrompt.ShowAsync()` botst erop. Het v1.0.11-vangnet ving de crash op (app overleeft), maar de prompt verscheen alsnog niet.
+  - **Fix — centrale `Helpers.DialogService.ShowAsync(dialog)`-gate.** Serialiseert alle dialogs die er doorheen gaan (`SemaphoreSlim`, één tegelijk) én vangt de teardown-race op: bij de COMException krijgt de UI-thread een low-priority tick om de vorige popup op te ruimen, daarna retry (max 10×). De hele install-knop-flow loopt nu via de gate: `ParallelInstallsPrompt` → `LocationPrompt` → `InstallDialog` → `ScheduleAutoUpdatePrompt` (+ de `ScheduleDialog` daarbinnen), in zowel `AppsPage` als `CategoryDetailPage`.
+- **MSI-lock-botsingen (install.log).** VirtualBox, PostgreSQL en MySQL Workbench (alle drie MSI met VCRedist-dependency) draaiden parallel (`parallel=4`) in de ge-eleveerde batch → botsten op de globale Windows Installer-mutex (`Waiting for another install/uninstall to complete...`) → faalden met `0x8A150006` / `0x8A150102`. Een tweede poging hielp deels (MySQL Workbench daarna `SKIP already installed`), maar VirtualBox + PostgreSQL bleven falen.
+  - **Fix — proactieve serialisatie via apps.json-vlag** (zelfde patroon als `requiresUnelevated` / `requiresLocation`): nieuwe `App.SerializeInstall` (`serializeInstall: true`). `WingetService` heeft een process-wide `_serialInstallGate` (`SemaphoreSlim(1,1)`); serialize-apps moeten die gate BINNEN de parallelisme-semaphore nemen → ze draaien nooit gelijktijdig met elkaar, terwijl losse EXE-installers gewoon parallel doorlopen. De vlag propageert door de ge-eleveerde runner (job → kind). Getagd: `Oracle.VirtualBox`, `PostgreSQL.PostgreSQL.17`, `Oracle.MySQLWorkbench`. Eén UAC blijft behouden (geen tweede prompt zoals een retry-achteraf zou kosten).
+
+> **Niet (door de fix) opgelost — losse installer-problemen, geen SetupToolbox-bug:** RoboForm (`0x8A150011` enterprise-MSI), NordVPN (`0x8A150110`), Microsoft.Office (`0x8A150006`, winget-Office is notoir), Proton Drive (`0x8A150102`), Foxit (`0x8A150006`). Firefox/Vivaldi faalden eerder op `0x80072F05` (transiente netwerk/SSL) en slaagden bij herpoging — daar is de bestaande retry-knop voor.
+
+> **Lokaal getest (2026-08-12):** ContentDialog-gate (install → schedule-prompt keten, geen crash meer) en MSI-serialisatie (VirtualBox + PostgreSQL + MySQL Workbench in 1 batch, 1 UAC, geen lock-botsingen) — beide bevestigd werkend.
 
 ### v1.0.11 — Globale crash-vangnet + crash-safe progress-callbacks
 
@@ -234,7 +298,7 @@ Vervolg op de v1.0.1-test (browsers op verse install): ná de `--source winget`-
 
 **Distributie-keuze** — repo wordt **publiek** met een **proprietary `LICENSE`** (MIT vervangen): code is in te zien + PR's mogen voorgesteld worden, maar niet kopiëren/hergebruiken/herdistribueren zonder toestemming; de **app/exe** is vrij te downloaden + gebruiken. Git-historie gescand op secrets — clean (`data-source.local.txt` nooit gecommit, 0 token-patterns in 87 commits).
 
-> **Nog te doen vóór live** (user-acties / aparte stap): GitHub-repo hernoemen naar `SetupToolbox` + publiek zetten, eerste v1.0.0-release publiceren met `setup.exe`, en de website (`projects.dpvb.nl/setup-toolbox`, React+Tailwind+GSAP) bouwen. Pas dán werkt self-update live (privé-repo gaf de `404` waardoor we deze hele beslissing namen).
+> **Vóór live vereist — allemaal afgerond:** GitHub-repo hernoemen naar `SetupToolbox` + publiek zetten ✅, eerste v1.0.0-release publiceren met `setup.exe` ✅, en de website (`projects.dpvb.nl/setup-toolbox`, React+Tailwind+GSAP) bouwen ✅ + deployen ✅. Self-update werkt live (privé-repo gaf eerder de `404` waardoor we deze hele beslissing namen). De site vraagt nog wel om een opfrisbeurt — zie **v1.2.4** in `## Open`.
 
 ### v0.10.0 — Inno Setup installer (per-user) + Tweaks-padding fix
 
@@ -999,100 +1063,9 @@ Bron-research (mei 2026 via web): Microsoft Learn policy-CSP docs, ElevenForum t
 
 ---
 
-## Open / gepland
+## Parking-lot & ideeën (niet gescoped, geen versienummer)
 
-### v0.6.x — Icon system polish (lopend)
-
-- Optionele eerste publieke pre-release: GitHub Releases artifact (publish-zip + exe)
-- Open issues in icon set: 2 LAAG (LibreOffice, Insomnia) — handmatig vervangen wanneer een schoner logo opduikt
-- Icons voor toekomstige Debloat / Tweaks dialogs (per Windows-feature een eigen icon, optioneel)
-
-### v0.7.0 — Install flow UX polish + Launcher port
-
-- ~~WinUI Launcher~~ — geschrapt: Inno Setup installer met `/SILENT` (op v1.0 roadmap) dekt exact dezelfde unattended-install rol én geeft proper Start Menu / uninstaller. Launcher zou dubbele moeite zijn
-- ~~Post-install "Schedule auto-updates?" prompt~~ — gedaan in v0.7.3
-- ~~Toast notificatie na `/autoupdate`~~ — gedaan in v0.7.7/v0.7.8 (via `Microsoft.Toolkit.Uwp.Notifications`; WinAppSDK's eigen API faalt op unpackaged WinUI 3 met "Class not registered")
-- ~~Parallel installaties~~ — gedaan in v0.7.5 + v0.7.6 (MSI-based installers blokkeren elkaar via Windows Installer lock — fundamentele platform-beperking, niet oplosbaar)
-- ~~Installation profiles~~ — geschrapt: user-gedefinieerde export/import (v0.7.4) dekt deze behoefte; vooraf-gedefinieerde profiles voegen weinig waarde toe
-- ~~Export/Import selectie naar JSON~~ — gedaan in v0.7.4
-- ~~Installatie geschiedenis / log~~ — geschrapt: `winget list` is al de source of truth; per-install feedback zit al in InstallDialog. Persistent log is meer noise dan signal
-- ~~"Fallback to download page" toggle~~ — gedaan in v0.7.1 (downloadUrl + Manual download badge) en v0.7.2 (Settings toggle)
-
-### v0.8.0 — Debloat tab full (lopend)
-
-Per sub-feature één patch versie. Milestone v0.8.0 = release zodra alle v0.8.x af zijn.
-
-- ~~**v0.8.1** — User-installed apps uninstaller upgraden~~ — gedaan (card-based, multi-select, batch via UninstallDialog)
-- ~~**v0.8.2** — Microsoft bloatware removal~~ — gedaan (curated lijst van ~22 Microsoft AppX items, sectie boven catalog-lijst op DebloatPage, batch via één UAC-elevated PowerShell call met live log-tail progress)
-- ~~**v0.8.3** — Categorieën-sectie + counts~~ — gedaan (BloatwareVendor enum, OEM curated lijst voor HP/Dell/Lenovo/ASUS/Acer/MSI, counts in alle section-headers, Windows11-Unattended-Debloat integratie geparkeerd voor v0.9.x Tweaks)
-- ~~**v0.8.4** — Unified "alle geïnstalleerde apps" lijst~~ — gedaan (InstalledAppEntry + InstalledAppsService voor 3-bron detectie, MixedSourceUninstaller voor per-source dispatch met one-UAC voor de elevated subset, AllAppsUninstallDialog met source-badges en cancellation-state, vervanger voor v0.8.1 catalog-sectie op DebloatPage met fuzzy search + filter ComboBox)
-- ~~**v0.8.5** — Restant-opruiming direct na uninstall~~ — gedaan (LeftoverScannerService scant registry uninstall keys + Program Files folders + AppData folders parallel, confidence-tiered matching, LeftoverCleanupDialog met preview-fase en elevated delete-batch, SettingsService.ScanLeftoversAfterUninstall toggle. Scheduled tasks + services + Temp niet meegenomen — te lawaaiig voor app-specifieke leftover scope)
-- ~~**v0.8.6** — Deep clean (los van uninstall)~~ — gedaan (DeepCleanService met `ScanWindowsCachesAsync` + `ScanOrphanedFoldersAsync`, DeepCleanDialog met safe/caution-tier groepering, DebloatPage layout-restructure naar outer "Apps debloat" + "Deep clean" expanders. Recycle Bin via `Clear-RecycleBin`, browser caches voor Edge/Chrome/Firefox/Brave, orphaned-folder match via comparison-set uit InstalledAppsService met brede protected-list)
-- ~~**v0.8.7** — Orphaned registry + cleaner installed-list~~ — gedaan (nieuwe `OrphanedRegistry` DeepCleanCategory + `ScanOrphanedRegistryAsync` walks HKLM/WOW6432Node/HKCU uninstall keys, `CheckRegistryEntryAlive` filtert op pad-veld bereikbaarheid uit InstallLocation/DisplayIcon/UninstallString/QuietUninstallString/InstallSource. `CollectAliveRegistryIdentifiers` filtert dode Web-source entries uit installed-list zodat folder-scan ze niet als "match" telt — orphan-folder die alleen via leftover registry-entry skipped werd komt nu terug. DeleteAsync: HKCU via in-process `DeleteSubKeyTree`, HKLM via `reg.exe delete /f` in elevated batch. DeepCleanPage tweede knop combineert orphan-folder + orphan-registry parallel scan, bundle-by-name in dialog groept registry+folder van zelfde app automatisch. Bug-fix in oude DeleteAsync local-loop: cache-clear werd ook op OrphanedFolder local items toegepast — nu correct geüpgraded naar full Directory.Delete)
-- ~~**v0.8.8** — Bredere deep clean scope (full deep clean)~~ — gedaan (App Paths / MUIcache / Class handlers / Start Menu + Desktop shortcuts allemaal toegevoegd als nieuwe scan-flows in DeepCleanService. Eén "Scan leftovers" knop runt nu 6 scans parallel: orphan-folders + uninstall-registry + App Paths + MUIcache + class handlers + shortcuts. DeepCleanItem extended met optionele `RegistryValueName` voor MUIcache value-deletion. DeleteAsync uitgebreid met DeleteRegistryValue helper voor specifieke MUIcache values + Remove-Item branch voor shortcuts in elevated PS-batch. Alle scans gebruiken dezelfde generieke heuristic — pad-veld resolveert? — geen hardcoded vendor-namen. Bundle-by-name in dialog groept nu folder + uninstall-key + App Paths + MUIcache + shortcut van zelfde app onder één card)
-- ~~**v0.8.9** — Orphan scheduled tasks + firewall rules~~ — gedaan (`ScanOrphanedScheduledTasksAsync` via `schtasks /Query /XML ONE` + XML-parse, filtert `\Microsoft\` system-tasks; `ScanOrphanedFirewallRulesAsync` via DIRECTE registry-read van `HKLM\SYSTEM\...\FirewallPolicy\FirewallRules` i.p.v. trage `Get-NetFirewallRule` cmdlet (fractie van seconde i.p.v. 10-30+ sec). Beide scans gaan altijd via elevated batch (admin nodig voor `schtasks /Delete` en `Remove-NetFirewallRule`). Firewall display valt terug op exe-filename als DisplayName cryptisch is (`@`-prefix of GUID). PathLink_Click opent `taskschd.msc` resp. `wf.msc`. Twee nieuwe `OrphanedScheduledTask` + `OrphanedFirewallRule` enum values + UI labels. Scan-leftovers knop runt nu 8 scans parallel)
-- ~~**v0.8.9.5** — Post-uninstall extended cleanup~~ — gedaan (LeftoverScannerService uitgebreid van 3 naar 7 scan-types: bestaande registry + Program Files + AppData + nieuwe App Paths + MUIcache + class handlers + Start Menu/Desktop shortcuts, allemaal app-name-filtered zodat alleen leftovers van de zojuist verwijderde app(s) terugkomen. LeftoverType enum + LeftoverItem.RegistryValueName property. TryDeleteLocal + RunElevatedDeleteAsync uitgebreid voor de nieuwe types. Apps Debloat triggert nu de full cleanup ladder i.p.v. alleen folders/registry — geen extra deep clean nodig na een uninstall voor app-specifieke residue)
-- ~~**v0.8.10** — Orphan services + HKCU vendor-residue~~ — gedaan (twee high-risk leftover-types met strict filters om system-state niet te raken. **Orphan services**: `Get-CimInstance Win32_Service` via base64-PS, parse pipe-separated `Name|DisplayName|State|StartMode|PathName`. Strikt filter — alleen orphan als (a) ImagePath dood, (b) State=Stopped, (c) StartMode=Manual/Disabled, (d) niet svchost.exe (DLL-hosted), (e) niet onder `%SystemRoot%` / `C:\Windows\`, (f) geen winget/AppX token cross-match. Delete via `sc.exe delete <name>` in elevated batch. Click op path → `services.msc`. **HKCU vendor**: walk `HKCU\Software\<Vendor>\<App>` (top 2 levels), per app-key zoek pad-values (value-name in `[InstallPath, InstallDir, Path, Program, ExecutablePath, ExePath, AppPath, ...]` óf value-data start met drive-letter `X:\`). Als ALLE pad-values dood AND geen winget/AppX cross-match → orphan. Protected vendor-keys (Microsoft / Classes / Policies / Wow6432Node / Google / Mozilla / driver vendors) altijd skipped. Delete via in-process `DeleteSubKeyTree` (HKCU = user-context, geen UAC). Beide types: IsSafe=false, default unchecked, caution-tier. DeepCleanService.GetOrphanedScanLocations + DeepCleanPage scan-leftovers flow uitgebreid naar 10 parallel scans + breakdown-counts in InfoBar)
-- ~~**v0.8.11** — Polish (diagnostic logs gated + multi-badge bundles + empty-state UI + auto-refresh)~~ — gedaan (zie Voltooide versies)
-- **v0.8.12** — Milestone v0.8.0 release voorbereiding:
-  - Versie-bump naar **v0.8.0** als milestone-release zodra dit af is → release op GitHub met exe-artifacts
-
-### v0.9.x — Tweaks tab (uitgebreid uit research mei 2026)
-
-Research mei 2026: ~140 tweaks geïnventariseerd over 14 categorieën (Chris Titus winutil + OFGB + ExplorerPatcher + Winaero + O&O ShutUp10 + community lists + Win11 24H2/25H2 specific). Core feature: **live state-detection** — elke toggle leest huidige registry-waarde bij page-load en reflecteert of de tweak al actief is. Per tweak `EnabledValue` + `DisabledValue` voor full reversibility. Multi-op bundles (bv OFGB = 22 keys onder 1 toggle) krijgen "partial state" indicator. HKLM-ops batchen in 1 elevated PS-call (zelfde patroon als BloatwareService / DeepCleanService). Per toggle een restart-indicator icoon: 🔄 explorer-restart / ⚙️ sign-out / 🔁 reboot / 🔒 admin.
-
-~~**v0.9.1 — Foundation + Explorer (vertical slice)**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.2 — Taskbar**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.3 — Start Menu**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.4 — Ads & Bloat (OFGB-equivalent)**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.5 — Backup & Restore infrastructuur**~~ — gedaan (zie Voltooide versies; nieuw item, niet in originele roadmap — daardoor schuift de rest van de v0.9.x nummering 1 op)
-
-~~**v0.9.6 — AI / Copilot (Win11 24H2+)**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.7 — Privacy uitbreidingen**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.8 — UI / Theme**~~ — gedaan (zie Voltooide versies). Accent-color override + classic Photo Viewer geparkeerd (zie toelichting)
-
-~~**v0.9.9 — Performance**~~ — gedaan (zie Voltooide versies). powercfg-afhankelijke items (Ultimate Performance power plan, hibernation-reclaim) + startup-apps cleanup geparkeerd; placebo-tweaks bewust niet opgenomen
-
-~~**v0.9.10 — Context Menu uitbreidingen**~~ — gedaan (zie Voltooide versies). Clipchamp-removal geskipt (geen betrouwbaar hardcoded CLSID — vereist runtime-discovery)
-
-~~**v0.9.11 — Notifications & Lock Screen**~~ — gedaan (zie Voltooide versies). "Suggest ways to finish setup" niet opgenomen (al in v0.9.4); Action Center + Calendar-systray samengevoegd tot één `DisableNotificationCenter`-tweak
-
-~~**v0.9.12 — Updates uitbreidingen**~~ — gedaan (zie Voltooide versies). Defer feature/quality updates + NoAutoUpdate + Ethernet-metered + service-disable bewust niet opgenomen (deprecated / fragiel — zie toelichting)
-
-~~**v0.9.13 — Gaming (lagere prio)**~~ — gedaan (zie Voltooide versies). Geen aparte Gaming-categorie — de 3 tweaks zijn in Performance ondergebracht; Game Mode bewust niet uitgezet (nuttig op moderne Windows)
-
-#### Gap-fill uit Winhance + Win11Debloat (gap-analyse 20 mei 2026)
-
-Twee research-agents hebben de volledige tweak-inventaris van **Winhance** (memstechtips) en **Win11Debloat** (Raphire) opgehaald en naast onze 66 geïmplementeerde tweaks gelegd. ~21 genuine gaps gevonden + 2 ontbrekende deelgebieden (Security, Window management). Placebo-tweaks (Win32PrioritySeparation / SystemResponsiveness / SvcHostSplit — v0.9.9-lijn), Game Mode, defer-updates, en deprecated items (3D Objects / News-and-Interests / TaskbarSmallIcons) bewust eruit gefilterd. Al-geparkeerd: Edge-debloat-bundle, Security caution-tier, Sticky Keys, classic Photo Viewer.
-
-~~**v0.9.14 — Explorer + Taskbar gaps**~~ — gedaan (zie Voltooide versies). Auto-hide taskbar geparkeerd (binary-blob)
-
-~~**v0.9.15 — Privacy + Security gaps**~~ — gedaan (zie Voltooide versies). Losse Security-categorie aangemaakt (alleen BitLocker; vult later met caution-tier)
-
-~~**v0.9.16 — Window management + Ads gaps**~~ — gedaan (zie Voltooide versies). Daarmee alle ~21 gap-tweaks verwerkt
-
-#### Gap-fill ronde 2 — winutil + O&O ShutUp10 (gap-analyse 20 mei 2026)
-
-Tweede research-ronde (2 agents) tegen Chris Titus winutil + O&O ShutUp10++. Gecureerd; placebo/deprecated/te-niche eruit. User-keuzes: Office-bundle + battery-% er WÉL bij; Defender caution-tier + app-permissie-mass-deny + classic Photo Viewer er NIET bij (te riskant/fragiel).
-
-~~**v0.9.17 — Edge-debloat-bundle**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.18 — Telemetrie-hardening + Privacy-restjes + Office**~~ — gedaan (zie Voltooide versies)
-
-~~**v0.9.19 — UI & Performance misc + battery %**~~ — gedaan (zie Voltooide versies)
-
-> **Geschrapt — Network tweaks** (IPv6-multichoice / LLMNR / NetBIOS): user vond Network-tweaks niet nuttig. NetBIOS was sowieso geparkeerd (per-adapter). De bestaande `Performance.PreferIPv4` blijft ongemoeid.
-
-~~**v0.9.20 — Tweak-profielen (export / import, apps-stijl)**~~ — gedaan (zie Voltooide versies). Presets geschrapt; profiel-bouwer (clean-slate selectie-modus op de Tweaks-tab) + file-based export/import via Settings, import = delta-only staging → Apply.
-
-**v0.9.0 — Milestone release**
-- Versie-bump naar v0.9.0 → release op GitHub met exe-artifacts (na Inno installer in v1.0)
+> Dit is een **referentie-lijst**, geen actuele takenlijst — voor wat écht openstaat, zie **## Open** bovenaan dit bestand. Alle v0.6.x t/m v0.9.20 roadmap-items die hier ooit stonden zijn afgerond (zie **Voltooide versies**) en zijn 2026-08-16 uit deze sectie verwijderd om duplicatie te voorkomen; niets inhoudelijks is verloren gegaan, het staat al gedetailleerd in de bijbehorende Voltooide-versies-entries. Wat overblijft is ruw onderzoeksmateriaal voor toekomstige tweaks — elk item moet nog gescoord/uitgewerkt worden vóór implementatie.
 
 ### Tweaks parking-lot extension — Michael-Matta UWT lijst (mei 2026)
 
@@ -1278,54 +1251,12 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 - **Disable folder auto-type discovery** (voorkomt dat folders ineens als "pictures" weergegeven worden)
 - **Auto-folder LaunchTo backup** — alternatieve setting voor User Files start-folder
 
-### v0.10.0 — Inno Setup installer ✓ · self-update → v0.10.1
-
-> **Hervolgorde (user, 20 mei 2026):** de Inno Setup installer (stond op v1.0) is **naar voren gehaald**, want het is de *enabler* voor self-update. Reden: de app is unpackaged + folder-based (self-contained WinAppSDK, geen single-file → [WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Een draaiende folder-app kan z'n eigen geladen DLL's niet overschrijven; een installer kan dat wél (in-use file replace + relaunch). Self-update wordt dan triviaal: download `setup.exe` → `/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`. Een zelfgebouwde PowerShell-folder-swapper vermeden.
-
-~~**Fase 1 — Inno Setup installer**~~ — **gedaan in v0.10.0** (zie Voltooide versies): per-user installer (geen UAC), `setup.exe` via `installer/SetupToolbox.iss` + `scripts/build-installer.ps1`, getest op silent install / launch / uninstall.
-
----
-
-**v0.10.1 — Self-update** (de resterende Fase 2 + 3 van de oorspronkelijke v0.10.0):
-
-**Fase 2 — WPF-releases opruimen (op publish-moment):**
-- GitHub-releases **v1.0.0 + v1.1.0** (WPF) + **v0.5.0-alpha** (oude launcher-build, `Launcher.exe`/`WinAppInstaller.exe`) verwijderen zodat `releases/latest` weer de WinUI-app reflecteert (user-oplossing voor de versie-collisie — WPF `releases/latest` v1.1.0 > WinUI zou anders een valse "update" naar de oude WPF-exe triggeren). **Alleen `v0.6.3` (WinUI icon-milestone) blijft** als historie (user-keuze 20 mei 2026). Git-tags blijven staan (beïnvloeden `releases/latest` niet); WPF-broncode veilig in `wpf-final-v1.2.1`. Onomkeerbaar/publiek → alleen met expliciete user-OK.
-- Eerste WinUI-installer-release uitbrengen met de `setup.exe` als asset.
-
-**Fase 3 — Self-update-laag:**
-- `GitHubService` — releases ophalen, vergelijken met `AssemblyVersion`, de `setup.exe`-asset van de nieuwste WinUI-release pakken. **Robuust tegen WPF-restjes**: filter op de WinUI-asset-naamconventie (`*-Setup-v*.exe`) i.p.v. blind `releases/latest`, voor het geval er ooit weer een hoger-genummerde non-WinUI release verschijnt.
-- "Update beschikbaar"-InfoBar in MainWindow → "Update now" → download `setup.exe` → run `/SILENT` → installer swapt + herstart.
-- Welcome-banner op AppsPage (dismissible via X + setting).
-- `SettingsService` uitbreiden: `CheckForUpdatesOnStartup` (default true) + `ShowWelcomeBanner` (default true). Settings-UI: toggles + "Check for updates now".
-
-### v1.0 go-live — status
-
-1. ~~GitHub-repo hernoemen → `SetupToolbox`~~ ✅ (21 mei 2026)
-2. ~~Repo publiek zetten~~ ✅ (secrets-scan clean)
-3. ~~v1.0.0-release publiceren met `SetupToolbox-v1.0.0.exe`~~ ✅ — release live + latest; tag herricht naar het v1.0.0-commit; **self-update werkt live** (publieke API 200, asset matcht `^SetupToolbox-v…exe`).
-4. **Website** — `website/`-map (Vite + React + **JavaScript/JSX** + Tailwind v4 + **custom GSAP**: aurora-drift, masked word-reveal, shiny titel, spotlight-cards). Haalt versie + download live uit de GitHub-API. ✅ gebouwd. ⏳ **Nog te deployen** naar `projects.dpvb.nl/setup-toolbox` (`npm run build` → upload `website/dist/`-inhoud; `base` staat al op `/setup-toolbox/`).
-
-### Latere milestones
-
-**v1.0.0 — eerste stable release**
-- Self-update via GitHub + **Inno Setup installer** zijn naar **v0.10.0** gehaald (zie daar) — bij v1.0 moeten ze end-to-end bewezen werken
-- Inno Setup `/SILENT` install dekt de unattended-debloat rol (was eerder gepland als losse v0.7.0 Launcher exe — geschrapt omdat Inno Setup dezelfde rol vervult). Note: sign-cert blijft buiten scope (kosten); SmartScreen reputation bouwt zich vanzelf op naarmate downloads stijgen
-- WinUI 3 single-file publish geprobeerd, faalt met `Microsoft.UI.Xaml.dll` 0xc000027b crash door XAML/WinRT activation lookups die filesystem-paden eisen — niet oplosbaar zonder bootstrap-launcher hack ([WinAppSDK #2719](https://github.com/microsoft/WindowsAppSDK/issues/2719)). Daarom installer i.p.v. single-exe
-- Geen P0 bugs
-
-**v1.x.x — feature uitbreidingen**
-- Multi-language (NL/EN toggle)
-- Plugin systeem voor custom app sources
-- Cloud sync voor settings + selecties
-- Custom app repositories
-- CLI interface (`winget-deployer install --profile gaming`)
-- Backup / restore functionaliteit
-
 ### Out of scope
 
 - Decoratieve themes (Sunset / Aurora / OceanBreeze) — historisch alleen in WPF
-- MSIX packaging — voorlopig unpackaged
-- Windows-only apps die geen winget hebben — zie v0.9.0 fallback-toggle als alternatief
+- Windows-only apps die geen winget hebben — opgelost via `downloadUrl` + de "Fallback to download page"-toggle (v0.7.1/v0.7.2), geen losse feature nodig
+
+> MSIX packaging stond hier eerder als "out of scope, voorlopig unpackaged" — dat is nu **actief onderzoek**, zie `### Onderzoek — MSIX-bundle` in de `## Open`-sectie bovenaan.
 
 ---
 
