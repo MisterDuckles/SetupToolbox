@@ -14,25 +14,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Open
 
-### Zonder versienummer — MSIX-bundle als distributievorm i.p.v. exe-installer?
-
-> Dit is een **onderzoeksitem**, geen feature: het levert geen code op en krijgt dus geen patchnummer. Stond eerder als v1.2.1 op de lijst; dat nummer is naar de security-fix gegaan die als eerste af was.
-
-Te onderzoeken (user-wens, 2026-08-16): kunnen we Setup Toolbox shippen als **MSIX** in plaats van de huidige Inno Setup-exe? MSIX is de moderne Windows-packaging-vorm: schone install/uninstall zonder restanten, ingebouwde update-mechaniek (App Installer / Store) en een gecontaineriseerde runtime.
-
-**Wat het zou opleveren:**
-- Geen eigen installer + geen eigen self-update-flow meer; `.appinstaller` doet de updates.
-- Echte package-identity → toasts werken nátief via `AppNotificationManager`, zonder de COM-activator-ellende en zonder het URI-protocol dat we in v1.0.13 moesten bouwen.
-- Uninstall laat gegarandeerd niets achter.
-
-**Wat het onderzoek moet uitwijzen — dit zijn géén details maar mogelijke blokkers:**
-1. **Elevatie.** Een MSIX-app kan zichzelf niet als admin herstarten zoals wij doen (`ShellExecute` met `runas` → `--install-runner`, één UAC per batch, v1.0.5). Zonder een werkend alternatief valt de kern van de install-flow om.
-2. **Registry- en filesystem-virtualisatie.** MSIX draait in een container waarin schrijfacties omgeleid kunnen worden naar een package-private hive. Dat botst frontaal met wat deze app *is*: Tweaks schrijft bewust naar HKCU/HKLM, Debloat verwijdert AppX-pakketten, Deep Clean wist systeemmappen. Moet uitgezocht worden wat `runFullTrust` hier precies wél en niet toestaat.
-3. **Code signing.** MSIX moet ondertekend zijn. Een self-signed certificaat betekent dat elke gebruiker eerst handmatig het certificaat installeert — voor publieke distributie onwerkbaar. Een echt certificaat kost geld.
-4. **Store-distributie** ligt waarschijnlijk sowieso niet voor de hand: een tool die systeeminstellingen wijzigt en apps verwijdert past slecht bij het Store-beleid. Sideload via `.appinstaller` is dan het realistische pad.
-
-**Aanpak:** eerst punt 1 en 2 uitzoeken met een wegwerp-proof-of-concept — als elevatie of registry-schrijven niet werkt, zijn 3 en 4 niet meer relevant. Pas daarna een keuze maken. De huidige Inno Setup-flow werkt en blijft tot dan de standaard.
-
 ### v1.2.2 — Multi-language (NL/EN)
 
 Geverifieerd (2026-08-16): **er is nul lokalisatie-infra.** Geen `.resw`-bestanden, geen `x:Uid`-attributen, geen `ResourceLoader`-gebruik; `Package.appxmanifest` heeft alleen de WinUI-template-default. Alle UI-tekst is hardcoded.
@@ -82,6 +63,51 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### Zonder versienummer — MSIX-onderzoek: afgerond, conclusie is **niet doen**
+
+**Geen code-wijziging, dus geen patchnummer** — dit was een onderzoeksitem (stond eerder geschetst als v1.2.1; dat nummer is naar de security-fix gegaan die als eerste af was). Uitkomst: Setup Toolbox blijft op de Inno Setup-exe. Onderzocht op 2026-08-16, alléén blokker 1 (elevatie) en 2 (virtualisatie), volgens de eigen afspraak dat 3 (code signing) en 4 (Store) niet meer relevant zijn als één van die twee omvalt. **Ze vallen allebei om, en ze versterken elkaar.**
+
+#### Blokker 1 — Elevatie: werkt alleen door de app *altijd* als admin te draaien
+
+Elevatie van een MSIX-app is technisch mogelijk (sinds Windows 11; op Windows 10 vereiste het OS-wijzigingen die er nooit gekomen zijn — relevant want onze `TargetPlatformMinVersion` staat op 10.0.17763). Het vereist `rescap:allowElevation` in het package-manifest **plus** `requestedExecutionLevel="requireAdministrator"` in `app.manifest`; zonder dat tweede wordt de capability genegeerd.
+
+En daar zit de klap: `requireAdministrator` geldt voor de **hele app**, altijd. Ons model is precies het omgekeerde — de app draait onge-eleveerd en vraagt één UAC voor de install-batch door zichzelf ge-eleveerd te herstarten (`ShellExecute` `runas` → `--install-runner`, v1.0.5). Dat patroon is onder MSIX niet na te bouwen: de exe staat in het ACL-beschermde `C:\Program Files\WindowsApps\` en een packaged app herstart zichzelf niet ge-eleveerd via een pad-launch.
+
+Altijd-elevated sloopt drie bewuste ontwerpbesluiten tegelijk:
+- **v1.0.6** zette `asInvoker` expliciet omdat de UAC Installer-Detectie-heuristiek anders toesloeg. Nu zou élke start een UAC-prompt geven.
+- **v0.10.0** koos per-user install zónder UAC, wat ook de self-update zonder UAC mogelijk maakt.
+- **Alle toasts vallen weg.** Microsoft documenteert het onomwonden: *"App notifications are not supported when your app is running with administrator privileges (elevated). Show will fail silently and no notification will be displayed."*
+
+Dat laatste is de ironie van dit hele onderzoek: de **belangrijkste reden** om MSIX te overwegen was "echte package identity → toasts nátief via `AppNotificationManager`, zonder COM-activator-ellende". Maar om de rest van de app te laten werken moet je elevated draaien, en elevated werken toasts sowieso niet — packaged of niet. De aanname uit de oorspronkelijke roadmap-schets klopt niet.
+
+#### Blokker 2 — Virtualisatie: het probleem is niet de container, het is de split-brain met child-processen
+
+Standaardgedrag voor een full-trust (Centennial) packaged app, uit de Microsoft-documentatie:
+
+| Locatie | Runtime-gedrag |
+| --- | --- |
+| **HKCU** | Schrijfacties gaan naar een **per-app private hive**; lezen is een merge van die hive met de echte HKCU. Weg bij uninstall, onzichtbaar voor andere apps. |
+| **HKLM** | Schrijven mag *alleen* als de key niet in de package-hive zit én de gebruiker rechten heeft — "effectively only available to a Centennial app running elevated". **Verwijst dus terug naar blokker 1.** |
+| **AppData** | Nieuwe bestanden naar een private per-app locatie. (De docs spreken zichzelf hier tegen: de containerization-overview van 2026 zegt "pass through for full-trust apps", de flexible-virtualization-pagina zegt van niet. Niet uitgezocht — verandert de conclusie niet.) |
+
+Dit is deels te ontwijden met `unvirtualizedResources` + `RegistryWriteVirtualization=disabled`, en op Windows 11 met fijnmazige `ExcludedKeys`. Maar die fijnmazige variant dekt **alleen HKCU** en **alleen paden binnen `%USERPROFILE%\AppData`** — precies niet de HKLM-policies waar de helft van Tweaks op leunt.
+
+**Het echte struikelblok is specifieker en erger.** Child-processen erven de package-identity **niet**: de kernel stript de token-claims van elk kind dat niet dezelfde app-identity heeft, en de virtualisatie-hive (`\Registry\WC\Silo{GUID}`) is alleen voor het hoofdproces. Onze architectuur is daar volledig op gebouwd — 17 bestanden met `Process.Start`, waarvan 11 aanroepen naar `powershell.exe`, plus `schtasks.exe`, `winget.exe` en `cmd.exe`. Gevolg: **de app schrijft naar twee verschillende registries tegelijk.**
+
+Concreet waar dat stukloopt:
+- **`TweakService`** splitst bewust: HKCU-ops in-process via `Microsoft.Win32.Registry` (→ gevirtualiseerd), HKLM + HKCU-Policies via een ge-eleveerde `reg.exe`-batch (→ echte registry). `DetectStatesAsync` leest in-process. De hele Enabled/Disabled/**Partial**-toestandsmachine — het fundament van de Tweaks-tab — zou naar de verkeerde hive kijken.
+- **`SnapshotService`** legt de vorige staat in-process vast maar herstelt deels via ge-eleveerde `reg.exe`. Het registry-vangnet vóór elke Apply wordt dan onbetrouwbaar; dat is een dataveiligheidsprobleem, geen UX-smetje.
+- **`LeftoverScannerService`** / **`DeepCleanService`** verwijderen HKCU-vendor-keys in-process — dat zou uit de private hive verwijderen en de echte key laten staan. Stil falen, precies het type bug dat v1.0.14 zo duur maakte.
+- **`ToastProtocol`** schrijft `setuptoolbox:` naar `HKCU\Software\Classes`; gevirtualiseerd ziet de shell die registratie niet. (Onder MSIX zou je dat in het manifest declareren, dus dit ene punt is oplosbaar.)
+
+#### Advies
+
+**Niet migreren.** Blokker 1 is alleen te omzeilen door een permanente UAC-prompt bij elke start te accepteren en alle notificaties op te geven; blokker 2 vergt dat de complete apply/detect-architectuur van Tweaks, Snapshots en Deep Clean herschreven wordt om de virtualisatie te ontwijken. Samen is dat een herbouw van de kern van de app, in ruil voor een schonere uninstall en een update-mechanisme dat we al hebben en dat aantoonbaar werkt (v1.2.0). Blokker 3 en 4 zijn hiermee niet meer onderzocht — conform de afspraak.
+
+> **Eerlijk over de methode:** dit is beslist op basis van de Microsoft-documentatie plus een inventarisatie van onze eigen call-sites, **niet** met een daadwerkelijk gebouwd en geïnstalleerd MSIX-package. Dat was de oorspronkelijk voorgestelde aanpak, maar de bewijsketen liep al dood vóór dat nodig was: elevatie-model en toast-ondersteuning spreken elkaar tegen ongeacht wat een PoC zou laten zien. Een PoC zou nog wél de AppData-tegenspraak in de docs kunnen beslechten en het split-brain-gedrag hard aantonen — de moeite waard alleen als we hier ooit op terugkomen.
+>
+> **Wat de conclusie zou kúnnen omdraaien:** als Microsoft app-notificaties voor elevated apps gaat ondersteunen, óf als er een manier komt om een packaged app on-demand te eleveren zonder `requireAdministrator`. Tot die tijd: niet heropenen zonder nieuw bewijs.
 
 ### v1.2.1 — Kwetsbare transitieve dependency weggepind: `System.Drawing.Common`
 
@@ -1291,7 +1317,7 @@ Bewust niet meegenomen om v0.9.x scope hanteerbaar te houden. Bij interesse late
 - Decoratieve themes (Sunset / Aurora / OceanBreeze) — historisch alleen in WPF
 - Windows-only apps die geen winget hebben — opgelost via `downloadUrl` + de "Fallback to download page"-toggle (v0.7.1/v0.7.2), geen losse feature nodig
 
-> MSIX packaging stond hier eerder als "out of scope, voorlopig unpackaged" — dat is nu **actief onderzoek**, zie `### Onderzoek — MSIX-bundle` in de `## Open`-sectie bovenaan.
+> MSIX packaging stond hier eerder als "out of scope, voorlopig unpackaged", daarna als actief onderzoek. Dat onderzoek is **afgerond op 2026-08-16 met de conclusie: niet doen** — zie de MSIX-sectie onder *Voltooide versies*. Weer out of scope, nu mét onderbouwing.
 
 ---
 
