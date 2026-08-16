@@ -1,10 +1,12 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.0** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.1** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
-> **Let op bij het lezen van tags:** de WinUI-lijn staat sinds 2026-08-16 op **v1.2.0** en overlapt daarmee numeriek met de oude WPF-nummering. De WPF-tags zijn te herkennen aan het `wpf-final-`-voorvoegsel; alles zonder voorvoegsel (`v1.0.0`, `v1.2.0`) is WinUI. **v1.1.0 wordt bewust overgeslagen** — dat nummer is in het WPF-tijdperk al eens vergeven en de release is later verwijderd, dus hergebruik zou de historie dubbelzinnig maken.
+> **Let op bij het lezen van tags:** de WinUI-lijn staat sinds 2026-08-16 op **v1.2.1** en overlapt daarmee numeriek met de oude WPF-nummering — inclusief een exacte botsing, want de WPF-archieftag heet `wpf-final-v1.2.1`. De WPF-tags zijn te herkennen aan het `wpf-final-`-voorvoegsel; alles zonder voorvoegsel (`v1.0.0`, `v1.2.0`, `v1.2.1`) is WinUI. **v1.1.0 wordt bewust overgeslagen** — dat nummer is in het WPF-tijdperk al eens vergeven en de release is later verwijderd, dus hergebruik zou de historie dubbelzinnig maken.
+>
+> **Nummering volgt de uitleververvolgorde, niet het roadmap-vakje.** Een item krijgt zijn patchnummer op het moment dat het uitkomt. De roadmap-labels hieronder zijn dus een *voornemen*: pak je ze in een andere volgorde op, dan schuiven de nummers mee. Zo bleef de reeks na v1.2.0 gewoon aaneengesloten toen de security-fix (oorspronkelijk als v1.2.5 geschetst) als eerste af was.
 
 **Stack:** .NET 10 + Windows App SDK 1.8 + WinUI 3 + unpackaged exe. Mica backdrop, native `Microsoft.UI.Xaml` controls. **Distributie:** publieke GitHub-repo (restrictieve/proprietary licentie) + per-user Inno Setup installer als release-asset; self-update via de GitHub releases-API. `apps.json` is gebundeld met de exe (geen live fetch).
 
@@ -12,7 +14,9 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Open
 
-### v1.2.1 — MSIX-bundle als distributievorm i.p.v. exe-installer?
+### Zonder versienummer — MSIX-bundle als distributievorm i.p.v. exe-installer?
+
+> Dit is een **onderzoeksitem**, geen feature: het levert geen code op en krijgt dus geen patchnummer. Stond eerder als v1.2.1 op de lijst; dat nummer is naar de security-fix gegaan die als eerste af was.
 
 Te onderzoeken (user-wens, 2026-08-16): kunnen we Setup Toolbox shippen als **MSIX** in plaats van de huidige Inno Setup-exe? MSIX is de moderne Windows-packaging-vorm: schone install/uninstall zonder restanten, ingebouwde update-mechaniek (App Installer / Store) en een gecontaineriseerde runtime.
 
@@ -29,7 +33,15 @@ Te onderzoeken (user-wens, 2026-08-16): kunnen we Setup Toolbox shippen als **MS
 
 **Aanpak:** eerst punt 1 en 2 uitzoeken met een wegwerp-proof-of-concept — als elevatie of registry-schrijven niet werkt, zijn 3 en 4 niet meer relevant. Pas daarna een keuze maken. De huidige Inno Setup-flow werkt en blijft tot dan de standaard.
 
-### v1.2.2 — Eén-klik volledige config-backup (apps + tweaks + settings)
+### v1.2.2 — Multi-language (NL/EN)
+
+Geverifieerd (2026-08-16): **er is nul lokalisatie-infra.** Geen `.resw`-bestanden, geen `x:Uid`-attributen, geen `ResourceLoader`-gebruik; `Package.appxmanifest` heeft alleen de WinUI-template-default. Alle UI-tekst is hardcoded.
+
+**Belangrijk om te weten vóór je begint:** de UI is nu feitelijk **half Nederlands, half Engels** — een organisch gegroeid mengsel. Settings toont "Scheduled auto-updates" / "Set up" / "Check for updates now" naast Nederlandse teksten, en dialogs mengen het door elkaar ("Schedule auto-updates?" met daaronder Nederlandse knoppen). Een NL/EN-toggle bouwen betekent dus niet alleen infra toevoegen, maar ook **alle bestaande strings inventariseren en van een consistente vertaling voorzien in beide talen** — dat is het grootste deel van het werk, niet de toggle zelf.
+
+Uit te werken vóór implementatie: `.resw` + `x:Uid` (het WinUI-standaardpad, maar vereist aanpassing van élk XAML-element met tekst) versus een eigen string-tabel-service (minder idiomatisch, makkelijker vanuit code-behind aan te roepen — en deze app zet veel tekst vanuit code-behind). Plus: live wisselen of pas na herstart?
+
+### v1.2.3 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
 Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een nieuwe of andere pc.
 
@@ -41,14 +53,6 @@ Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een
 
 **Scope:** één "Configuratie exporteren"-knop → één JSON met de drie onderdelen (app-selectie + tweak-profiel + settings), en één "Importeren" die ze samen terugzet. Uit te werken vóór implementatie: versie-veld voor forward-compat, wat te doen bij een deels-onbekende catalogus op de doelmachine (bestaande import-flows melden dat al per app/tweak), en of settings selectief overslaan mogelijk moet zijn (bv. wél je tweak-profiel, níét je logging-voorkeur).
 
-### v1.2.3 — Multi-language (NL/EN)
-
-Geverifieerd (2026-08-16): **er is nul lokalisatie-infra.** Geen `.resw`-bestanden, geen `x:Uid`-attributen, geen `ResourceLoader`-gebruik; `Package.appxmanifest` heeft alleen de WinUI-template-default. Alle UI-tekst is hardcoded.
-
-**Belangrijk om te weten vóór je begint:** de UI is nu feitelijk **half Nederlands, half Engels** — een organisch gegroeid mengsel. Settings toont "Scheduled auto-updates" / "Set up" / "Check for updates now" naast Nederlandse teksten, en dialogs mengen het door elkaar ("Schedule auto-updates?" met daaronder Nederlandse knoppen). Een NL/EN-toggle bouwen betekent dus niet alleen infra toevoegen, maar ook **alle bestaande strings inventariseren en van een consistente vertaling voorzien in beide talen** — dat is het grootste deel van het werk, niet de toggle zelf.
-
-Uit te werken vóór implementatie: `.resw` + `x:Uid` (het WinUI-standaardpad, maar vereist aanpassing van élk XAML-element met tekst) versus een eigen string-tabel-service (minder idiomatisch, makkelijker vanuit code-behind aan te roepen — en deze app zet veel tekst vanuit code-behind). Plus: live wisselen of pas na herstart?
-
 ### v1.2.4 — Website professionaliseren + bijwerken
 
 De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
@@ -59,31 +63,52 @@ De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
 
 Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zodat je in één keer een actueel verhaal kunt neerzetten.
 
-### v1.2.5 — Kwetsbare transitieve dependency: `System.Drawing.Common` 4.7.0
-
-Opgemerkt tijdens de v1.2.0-releasebuild (2026-08-16): elke `dotnet restore` geeft **`warning NU1904: Package 'System.Drawing.Common' 4.7.0 has a known critical severity vulnerability`** ([GHSA-rxg9-xrhp-64gj](https://github.com/advisories/GHSA-rxg9-xrhp-64gj)).
-
-Het pakket staat **niet** als `PackageReference` in de csproj — het komt transitief binnen, vrijwel zeker via `Microsoft.Toolkit.Uwp.Notifications` 7.x (de toast-library). Bewust **niet** meegenomen in v1.2.0: een dependency-wissel vlak vóór een release is precies het soort verandering dat je daarna wilt testen, niet ongetest uitleveren.
-
-**Uit te zoeken:** (1) waar het vandaan komt — `dotnet nuget why` of `dotnet list package --include-transitive`; (2) of een directe `PackageReference` op een gepatchte versie het weg-pint zonder de toast-flow te breken; (3) of `Microsoft.Toolkit.Uwp.Notifications` (inmiddels vervangen door `CommunityToolkit.WinUI.Notifications`) sowieso een upgrade verdient — let op dat de hele toast-infra uit v1.0.13 daarop leunt, inclusief de COM-activator-registratie die we bewust omzeilen via het `setuptoolbox:`-protocol.
-
 ### Zonder versienummer — release-cadans
 
 **Besloten op 2026-08-16: v1.2.0 is gecut** en als GitHub Release gepubliceerd — zie de v1.2.0-sectie onder *Voltooide versies*. Daarmee is de achterstand weg: self-update levert nu alles uit v1.0.1 t/m v1.0.14 in één keer af. Het openstaande besluit ("wanneer komt de volgende milestone?") is hiermee beantwoord voor deze ronde.
 
 **Wat blijft staan als werkafspraak:** patches (v1.2.1, v1.2.2, …) krijgen géén eigen Release — dat blijft de CLAUDE.md-regel. Maar de les uit deze ronde is dat 14 patches opsparen te lang was: geïnstalleerde gebruikers zaten ruim twee maanden op v1.0.0 zonder de crash-fixes uit v1.0.11/v1.0.12 en zonder de accu-fix uit v1.0.14. **Vuistregel voortaan: cut een milestone zodra er een gebruikers-zichtbare crash- of dataverlies-fix in de patchstapel zit, en anders uiterlijk na een handvol patches** — niet wachten tot de stapel "af" voelt.
 
+**Open besluit — telt een security-fix mee als reden om te cutten?** v1.2.1 haalt een kwetsbare DLL uit de publish, maar is volgens de regel "gewoon" een patch en krijgt dus geen Release. Gevolg: iedereen die op v1.2.0 zit houdt `System.Drawing.Common` 4.7.0 op schijf tot de volgende milestone. Het is geen crash en geen dataverlies, dus de vuistregel hierboven dekt het niet — maar het is wel precies het soort ding waar je niet drie features op wilt wachten. Te beslissen: de vuistregel uitbreiden met "of een security-fix", of per geval wegen.
+
 ### Ideeën — nog niet gescoped
 
 Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 
 - **Plugin-systeem voor custom app-sources** + **custom app-repositories** — hetzelfde onderliggende gat, dus samengevoegd. `AppDatabaseService` leest precies één gebundelde `data/apps.json`; geen source-abstractie, geen UI om een extra bron toe te voegen.
-- **Cloud sync voor settings/selecties** — let op het verschil met v1.2.2 hierboven: dát is een handmatig bestand dat je zelf meeneemt, dit zou **automatische** synchronisatie tussen machines zijn. Vereist een transport (OneDrive-map? eigen backend? account-systeem?) dat nu nergens bestaat.
+- **Cloud sync voor settings/selecties** — let op het verschil met v1.2.3 hierboven: dát is een handmatig bestand dat je zelf meeneemt, dit zou **automatische** synchronisatie tussen machines zijn. Vereist een transport (OneDrive-map? eigen backend? account-systeem?) dat nu nergens bestaat.
 - **CLI interface** (bv. `install --profile gaming`) — `App.OnLaunched` heeft al 5 herkende command-line-argumenten, maar die zijn stuk voor stuk interne/headless plumbing voor een specifieke feature (`/autoupdate`, `/toasttest`, `/updatecheck`, `--install-runner <pad>`, `setuptoolbox:open`) — geen ervan accepteert een vrije app-naam of profielnaam. Wel een bruikbaar precedent: het dispatch-patroon in `OnLaunched` is uit te breiden, dus lager effort dan vanaf nul.
 
 ---
 
 ## Voltooide versies
+
+### v1.2.1 — Kwetsbare transitieve dependency weggepind: `System.Drawing.Common`
+
+Elke `dotnet restore` gaf **`warning NU1904: Package 'System.Drawing.Common' 4.7.0 has a known critical severity vulnerability`** ([GHSA-rxg9-xrhp-64gj](https://github.com/advisories/GHSA-rxg9-xrhp-64gj), CVE-2021-24112). Opgelost met één directe `PackageReference` op **10.0.11**.
+
+> **Stond op de roadmap geschetst als v1.2.5**, maar was als eerste af en is dus als v1.2.1 uitgeleverd — nummers volgen de uitleververvolgorde, niet het roadmap-vakje. De rest van de reeks is meegeschoven; zie de notitie bovenaan dit bestand.
+
+**Herkomst — geverifieerd, niet aangenomen.** `dotnet nuget why` geeft precies één pad: `Microsoft.Toolkit.Uwp.Notifications` 7.1.3 → `System.Drawing.Common` 4.7.0. Het vermoeden uit de v1.2.0-notitie klopte, maar het was het narekenen waard omdat de rest van de conclusie er wél anders uitkwam dan verwacht.
+
+**Het was geen papieren waarschuwing.** `System.Drawing.Common.dll` stond gewoon in `bin/Release/…/win-x64/publish/` — we leverden de kwetsbare DLL mee. En de code is *live*: een metadata-scan van de toolkit-DLL laat `ExtractAssociatedIcon` → `ToBitmap` → `Save` + `System.Drawing.Imaging` zien. Dat is de icoon-extractie die `ToastNotificationManagerCompat` bij élke `Show()` doet voor de AUMID-registratie (het resultaat is de `Icon.png` waar de `IconUri` in `HKCU\Software\Classes\AppUserModelId\<exe-pad>` naar wijst). Praktische exploiteerbaarheid blijft nihil — CVE-2021-24112 vereist een geprepareerde afbeelding en de input is ons eigen exe-icoon — maar "we leveren 'm mee en elke scan gaat erop af" was reden genoeg.
+
+**Migreren naar `CommunityToolkit.WinUI.Notifications` lost het NIET op** — dit was de aanname vooraf en die sneuvelde. De nuspec van 7.1.2 (de nieuwste; er is géén 8.x) declareert op z'n `net5.0-windows10.0.18362`-target exact dezelfde `System.Drawing.Common [4.7.0, )`. Zelfde code, andere naam, en één versie *ouder* dan de 7.1.3 die we al hadden. Dat zou een namespace-rename in drie bestanden zijn zonder enige winst. **Niet nog eens onderzoeken.**
+
+**Waarom pinnen wél schoon werkt.** De dependency-range van de toolkit is `[4.7.0, )` — een minimum, geen exact. Een directe `PackageReference` wint dus zonder `NU1605`-downgrade-conflict. Vooraf getest in een wegwerp-project (repo ongemoeid): 4.7.3, 8.0.30 én 10.0.11 laten NU1904 alle drie verdwijnen, zonder extra NuGet-warnings.
+
+**Waarom 10.0.11 en niet 4.7.3.** 4.7.3 is de behoudende keuze (zelfde 4.x-lijn waartegen de toolkit gecompileerd is, alleen de securityfix erin), maar die lijn krijgt geen onderhoud meer — dat dekt déze advisory, niet de volgende. 10.0.x loopt mee met onze `net10.0`-target en blijft gepatcht. Het risico dat daar tegenover staat: de toolkit is gecompileerd tegen assembly-versie 4.0.0.1 en bindt runtime aan 10.x. .NET Core lost dat via `deps.json` op, maar dat is een aanname die getest moest worden — zie hieronder.
+
+**Nevenwinst:** `Microsoft.NETCore.Platforms` (3.1.0) valt volledig uit de graph en `Microsoft.Win32.SystemEvents` gaat van 4.7.0 → 10.0.11.
+
+> **Geverifieerd (2026-08-16):**
+> - `dotnet restore --force` op de échte csproj: **NU1904 weg**, geen andere NuGet-warnings. Build: 0 warnings, 0 errors. De DLL in `bin/Debug` is `10.0.1126.37416` / `10.0.11`.
+> - **De `System.Drawing`-route is aantoonbaar uitgevoerd**, niet omzeild door een gecachete registratie. Bewijs: de AUMID-registratie (`HKCU\…\AppUserModelId\<exe-pad>`) en de bijbehorende `Icon.png` zijn verwijderd, daarna `/toasttest` opnieuw gedraaid → registry-key én `Icon.png` (3653 bytes) zijn opnieuw aangemaakt. `ExtractAssociatedIcon → ToBitmap → Save` draait dus gewoon onder 10.0.11. Dit was het enige echte risico van deze wissel.
+> - `/toasttest`: beide toasts `Show() OK` in `SetupToolbox_toast.log`, tweede vervangt de eerste, proces sluit netjes af.
+> - `/updatecheck`: **23 entries** geparsed, msstore-bron erbij, beide toasts OK. `winget upgrade` meldt zelf ook "23 upgrades available" — dus 23/23, niets gemist. (v1.0.14 telde er 24; er staat nu simpelweg geen tweede "explicit targeting"-tabel in de output. `ParseUpgradeTables` is niet aangeraakt.)
+> - App start normaal, venster reageert, geen `crash.log`.
+>
+> **Bevinding voor het MSIX-onderzoek:** de aanname "MSIX geeft package identity → toasts native via `AppNotificationManager` → toolkit kan eruit → kwetsbaarheid weg" gaat waarschijnlijk **niet** op. De Microsoft-docs stellen expliciet: *"App notifications are not supported when your app is running with administrator privileges (elevated). Show will fail silently and no notification will be displayed."* Onze auto-update-task draait op `RunLevel=Highest` (v1.0.14) — precies de plek waar de toasts vandaan komen. Package identity verandert daar niets aan. Dat maakt "de toolkit eruit slopen" een slecht idee, los van MSIX.
 
 ### v1.2.0 — Milestone-release: v1.0.1 t/m v1.0.14 uitgeleverd
 
