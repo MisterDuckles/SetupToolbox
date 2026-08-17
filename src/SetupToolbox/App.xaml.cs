@@ -40,6 +40,10 @@ public partial class App : Application
     public static WingetService Winget { get; } = new();
     public static TaskSchedulerService TaskScheduler { get; } = new();
     public static SettingsService Settings { get; } = new();
+    // Vertalingen (v1.2.2). MOET ná Settings gedeclareerd blijven: de service
+    // leest de taalkeuze uit Settings, en static field initializers draaien in
+    // declaratie-volgorde.
+    public static LocalizationService Loc { get; } = new();
     public static SelectionImportExportService SelectionIO { get; } = new();
     public static BloatwareService Bloatware { get; } = new();
     public static InstalledAppsService InstalledApps { get; } = new();
@@ -190,9 +194,11 @@ public partial class App : Application
             {
                 Helpers.ToastHelper.ShowAutoUpdateSearching();
                 await Task.Delay(2500);
+                // Nepdata in de brontaal (Engels). De échte reden-teksten komen uit
+                // WingetService en zijn nog niet vertaald — dat is v1.2.3.
                 Helpers.ToastHelper.ShowAutoUpdateResult(new AutoUpdateResult(
                     new[] { "Vivaldi", "VLC media player" },
-                    new[] { new AutoUpdateFailure("Notion", "Installer mislukte. Probeer opnieuw.") },
+                    new[] { new AutoUpdateFailure("Notion", "The installer failed. Try again.") },
                     null));
                 await Task.Delay(3000);
                 Environment.Exit(0);

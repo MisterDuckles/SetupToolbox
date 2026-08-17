@@ -249,6 +249,21 @@ public sealed class SettingsService
         }
     }
 
+    // UI-taal (v1.2.2). "en" / "nl", of null = volg de Windows-weergavetaal.
+    // Dat onderscheid is bewust: zonder null-state is "gebruiker koos Engels"
+    // niet te scheiden van "systeem is Engels", en zou een latere systeemwissel
+    // stil zijn keuze overschrijven. LocalizationService leest 'm.
+    public string? Language
+    {
+        get => _data.Language;
+        set
+        {
+            if (_data.Language == value) return;
+            _data.Language = value;
+            Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -322,5 +337,9 @@ public sealed class SettingsService
 
         [JsonPropertyName("updateNotificationsEnabled")]
         public bool UpdateNotificationsEnabled { get; set; } = true;
+
+        // null = geen expliciete keuze, volg de systeemtaal.
+        [JsonPropertyName("language")]
+        public string? Language { get; set; }
     }
 }

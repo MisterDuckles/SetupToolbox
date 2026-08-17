@@ -17,6 +17,14 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
+        // Teksten van de shell zetten vóór de eerste navigatie (v1.2.2).
+        ApplyLanguage();
+        // NavView.SettingsItem bestaat pas nadat het control-template is toegepast,
+        // dus in de constructor is 'ie nog null. Nog een keer na Loaded, anders houdt
+        // dat ene item z'n door WinUI ingevulde label.
+        NavView.Loaded += (_, _) => ApplyLanguage();
+        App.Loc.LanguageChanged += OnLanguageChanged;
+
         // Select the first menu item on startup — fires SelectionChanged which
         // handles the Frame navigation. Mica backdrop is configured declaratively
         // in MainWindow.xaml via <Window.SystemBackdrop><MicaBackdrop/></Window.SystemBackdrop>.
@@ -24,6 +32,58 @@ public sealed partial class MainWindow : Window
 
         // Self-update: stille achtergrond-check bij startup (indien aan).
         _ = CheckForUpdatesOnStartupAsync();
+    }
+
+    // ---------------------------------------------------------------
+    // TAAL (v1.2.2)
+    // ---------------------------------------------------------------
+
+    // De shell (titelbalk + navigatie) overleeft een taalwissel en wordt dus niet
+    // opnieuw geparsed. Die teksten zetten we daarom hier in code; alles binnen
+    // een Page komt uit {loc:Localize} en wordt vers opgebouwd bij de re-navigatie
+    // hieronder.
+    private void ApplyLanguage()
+    {
+        Title = App.Loc.S("app.title");
+        AppTitleBar.Title = App.Loc.S("app.title");
+
+        NavApps.Content = App.Loc.S("nav.apps");
+        NavTweaks.Content = App.Loc.S("nav.tweaks");
+        NavDebloat.Content = App.Loc.S("nav.debloat");
+        NavDebloatApps.Content = App.Loc.S("nav.debloat.apps");
+        NavDeepClean.Content = App.Loc.S("nav.debloat.deepClean");
+
+        // Het ingebouwde Settings-item krijgt z'n label van WinUI zelf, via MRT.
+        // Dat volgt niet onze keuze én niet eens de Windows-weergavetaal: MRT kijkt
+        // naar de gebruikers-taallijst. Op deze machine leverde dat een Nederlands
+        // "Instellingen" op naast een verder Engelse UI. Zelf overschrijven dus.
+        if (NavView.SettingsItem is NavigationViewItem settingsItem)
+            settingsItem.Content = App.Loc.S("nav.settings");
+
+        UpdateNowButton.Content = App.Loc.S("update.now");
+
+        // Staat de update-balk open, dan hangt z'n tekst aan de vorige taal.
+        // Opnieuw opbouwen uit de bewaarde UpdateInfo.
+        if (UpdateBar.IsOpen && _pendingUpdate != null)
+        {
+            UpdateBar.Title = App.Loc.S("update.available.title");
+            UpdateBar.Message = App.Loc.S("update.available.body",
+                _pendingUpdate.Version, App.GitHub.CurrentVersion);
+        }
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        ApplyLanguage();
+
+        // Markup-extensions evalueren alleen tijdens het parsen, dus de huidige
+        // page moet opnieuw opgebouwd worden. Dat mag simpelweg door opnieuw naar
+        // hetzelfde type te navigeren: geen enkele page zet NavigationCacheMode,
+        // dus de Frame maakt gegarandeerd een verse instantie. Zonder transitie,
+        // anders krijg je een animatie bij wat een in-place refresh moet lijken.
+        var current = ContentFrame.CurrentSourcePageType;
+        if (current == null) return;
+        ContentFrame.Navigate(current, null, new SuppressNavigationTransitionInfo());
     }
 
     // ---------------------------------------------------------------
@@ -50,8 +110,8 @@ public sealed partial class MainWindow : Window
     {
         _pendingUpdate = info;
         UpdateBar.Severity = InfoBarSeverity.Informational;
-        UpdateBar.Title = "Update beschikbaar";
-        UpdateBar.Message = $"Versie {info.Version} is beschikbaar (je hebt {App.GitHub.CurrentVersion}).";
+        UpdateBar.Title = App.Loc.S("update.available.title");
+        UpdateBar.Message = App.Loc.S("update.available.body", info.Version, App.GitHub.CurrentVersion);
         UpdateBar.IsClosable = true;
         UpdateNowButton.Visibility = Visibility.Visible;
         UpdateNowButton.IsEnabled = true;
@@ -69,19 +129,19 @@ public sealed partial class MainWindow : Window
         UpdateProgress.Visibility = Visibility.Visible;
         UpdateProgress.IsIndeterminate = false;
         UpdateProgress.Value = 0;
-        UpdateBar.Message = "Bezig met downloaden...";
+        UpdateBar.Message = App.Loc.S("update.downloading");
 
         try
         {
             var progress = new Progress<double>(p =>
             {
                 UpdateProgress.Value = p;
-                UpdateBar.Message = $"Bezig met downloaden... {p:P0}";
+                UpdateBar.Message = App.Loc.S("update.downloadingPct", p);
             });
             var setupPath = await App.GitHub.DownloadInstallerAsync(_pendingUpdate, progress);
 
             UpdateProgress.IsIndeterminate = true;
-            UpdateBar.Message = "Installeren — de app sluit en herstart automatisch...";
+            UpdateBar.Message = App.Loc.S("update.installing");
             // Installer sluit deze app via Restart Manager en herstart 'm. We
             // exiten niet zelf zodat /RESTARTAPPLICATIONS de app terugbrengt.
             App.GitHub.LaunchInstaller(setupPath);
@@ -89,7 +149,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             UpdateBar.Severity = InfoBarSeverity.Error;
-            UpdateBar.Title = "Update mislukt";
+            UpdateBar.Title = App.Loc.S("update.failed.title");
             UpdateBar.Message = ex.Message;
             UpdateBar.IsClosable = true;
             UpdateNowButton.IsEnabled = true;

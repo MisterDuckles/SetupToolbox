@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.1** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.2** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -14,36 +14,42 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Open
 
-### v1.2.2 — Multi-language (NL/EN)
+### v1.2.3 — Multi-language fase 2: overige XAML + code-behind/services
 
-Geverifieerd (2026-08-16): **er is nul lokalisatie-infra.** Geen `.resw`-bestanden, geen `x:Uid`-attributen, geen `ResourceLoader`-gebruik; `Package.appxmanifest` heeft alleen de WinUI-template-default. Alle UI-tekst is hardcoded.
+Vervolg op **v1.2.2**, waar de infra staat en werkt — zie die sectie onder *Voltooide versies* voor het mechanisme, de gemeten unpackaged-bevindingen en de sleutelconventie. Hier gaat het puur om strings verplaatsen naar de tabel.
 
-**Belangrijk om te weten vóór je begint:** de UI is nu feitelijk **half Nederlands, half Engels** — een organisch gegroeid mengsel. Settings toont "Scheduled auto-updates" / "Set up" / "Check for updates now" naast Nederlandse teksten, en dialogs mengen het door elkaar ("Schedule auto-updates?" met daaronder Nederlandse knoppen). Een NL/EN-toggle bouwen betekent dus niet alleen infra toevoegen, maar ook **alle bestaande strings inventariseren en van een consistente vertaling voorzien in beide talen** — dat is het grootste deel van het werk, niet de toggle zelf.
+**Scope (~270 strings):**
+- De resterende **17 XAML-bestanden** (SettingsPage is in v1.2.2 gedaan). Zet `xmlns:loc="using:SetupToolbox.Helpers"` en vervang literals door `{loc:Localize Key=…}`.
+- **Code-behind van Pages en Dialogs** — de ~160 Nederlandse literals buiten `TweakService`.
+- **`WingetService`** — `FriendlyError` en `CancelledMessage` stromen door naar de InstallDialog en zijn dus gebruiker-zichtbaar. De nepdata in de `/toasttest`-tak van `App.OnLaunched` verwijst hier al naar.
+- **`DeepCleanService`** — let op: die descriptions worden **runtime met interpolatie** samengesteld (`$"Uninstall registry-entry zonder werkende paden. {aliveResult.Reason} — …"`). Die kunnen geen platte string worden; gebruik `Loc.S(key, args)` met een geparametriseerde format-string.
 
-**Besloten (2026-08-16, user): brontaal wordt Engels, Nederlands is de tweede taal.** Daarmee is de belangrijkste openstaande vraag beantwoord — zonder één canonieke taal was "vertalen" niet eens gedefinieerd.
+**Let op — ingebouwde WinUI-strings volgen onze keuze niet.** Dit kostte in v1.2.2 twee ronden: het `NavigationView`-Settings-item en de `ToggleSwitch` On/Off-labels komen uit WinUI's eigen resources via MRT, en die is op unpackaged niet om te buigen. Ze moeten expliciet gezet worden (`settingsItem.Content`, `OnContent`/`OffContent`). Alle 8 ToggleSwitches stonden op SettingsPage en zijn dus al gedaan, maar **controleer per scherm op vergelijkbare ingebouwde teksten** — denk aan `ContentDialog`-knoppen zonder expliciete tekst, `NumberBox`-validatie en `AutoSuggestBox`-placeholders.
 
-**Wat dat besluit concreet betekent — het werk loopt twee kanten op.** Engels als brontaal betekent níét dat alleen de Nederlandse strings werk zijn. Een inventarisatie (2026-08-16) laat zien dat de bestaande tekst per laag verschilt, en soms zelfs *binnen één record*:
+**Verifiëren:** `install.log` op `LOC-MISS`-regels na het doorlopen van elk scherm — de service logt elke ontbrekende of onvertaalde key één keer.
 
-| Bron | Huidige taal | Werk onder Engels-als-brontaal |
-| --- | --- | --- |
-| `data/apps.json` — 144 `name` + 144 `description` | **Al Engels** | Alleen een NL-vertaling toevoegen (of bewust overslaan — zie hieronder) |
-| `TweakService.BuildAll()` — 117 tweaks | **Gemengd binnen één record**: `name` is Engels ("Show file extensions"), maar `description` en `useCase` zijn Nederlands | ~234 Engelse bronteksten **schrijven** die er nog niet zijn, en de huidige NL-tekst wordt de vertaling |
-| XAML — ~624 tekstdragende attributen over 19 bestanden | Gemengd; knoppen vaak Nederlands ("Sluiten", "Toepassen", "Opslaan profiel") | Engelse bron schrijven voor de NL-delen, NL-vertaling voor de EN-delen |
-| Code-behind (Pages / Dialogs / Helpers) | Overwegend Nederlands | Engelse bron schrijven |
-| `BloatwareItem.CuratedMetadata` — 68 entries | Grotendeels Engels | NL-vertaling toevoegen |
-| `TweakCategory` — 12 × Name + Blurb + CountLabel | Gemengd | Beide kanten |
+### v1.2.4 — Multi-language fase 3: het tweak-corpus
 
-De 117 tweak-`description`/`useCase`-velden zijn veruit het grootste blok, en het is **auteurswerk, geen vertaalwerk**: die Engelse zinnen bestaan nog niet.
+Het grootste blok en het enige dat **auteurswerk** is in plaats van vertaalwerk: de Engelse zinnen bestaan nog niet.
 
-**Nog te beslissen vóór implementatie:**
-- **Infra:** `.resw` + `x:Uid` (het WinUI-standaardpad, maar vereist aanpassing van élk XAML-element met tekst) versus een eigen string-tabel-service (minder idiomatisch, makkelijker vanuit code-behind aan te roepen). Weeg mee dat de meerderheid van de strings in **C#** zit, niet in XAML — `x:Uid` dekt alleen die ~624 XAML-attributen en doet niets voor de tweak-definities, de dialogs en de code-behind.
-- **Live wisselen of pas na herstart?**
-- **Valt de catalogus binnen scope?** `apps.json` is data, geen code. 144 beschrijvingen vertalen is een aparte klus die je ook kunt uitstellen zonder de toggle te blokkeren.
-- **Wat is de default voor een nieuwe gebruiker?** Systeemtaal volgen met Engels als fallback ligt voor de hand, maar is niet besloten.
+**Scope (~390 strings):** 117 × `name` (al Engels, verplaatsen), 117 × `description` en 115 × `useCase` (nu Nederlands → Engelse bron schrijven, huidige NL wordt de vertaling), 27 `TweakChoice`-labels verspreid over **7** choice-tweaks, en de 12 `TweakCategory`-blurbs uit `Models/Tweak.cs`.
 
-**Valkuil:** `ToastHelper.JoinDutch` bouwt "X, Y en Z" — dat is Nederlandse grammatica, geen string. Zulke opmaak-helpers moeten per taal bestaan; alleen de losse strings vervangen is niet genoeg.
+**Mechanisch aandachtspunt:** `Tweak.Name`/`Description`/`UseCase` zijn nu constructor-velden. Voor live wisselen moeten dat lookups worden op basis van de stabiele `Id` (bv. `tweak.Explorer.ShowFileExtensions.desc`) — `Tweak` implementeert al `INotifyPropertyChanged`, dus na een taalwissel volstaat het om `PropertyChanged` voor die drie te vuren. Ook `StateLabel` en `AdminTooltip` in `Models/Tweak.cs` staan nog hardcoded.
 
-### v1.2.3 — Eén-klik volledige config-backup (apps + tweaks + settings)
+### v1.2.5 — Multi-language fase 4: bloatware-metadata
+
+68 `BloatwareItem.CuratedMetadata`-entries: display-naam + description + de categorie-labels ("Games", "Gaming", "Communication", …). Grotendeels Engels, dus vooral NL-vertaling toevoegen; een deel van de descriptions is Nederlands en heeft een Engelse bron nodig.
+
+### v1.2.6 — Multi-language fase 5: de catalogus (`data/apps.json`)
+
+Bewust als laatste en apart van de bloatware-fase: dit is de enige fase met een **schemawijziging**, en die raakt `AppDatabaseService` en de icon-koppeling. Los houden maakt terugdraaien makkelijker.
+
+**Scope (~356 strings):** 34 categorie-namen + 34 categorie-descriptions + 144 app-namen + 144 app-descriptions. Alles is nu Engels, dus dit is puur NL-vertaling toevoegen.
+
+**Uit te werken vóór implementatie:** waar de vertaling landt. Twee opties die je moet wegen: velden naast elkaar in hetzelfde record (`"description"` + `"descriptionNl"`) houdt één bestand maar vervuilt het schema; een parallel `apps.nl.json` houdt het schema schoon maar introduceert een tweede bestand dat uit de pas kan lopen met de catalogus. App-**namen** zijn bijna allemaal eigennamen ("Google Chrome") en hoeven waarschijnlijk niet vertaald — beslis dat expliciet, anders vertaal je 144 dingen voor niets.
+
+
+### v1.2.7 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
 Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een nieuwe of andere pc.
 
@@ -55,7 +61,7 @@ Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een
 
 **Scope:** één "Configuratie exporteren"-knop → één JSON met de drie onderdelen (app-selectie + tweak-profiel + settings), en één "Importeren" die ze samen terugzet. Uit te werken vóór implementatie: versie-veld voor forward-compat, wat te doen bij een deels-onbekende catalogus op de doelmachine (bestaande import-flows melden dat al per app/tweak), en of settings selectief overslaan mogelijk moet zijn (bv. wél je tweak-profiel, níét je logging-voorkeur).
 
-### v1.2.4 — Website professionaliseren + bijwerken
+### v1.2.8 — Website professionaliseren + bijwerken
 
 De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
 
@@ -129,6 +135,115 @@ Concreet waar dat stukloopt:
 > **Eerlijk over de methode:** dit is beslist op basis van de Microsoft-documentatie plus een inventarisatie van onze eigen call-sites, **niet** met een daadwerkelijk gebouwd en geïnstalleerd MSIX-package. Dat was de oorspronkelijk voorgestelde aanpak, maar de bewijsketen liep al dood vóór dat nodig was: elevatie-model en toast-ondersteuning spreken elkaar tegen ongeacht wat een PoC zou laten zien. Een PoC zou nog wél de AppData-tegenspraak in de docs kunnen beslechten en het split-brain-gedrag hard aantonen — de moeite waard alleen als we hier ooit op terugkomen.
 >
 > **Wat de conclusie zou kúnnen omdraaien:** als Microsoft app-notificaties voor elevated apps gaat ondersteunen, óf als er een manier komt om een packaged app on-demand te eleveren zonder `requireAdministrator`. Tot die tijd: niet heropenen zonder nieuw bewijs.
+
+### v1.2.2 — Multi-language fase 1: infra + live toggle + SettingsPage als proof
+
+**Eerste van vijf fasen.** De vertaal-infra staat en werkt end-to-end; de resterende ~1160 strings zijn v1.2.3 t/m v1.2.6 (zie *Open*). De onderbouwing van de gekozen aanpak staat verderop in deze sectie en is de referentie voor die fasen.
+
+**Wat er is gebouwd:**
+- **`Services/LocalizationService.cs`** — laadt `data/strings.en.json` + `data/strings.nl.json` naast de exe (zelfde `<Content>`-patroon als `apps.json`). Fallback-keten: actieve taal → Engels (brontaal) → de key zelf, zichtbaar in de UI zodat een gat opvalt tijdens het vertalen. Ontbrekende keys worden **één keer per key** als `LOC-MISS` gelogd, zodat een key in een ItemsRepeater niet 100 logregels oplevert.
+- **`Helpers/Localize.cs`** — XAML-markup-extension `{loc:Localize Key=…}` als vervanger van `x:Uid`. Klasse heet bewust niet `LocalizeExtension`: UWP/WinUI-XAML kent de WPF-conventie van het weglaten van het achtervoegsel niet betrouwbaar.
+- **Taalkeuze in Settings** — drie opties: *Windows volgen* (default), *English*, *Nederlands*. De systeem-optie toont welke taal dat nú oplevert ("Follow Windows — English"), zodat de keuze niet blind is.
+- **`SettingsService.Language`** — `"en"` / `"nl"` / **`null` = volg systeem**. Dat null-onderscheid is functioneel: zonder dat is "gebruiker koos Engels" niet te scheiden van "systeem is Engels", en zou een latere systeemwissel stil zijn keuze overschrijven.
+- **Live wisselen** — `MainWindow` luistert op `LanguageChanged`, zet de shell-teksten opnieuw en navigeert de huidige page opnieuw. Geen page zet `NavigationCacheMode`, dus de Frame maakt gegarandeerd een verse instantie; markup-extensions evalueren alleen bij het parsen, dus dat is precies wat nodig is.
+- **Opmaak-helpers per taal** — `ToastHelper.JoinDutch` is `LocalizationService.JoinList` geworden ("A, B **en** C" / "A, B **and** C"). `FormatBytes` stond **vier** keer in de codebase (`DeepCleanDialog`, `DeepCleanItem`, `LeftoverItem`, `DeepCleanPage`), elk op de systeem-culture; nu één implementatie, gekoppeld aan de **gekozen** taal — anders zag een gebruiker op Nederlands Windows die Engels kiest nog steeds "1,5 GB". Afrondgedrag is identiek gehouden aan de originelen. Nieuw `Loc.Plural(key, count)` vervangt de `item(s)`-ontwijking, die in het Nederlands sowieso niet werkt.
+- **Ingebouwde WinUI-strings overgenomen** — zie de valkuil hieronder.
+- **`/toasttest` logt nu de toast-tékst** (`lang=` + `text="…"`) in plaats van alleen `Show() OK`. Die debug-switch bestaat om de toast-tekst te verifiëren, maar dat kon alleen door naar het scherm te kijken; met twee talen is juist die tekst wat je wilt narekenen.
+
+**Valkuil die twee ronden kostte: ingebouwde WinUI-teksten volgen onze keuze niet.** Het `NavigationView`-Settings-item en de `ToggleSwitch` On/Off-labels komen uit WinUI's eigen resources via MRT. Op de testmachine leverde dat een Nederlands **"Instellingen"** naast een verder volledig Engelse UI, en bleef de toggle "On" tonen in het Nederlands. Beide moeten expliciet gezet worden (`settingsItem.Content`, `OnContent`/`OffContent`). Let op dat `NavView.SettingsItem` in de constructor nog `null` is — dat item bestaat pas nadat het control-template is toegepast, dus de shell-teksten worden ook na `NavView.Loaded` nog een keer gezet.
+
+**Bijvangst — MRT en .NET zijn het oneens over "de systeemtaal".** Op de testmachine: Windows-**weergavetaal** = en-GB (`InstallLanguage=0809`), **regio-instelling** = nl-NL, **taallijst** = nl-NL. `CultureInfo.CurrentUICulture` volgt de weergavetaal (en-GB), MRT volgt de taallijst (nl-NL). Wij volgen bewust `CurrentUICulture`, want dat is de taal waarin de rest van Windows tegen de gebruiker praat. Dit verschil is precies waarom de toggle een eigen detectie nodig had.
+
+> **Geverifieerd (2026-08-16) — draaiende app, niet alleen een geslaagde build:**
+> - **Live wisselen werkt beide kanten op**, zonder herstart: EN → NL → EN, met de complete SettingsPage vertaald tot en met de onderste sectie (Windows-herstelpunten, App-updates, Diagnostiek), inclusief radiobuttons en de "Aan"/"Uit"-toggles.
+> - **De markup-extension resolvet daadwerkelijk** — dit was het hele risico van deze aanpak.
+> - **Taalkeuze is persistent**: `"language": "nl"` in `settings.json`, en na herstart staat de app in die taal.
+> - **Default voor een verse gebruiker klopt**: `language`-key verwijderd → combo staat op "Follow Windows — English" en de UI is Engels, conform de weergavetaal van de machine.
+> - **Geen enkele `LOC-MISS`** in `install.log` na het doorlopen van alle schermen, en geen `crash.log`.
+> - **Toasts in beide talen**, met het juiste voegwoord uit `JoinList`:
+>   `lang=Dutch text="Vivaldi en VLC media player zijn bijgewerkt. Notion is mislukt — …"`
+>   `lang=English text="Vivaldi and VLC media player have been updated. Notion failed — …"`
+>   Twee `Show() OK`, de tweede vervangt de eerste, proces sluit netjes af.
+>
+> **Niet getest:** de Release-build en de installer. Debug-build only, net als bij de meeste patches.
+
+**Nog Nederlands en dus zichtbaar half-af tot v1.2.3:** alle andere schermen. Dat is bewust — de app was vóór deze wijziging al half Nederlands / half Engels, dus dit is geen regressie.
+
+#### Resource-loading op unpackaged: gemeten, niet aangenomen (2026-08-16)
+
+Twee wegwerp-projecten in een scratchpad (`PriSpike` = headless, `UidSpike` = echt WinUI-venster), allebei met exact onze pins: `net10.0-windows10.0.26100.0`, WinAppSDK `1.8.260710003`, `WindowsPackageType=None`, en een assembly-naam die níét "resources" is — zodat de PRI net als bij ons `<AssemblyName>.pri` heet. Repo ongemoeid gebleven.
+
+**Wat wél werkt:**
+
+| Test | Uitkomst |
+| --- | --- |
+| `.resw` → PRI in een unpackaged build | **Werkt.** De RESW-indexer zit al in onze `priconfig.xml` (`convertDotsToSlashes="true"`, default-qualifier `Language=en-US`) |
+| `.resw` expliciet als `<PRIResource>` includen | **Niet doen** — `error NETSDK1022`, de SDK neemt ze al impliciet op |
+| `new ResourceLoader()` (parameterloos) unpackaged | **Werkt**, óók met een PRI die `PriSpike.pri` heet. De v0.6.0-bestandsnaam-vloek speelt hier niet |
+| Fallback naar `en-US` bij een key die alleen in de bron-taal bestaat | **Werkt** — key uitsluitend in `en-US` resolved netjes onder een `nl-NL`-context |
+| `ResourceContext` + `QualifierValues["Language"]` per lookup | **Werkt**, beide talen naast elkaar in één proces, zonder herstart |
+| Punt-keys (`CloseButton.Content`) | Worden `CloseButton/Content` in de resource-map; ook vanuit code leesbaar |
+
+**Wat NIET werkt — en dit is de beslissende bevinding:**
+
+Er is op een unpackaged WinUI 3-app **geen enkele manier om de app-brede taal te overrulen.** Alle drie de gedocumenteerde routes zijn gemeten en vallen om:
+
+| Route | Resultaat |
+| --- | --- |
+| `Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride` | Gooit `InvalidOperationException` |
+| `SetProcessPreferredUILanguages` (Win32) | Slaagt op Win32-niveau (`ok=True`, `Get…` geeft `en-US` terug) maar **MRT negeert 'm** — de default context blijft de Windows-weergavetaal. Ook getest mét auto-bootstrap uít, dus taal gezet vóór WinAppSDK-init: geen verschil. "MRT was al warm" is dus geen verklaring |
+| `Windows.ApplicationModel.Resources.Core.ResourceContext.SetGlobalQualifierValue` | **Kill't het proces hard.** Geen vangbare exception, log stopt midden in de call |
+
+**Gevolg: `x:Uid` is onbruikbaar voor een taalkeuze in deze app.** In het WinUI-venster met een `x:Uid`-TextBlock en `x:Uid`-Button kwam er onder een gevraagde `en-US` gewoon Nederlands uit — `x:Uid` volgt de Windows-weergavetaal en is niet om te buigen. Een gebruiker op Nederlands Windows zou de app nooit op Engels kunnen zetten; de toggle zou voor álle XAML-strings stil niets doen. In hetzelfde proces gaf een expliciete `ResourceContext` wél netjes beide talen.
+
+> Dit is precies de aanname die getest moest worden. `.resw` blijft bruikbaar als *opslagformaat* met een expliciete context per lookup — maar `x:Uid`, de enige reden om voor `.resw` te kiezen boven een gewone tabel, valt weg.
+
+#### Inventarisatie bijgesteld na narekenen
+
+De eerdere telling was te laag; hij dekte alleen het tweak-blok. Gemeten aantallen:
+
+| Bron | Aantal | Waarvan Engelse bron nog te schrijven |
+| --- | --- | --- |
+| `TweakService`: 117 × name / 117 × description / 115 × useCase | ~349 | ~232 (description + useCase) |
+| `TweakService`: 27 × `TweakChoice`-label (verspreid over **7** choice-tweaks, niet 27 groepen) + descriptions | ~40 | deels — labels zijn gemengd ("Search box" vs "5 seconden (standaard)") |
+| XAML: 166 unieke literals / 208 voorkomens over 18 bestanden | 166 | 54 (de Nederlandse) |
+| Code-behind + services buiten `TweakService` | ~160 | ~160 |
+| `TweakCategory`: 12 × DisplayName + 12 × Blurb + StateLabel/AdminTooltip | 29 | 12 blurbs |
+| `BloatwareItem.CuratedMetadata`: 68 × naam + 68 × description + categorie-labels | ~151 | ~40 |
+
+Ruwweg **900+ strings**, waarvan **~470 nieuw Engels auteurswerk** — dus fors meer dan de ~234 uit de eerste schatting.
+
+**De ~624 uit de eerste telling was een overschatting:** dat was elk `Attribuut="waarde"`-paar. Filter je bindings (`{x:Bind …}`), lege waarden en niet-tekst attributen eruit, dan blijven er 208 voorkomens over.
+
+#### Niet eerder geïnventariseerd
+
+- **`DeepCleanService`** — 12 statische `DeepCleanItem`-definities plus descriptions die **runtime met interpolatie** worden samengesteld (`$"Uninstall registry-entry zonder werkende paden. {aliveResult.Reason} — …"`). Die kunnen geen platte string worden; ze hebben een geparametriseerde format-string nodig.
+- **`WingetService`** — de gebruiker-zichtbare foutmeldingen (`FriendlyError`, `CancelledMessage`) stromen door naar de InstallDialog.
+
+**Valkuilen:** `ToastHelper.JoinDutch` bouwt "X, Y en Z" — dat is grammatica, geen string. Maar het is niet de enige opmaak-helper: `FormatBytes` bestaat **twee keer** (`DeepCleanDialog` én `DeepCleanItem`) en formatteert op de actieve culture, `item(s)` ontwijkt meervoudsvormen met haakjes, en `RestorePointConfigDialog` bouwt `"{ago} geleden"`. Let op de inconsistentie die dit oplevert: kiest een gebruiker op Nederlands Windows voor Engels, dan blijft `FormatBytes` "1,5 GB" tonen tenzij de opmaak aan de gekozen taal wordt gekoppeld in plaats van aan de systeem-culture.
+
+#### Besloten (2026-08-16, user)
+
+- **Infra: eigen string-tabel als gebundelde JSON** (`data/strings.en.json` + `data/strings.nl.json`), plus een XAML-markup-extension `{loc:S Key=…}` als vervanger van `x:Uid`. Volgt exact het `data/apps.json`-patroon dat in deze app al bewezen werkt (`<Content>` + `PreserveNewest`). `.resw` is afgevallen: zonder `x:Uid` — dat op bewijs onbruikbaar is — houdt het alleen nadelen over (verbose XML voor 1250 strings, PRI-rebuild per wijziging, punt-in-sleutel wordt schuine streep). Een combinatie van beide is expliciet verworpen: dat draagt twee sleutelconventies en twee faalmodi voor hetzelfde resultaat.
+- **Live wisselen**, via "taal zetten → huidige page opnieuw navigeren". `MainWindow` bouwt pages toch al opnieuw op via `ContentFrame.Navigate`. Bijkomend werk: `Tweak.Name`/`Description`/`UseCase` van constructor-velden naar lookups (`Tweak` implementeert al `INotifyPropertyChanged`), plus expliciete refresh van de NavigationView-labels — die leven in `MainWindow.xaml` en worden níét opnieuw opgebouwd.
+- **`apps.json` valt volledig binnen scope** — afwijkend van mijn advies om 'm uit te stellen. Dat is ~356 strings extra (34 categorie-namen + 34 categorie-descriptions + 144 app-namen + 144 app-descriptions) plus een schemawijziging, en brengt het totaal op **~1250 strings**.
+- **Default: Windows-weergavetaal volgen, Engels als fallback.** In `settings.json` wordt het onderscheid bewaard tussen "gebruiker koos expliciet" en "volg systeem" (afwezig/`null` = volg systeem), anders is "gebruiker koos Engels" niet te onderscheiden van "systeem is Engels" en overschrijf je later stil zijn keuze.
+
+#### Fasering — vijf patches (besloten 2026-08-16, user)
+
+Eén diff van ~1250 strings is niet te reviewen en niet te bisecten, en het mechanisme is ander werk dan het auteurswerk: bij een fout mechanisme merk je dat na ~90 strings in plaats van na 1250. Elke fase is los te bouwen én te starten. De app is nu al half-en-half, dus een tussenstand is geen regressie.
+
+| Versie | Inhoud | Omvang |
+| --- | --- | --- |
+| **v1.2.2** | Loc-service + `{loc:S}` markup-extension + live-switch mechaniek + taalkeuze in Settings + **SettingsPage volledig tweetalig als proof**. Plus de opmaak-helpers: `JoinDutch` → taalafhankelijke `JoinList`, `FormatBytes` ontdubbeld en aan de gekozen taal gekoppeld, ToastHelper-teksten | ~90 strings |
+| **v1.2.3** | Overige XAML (17 bestanden) + code-behind/services, incl. `WingetService`-foutmeldingen en de geïnterpoleerde `DeepCleanService`-descriptions | ~270 |
+| **v1.2.4** | Tweak-corpus: 117 × name/description/useCase, 27 choice-labels, 12 categorie-blurbs | ~390 |
+| **v1.2.5** | 68 `BloatwareItem.CuratedMetadata`-entries | ~150 |
+| **v1.2.6** | `data/apps.json` (~356) incl. schemawijziging | ~356 |
+
+SettingsPage is bewust fase 1: dat scherm *bevat* de toggle, dus de omschakeling is zichtbaar op de plek waar je 'm indrukt. De catalogus staat apart van bloatware omdat de `apps.json`-schemawijziging `AppDatabaseService` en de icon-koppeling raakt — los houden maakt terugdraaien makkelijker.
+
+**Gevolg voor de rest van de roadmap:** config-backup schuift naar **v1.2.7**, website naar **v1.2.8**.
 
 ### v1.2.1 — Kwetsbare transitieve dependency weggepind: `System.Drawing.Common`
 

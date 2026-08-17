@@ -22,9 +22,9 @@
          AssemblyVersion + FileVersion gelijk zodat assembly metadata, exe
          properties en eventuele toekomstige in-app version-display match. -->
     <AssemblyName>SetupToolbox</AssemblyName>
-    <Version>1.2.1</Version>
-    <AssemblyVersion>1.2.1</AssemblyVersion>
-    <FileVersion>1.2.1</FileVersion>
+    <Version>1.2.2</Version>
+    <AssemblyVersion>1.2.2</AssemblyVersion>
+    <FileVersion>1.2.2</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -45,6 +45,18 @@
        de apps.json gebundeld dus geen netwerk fetch nodig. -->
   <ItemGroup>
     <Content Include="..\..\data\apps.json" Link="data\apps.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Vertaaltabellen (v1.2.2). Zelfde bundel-patroon als apps.json: naast de
+       exe in data/, gelezen door LocalizationService.
+       Bewust GEEN .resw + x:Uid — dat is op unpackaged gemeten en werkt niet
+       voor een taalkeuze: x:Uid volgt daar altijd de Windows-weergavetaal en er
+       is geen API om die te overrulen. Zie de uitleg bovenin
+       Services/LocalizationService.cs en de v1.2.2-sectie in NEXT-STEPS.md. -->
+  <ItemGroup>
+    <Content Include="..\..\data\strings.*.json" Link="data\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

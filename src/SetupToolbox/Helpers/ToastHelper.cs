@@ -27,74 +27,61 @@ internal static class ToastHelper
     private const int MaxNames = 5;
 
     public static void ShowAutoUpdateSearching() =>
-        Show(AutoUpdateTag, b => b
-            .AddText("Setup Toolbox")
-            .AddText("Zoeken naar updates…"));
+        Show(AutoUpdateTag, App.Loc.S("toast.appName"), App.Loc.S("toast.searching"));
 
     public static void ShowAutoUpdateResult(AutoUpdateResult result) =>
-        Show(AutoUpdateTag, b => b
-            .AddText("Setup Toolbox")
-            .AddText(BuildResultText(result)));
+        Show(AutoUpdateTag, App.Loc.S("toast.appName"), BuildResultText(result));
 
     public static void ShowAutoUpdateFailed(string reason) =>
-        Show(AutoUpdateTag, b => b
-            .AddText("Setup Toolbox")
-            .AddText($"Bijwerken is mislukt. {reason}"));
+        Show(AutoUpdateTag, App.Loc.S("toast.appName"), App.Loc.S("toast.updateFailed", reason));
 
     public static void ShowScheduleEnabled(string scheduleDescription) =>
-        Show(ScheduleTag, b => b
-            .AddText("Automatische updates staan ingeschakeld")
-            .AddText(scheduleDescription));
+        Show(ScheduleTag, App.Loc.S("toast.schedule.title"), scheduleDescription);
 
     private static string BuildResultText(AutoUpdateResult result)
     {
         if (result.HasListError)
-            return $"Kon niet naar updates zoeken. {result.ListError}";
+            return App.Loc.S("toast.listFailed", result.ListError);
 
         if (result.NothingToDo)
-            return "Alles is up-to-date.";
+            return App.Loc.S("toast.upToDate");
 
         var parts = new List<string>();
 
         if (result.Updated.Count > 0)
             parts.Add(result.Updated.Count == 1
-                ? $"{result.Updated[0]} is bijgewerkt."
-                : $"{Summarize(result.Updated)} zijn bijgewerkt.");
+                ? App.Loc.S("toast.updatedOne", result.Updated[0])
+                : App.Loc.S("toast.updatedMany", Summarize(result.Updated)));
 
         // Bij één mislukking noemen we de reden erbij — dat is het geval waar de
         // reden nog leesbaar in een toast past. Bij meerdere alleen de namen; de
         // details staan in install.log en de toast opent bij klik de app.
         if (result.Failed.Count == 1)
-            parts.Add($"{result.Failed[0].Name} is mislukt — {result.Failed[0].Reason}");
+            parts.Add(App.Loc.S("toast.failedOne", result.Failed[0].Name, result.Failed[0].Reason));
         else if (result.Failed.Count > 1)
-            parts.Add($"Mislukt: {Summarize(result.Failed.Select(f => f.Name).ToList())}.");
+            parts.Add(App.Loc.S("toast.failedMany", Summarize(result.Failed.Select(f => f.Name).ToList())));
 
         return string.Join(" ", parts);
     }
 
+    // De opsomming zelf ("A, B en C" / "A, B and C") is grammatica en zit daarom
+    // in LocalizationService.JoinList, niet in een vertaalde losse string.
     private static string Summarize(IReadOnlyList<string> names)
     {
-        if (names.Count <= MaxNames) return JoinDutch(names);
-        return JoinDutch(names.Take(MaxNames).ToList()) + $" en {names.Count - MaxNames} andere";
+        if (names.Count <= MaxNames) return App.Loc.JoinList(names);
+        return App.Loc.S("toast.andOthers",
+            App.Loc.JoinList(names.Take(MaxNames).ToList()),
+            names.Count - MaxNames);
     }
-
-    // "Vivaldi, VLC en Notion" — Nederlandse opsomming met "en" voor het laatste item.
-    private static string JoinDutch(IReadOnlyList<string> names) =>
-        names.Count switch
-        {
-            0 => string.Empty,
-            1 => names[0],
-            _ => string.Join(", ", names.Take(names.Count - 1)) + " en " + names[^1]
-        };
 
     // Eén plek voor de gate, de Tag/Group, de klik-actie en de logging, zodat elke
     // toast hetzelfde gedrag heeft. Best-effort: een geweigerde notificatie mag de
     // auto-update-flow nooit omvergooien.
-    private static void Show(string tag, Action<ToastContentBuilder> build)
+    private static void Show(string tag, string title, string body)
     {
         if (!App.Settings.UpdateNotificationsEnabled)
         {
-            Diagnostics.Log("SetupToolbox_toast.log", $"skipped (notificaties uit) tag={tag}");
+            Diagnostics.Log("SetupToolbox_toast.log", $"skipped (notifications off) tag={tag}");
             return;
         }
 
@@ -104,8 +91,9 @@ internal static class ToastHelper
             // ToastProtocol voor waarom die op unpackaged apps niet aanslaat.
             ToastProtocol.EnsureRegistered();
 
-            var builder = new ToastContentBuilder();
-            build(builder);
+            var builder = new ToastContentBuilder()
+                .AddText(title)
+                .AddText(body);
             builder.SetProtocolActivation(new Uri(ToastProtocol.OpenUri));
 
             builder.Show(toast =>
@@ -116,7 +104,12 @@ internal static class ToastHelper
                 toast.Group = ToastGroup;
             });
 
-            Diagnostics.Log("SetupToolbox_toast.log", $"Show() OK tag={tag}");
+            // Ook de tekst loggen, niet alleen "OK". /toasttest bestaat om de
+            // toast-tekst te kunnen verifiëren, maar zonder dit moest je daarvoor
+            // het scherm in de gaten houden — en met twee talen erbij is precies
+            // die tekst wat je wilt narekenen.
+            Diagnostics.Log("SetupToolbox_toast.log",
+                $"Show() OK tag={tag} lang={App.Loc.Current} text=\"{body}\"");
         }
         catch (Exception ex)
         {

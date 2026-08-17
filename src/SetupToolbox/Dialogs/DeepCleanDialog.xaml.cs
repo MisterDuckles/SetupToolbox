@@ -80,7 +80,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
 
         var totalSize = _items.Sum(i => i.SizeBytes);
         HeaderText.Text = string.IsNullOrEmpty(_filterQuery)
-            ? $"Found {_items.Count} cleanup item(s) — {FormatBytes(totalSize)} total"
+            ? $"Found {_items.Count} cleanup item(s) — {App.Loc.FormatBytes(totalSize)} total"
             : $"Found {_items.Count} item(s) — filter active";
 
         // Apply filter eerst: query matcht case-insensitive op DisplayName,
@@ -478,7 +478,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         };
         sizePanel.Children.Add(new TextBlock
         {
-            Text = FormatBytes(totalSize),
+            Text = App.Loc.FormatBytes(totalSize),
             Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
             TextAlignment = TextAlignment.Right
         });
@@ -779,7 +779,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         }
         else
         {
-            var label = $"{selectedItems.Count} selected · {FormatBytes(totalBytes)} to free";
+            var label = $"{selectedItems.Count} selected · {App.Loc.FormatBytes(totalBytes)} to free";
             if (elevated > 0) label += $" · {elevated} need administrator rights";
             SelectionStatusText.Text = label;
         }
@@ -835,12 +835,12 @@ public sealed partial class DeepCleanDialog : ContentDialog
             else if (DeleteResult.FailedCount == 0)
             {
                 ProgressStatusText.Text =
-                    $"Done — {DeleteResult.SuccessCount} item(s) cleaned, {FormatBytes(DeleteResult.BytesFreed)} freed.";
+                    $"Done — {DeleteResult.SuccessCount} item(s) cleaned, {App.Loc.FormatBytes(DeleteResult.BytesFreed)} freed.";
             }
             else
             {
                 ProgressStatusText.Text =
-                    $"Done — {DeleteResult.SuccessCount} cleaned, {DeleteResult.FailedCount} failed, {FormatBytes(DeleteResult.BytesFreed)} freed.";
+                    $"Done — {DeleteResult.SuccessCount} cleaned, {DeleteResult.FailedCount} failed, {App.Loc.FormatBytes(DeleteResult.BytesFreed)} freed.";
             }
 
             _deleteCompleted = true;
@@ -854,14 +854,4 @@ public sealed partial class DeepCleanDialog : ContentDialog
         }
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        if (bytes < 1024) return $"{bytes} B";
-        double v = bytes;
-        string[] units = { "KB", "MB", "GB", "TB" };
-        int unitIdx = -1;
-        do { v /= 1024; unitIdx++; } while (v >= 1024 && unitIdx < units.Length - 1);
-        return v >= 100 ? $"{v:0} {units[unitIdx]}" : $"{v:0.#} {units[unitIdx]}";
-    }
 }

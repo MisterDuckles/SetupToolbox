@@ -147,7 +147,7 @@ public sealed partial class DeepCleanPage : Page
 
         var totalSize = items.Sum(i => i.SizeBytes);
         CleanupResultBar.Severity = InfoBarSeverity.Informational;
-        CleanupResultBar.Title = $"{label}: {items.Count} item(s) found ({FormatBytes(totalSize)})";
+        CleanupResultBar.Title = $"{label}: {items.Count} item(s) found ({App.Loc.FormatBytes(totalSize)})";
         if (kind == ScanKind.Caches)
         {
             CleanupResultBar.Message = "Review and pick what to delete.";
@@ -205,8 +205,8 @@ public sealed partial class DeepCleanPage : Page
             CleanupResultBar.Severity = InfoBarSeverity.Success;
             CleanupResultBar.Title = $"{label}: {dialog.DeleteResult.SuccessCount} item(s) deleted";
             CleanupResultBar.Message = dialog.DeleteResult.FailedCount > 0
-                ? $"{FormatBytes(dialog.DeleteResult.BytesFreed)} freed · {dialog.DeleteResult.FailedCount} item(s) couldn't be deleted."
-                : $"{FormatBytes(dialog.DeleteResult.BytesFreed)} freed.";
+                ? $"{App.Loc.FormatBytes(dialog.DeleteResult.BytesFreed)} freed · {dialog.DeleteResult.FailedCount} item(s) couldn't be deleted."
+                : $"{App.Loc.FormatBytes(dialog.DeleteResult.BytesFreed)} freed.";
             CleanupResultBar.IsOpen = true;
 
             // Auto-refresh: na een succesvolle delete-batch dezelfde scan
@@ -227,14 +227,4 @@ public sealed partial class DeepCleanPage : Page
         }
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        if (bytes < 1024) return $"{bytes} B";
-        double v = bytes;
-        string[] units = { "KB", "MB", "GB", "TB" };
-        int unitIdx = -1;
-        do { v /= 1024; unitIdx++; } while (v >= 1024 && unitIdx < units.Length - 1);
-        return v >= 100 ? $"{v:0} {units[unitIdx]}" : $"{v:0.#} {units[unitIdx]}";
-    }
 }

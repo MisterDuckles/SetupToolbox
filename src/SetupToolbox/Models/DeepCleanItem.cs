@@ -129,7 +129,7 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
 
     public string SizeLabel => SizeBytes <= 0
         ? "empty"
-        : FormatBytes(SizeBytes);
+        : SetupToolbox.App.Loc.FormatBytes(SizeBytes);
 
     public string LastModifiedLabel => LastModified == null
         ? string.Empty
@@ -144,15 +144,6 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
     public Visibility ElevationVisibility =>
         RequiresElevation ? Visibility.Visible : Visibility.Collapsed;
 
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes < 1024) return $"{bytes} B";
-        double v = bytes;
-        string[] units = { "KB", "MB", "GB", "TB" };
-        int unitIdx = -1;
-        do { v /= 1024; unitIdx++; } while (v >= 1024 && unitIdx < units.Length - 1);
-        return v >= 100 ? $"{v:0} {units[unitIdx]}" : $"{v:0.#} {units[unitIdx]}";
-    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnChanged([CallerMemberName] string? name = null) =>

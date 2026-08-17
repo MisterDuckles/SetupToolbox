@@ -141,22 +141,13 @@ public sealed class LeftoverItem : INotifyPropertyChanged
 
     public string SizeLabel => SizeBytes <= 0
         ? string.Empty
-        : FormatBytes(SizeBytes);
+        : SetupToolbox.App.Loc.FormatBytes(SizeBytes);
 
     public Visibility SizeVisibility => SizeBytes > 0 ? Visibility.Visible : Visibility.Collapsed;
 
     // Voor de hint-tekst bij de footer ("X of Y require admin rights").
     public Visibility ElevationBadgeVisibility => RequiresElevation ? Visibility.Visible : Visibility.Collapsed;
 
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes < 1024) return $"{bytes} B";
-        double v = bytes;
-        string[] units = { "KB", "MB", "GB", "TB" };
-        int unitIdx = -1;
-        do { v /= 1024; unitIdx++; } while (v >= 1024 && unitIdx < units.Length - 1);
-        return v >= 100 ? $"{v:0} {units[unitIdx]}" : $"{v:0.#} {units[unitIdx]}";
-    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnChanged([CallerMemberName] string? name = null) =>

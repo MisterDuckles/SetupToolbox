@@ -34,11 +34,9 @@
                  Grid.Row="1"
                  IsOpen="False"
                  Severity="Informational"
-                 Title="Update beschikbaar"
                  Margin="12,4,12,0">
             <InfoBar.ActionButton>
                 <Button x:Name="UpdateNowButton"
-                        Content="Update now"
                         Click="UpdateNowButton_Click" />
             </InfoBar.ActionButton>
             <InfoBar.Content>
@@ -58,24 +56,29 @@
                         SelectionChanged="NavView_SelectionChanged"
                         ItemInvoked="NavView_ItemInvoked">
 
+            <!-- Content-teksten worden in code gezet (ApplyLanguage) i.p.v. via de
+                 {loc:Localize}-markup-extension: de NavigationView blijft bij een
+                 taalwissel bestaan, en een markup-extension evalueert maar één keer
+                 tijdens het parsen. Pages worden wél opnieuw opgebouwd en gebruiken
+                 daarom de extension. -->
             <NavigationView.MenuItems>
-                <NavigationViewItem Icon="AllApps" Content="Apps" Tag="Apps" />
-                <NavigationViewItem Icon="Setting" Content="Tweaks" Tag="Tweaks" />
+                <NavigationViewItem x:Name="NavApps" Icon="AllApps" Tag="Apps" />
+                <NavigationViewItem x:Name="NavTweaks" Icon="Setting" Tag="Tweaks" />
                 <!-- Debloat parent met twee sub-items. SelectsOnInvoked=False zodat
                      klik op "Debloat" alleen de groep open/dichtklapt zonder zelf
                      te navigeren. Default IsExpanded=True zodat user meteen ziet
                      dat er twee opties zijn. Sub-items hebben hun eigen Tag → page
                      mapping in NavView_SelectionChanged. -->
-                <NavigationViewItem Icon="Delete" Content="Debloat" SelectsOnInvoked="False" IsExpanded="True">
+                <NavigationViewItem x:Name="NavDebloat" Icon="Delete" SelectsOnInvoked="False" IsExpanded="True">
                     <NavigationViewItem.MenuItems>
-                        <NavigationViewItem Content="Apps" Tag="DebloatApps">
+                        <NavigationViewItem x:Name="NavDebloatApps" Tag="DebloatApps">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE71D;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
                         <!-- Deep clean glyph: Sweep / E7B8 — Broom bestaat niet in
                              de Symbol enum, vandaar custom FontIcon. -->
-                        <NavigationViewItem Content="Deep clean" Tag="DebloatDeepClean">
+                        <NavigationViewItem x:Name="NavDeepClean" Tag="DebloatDeepClean">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE7B8;" />
                             </NavigationViewItem.Icon>

@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:SetupToolbox.Helpers"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Background="Transparent">
@@ -36,20 +37,66 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0"
-                       Text="Settings"
+                       Text="{loc:Localize Key=settings.title}"
                        Style="{StaticResource TitleTextBlockStyle}"
                        Margin="0,0,0,20" />
 
+            <!-- ── TAAL (v1.2.2) ── -->
             <TextBlock Grid.Row="1"
-                       Text="Auto-updates"
+                       Text="{loc:Localize Key=settings.section.language}"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,0,0,12" />
+
+            <Border Grid.Row="2"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xF2B7;"
+                              FontSize="20"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="{loc:Localize Key=settings.language.title}"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="{loc:Localize Key=settings.language.desc}" />
+                    </StackPanel>
+
+                    <!-- Items worden in code gevuld zodat "Windows volgen" de
+                         actueel gedetecteerde taal kan tonen. -->
+                    <ComboBox x:Name="LanguageCombo"
+                              Grid.Column="2"
+                              MinWidth="180"
+                              VerticalAlignment="Center"
+                              SelectionChanged="LanguageCombo_SelectionChanged" />
+                </Grid>
+            </Border>
+
+            <TextBlock Grid.Row="3"
+                       Text="{loc:Localize Key=settings.section.autoUpdates}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,0,0,12" />
 
             <!-- Auto-update schedule card -->
-            <Border Grid.Row="2"
+            <Border Grid.Row="4"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -70,12 +117,12 @@
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Scheduled auto-updates"
+                            <TextBlock Text="{loc:Localize Key=settings.schedule.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock x:Name="ScheduleStatusText"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Checking status..." />
+                                       Text="{loc:Localize Key=settings.schedule.checking}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="2"
@@ -87,7 +134,7 @@
                                     Visibility="Collapsed">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                                    <TextBlock Text="Disable" />
+                                    <TextBlock Text="{loc:Localize Key=settings.schedule.disable}" />
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ScheduleButton"
@@ -95,7 +142,7 @@
                                     Style="{ThemeResource AccentButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon Glyph="&#xE787;" FontSize="14" />
-                                    <TextBlock x:Name="ScheduleButtonText" Text="Set up" />
+                                    <TextBlock x:Name="ScheduleButtonText" Text="{loc:Localize Key=settings.schedule.setUp}" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>
@@ -116,15 +163,17 @@
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Notificaties bij automatische updates"
+                            <TextBlock Text="{loc:Localize Key=settings.notifications.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Toont rechtsonder een melding wanneer de geplande run naar updates zoekt, en daarna welke apps zijn bijgewerkt. Klik op de melding om de app te openen." />
+                                       Text="{loc:Localize Key=settings.notifications.desc}" />
                         </StackPanel>
 
                         <ToggleSwitch x:Name="UpdateNotificationsToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       Toggled="UpdateNotificationsToggle_Toggled" />
@@ -132,13 +181,13 @@
                 </StackPanel>
             </Border>
 
-            <TextBlock Grid.Row="3"
-                       Text="Installation"
+            <TextBlock Grid.Row="5"
+                       Text="{loc:Localize Key=settings.section.installation}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <!-- Manual download fallback toggle -->
-            <Border Grid.Row="4"
+            <Border Grid.Row="6"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -158,15 +207,17 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Open vendor download pages"
+                        <TextBlock Text="{loc:Localize Key=settings.fallback.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="When installing apps that aren't on winget (badged 'Manual download'), open the vendor's download page in your default browser. Disable to skip these apps during install." />
+                                   Text="{loc:Localize Key=settings.fallback.desc}" />
                     </StackPanel>
 
                     <ToggleSwitch x:Name="FallbackToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                   Grid.Column="2"
                                   VerticalAlignment="Center"
                                   Toggled="FallbackToggle_Toggled" />
@@ -174,7 +225,7 @@
             </Border>
 
             <!-- Parallel installs count (1-4) -->
-            <Border Grid.Row="5"
+            <Border Grid.Row="7"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -195,12 +246,12 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Parallel installs"
+                        <TextBlock Text="{loc:Localize Key=settings.parallel.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="How many apps to install at the same time (1–4). Higher is faster for regular installers, but MSI installers still serialize and higher counts mean more UAC prompts. 1 = one at a time." />
+                                   Text="{loc:Localize Key=settings.parallel.desc}" />
                     </StackPanel>
 
                     <NumberBox x:Name="ParallelCountBox"
@@ -215,13 +266,13 @@
                 </Grid>
             </Border>
 
-            <TextBlock Grid.Row="6"
-                       Text="Uninstall"
+            <TextBlock Grid.Row="8"
+                       Text="{loc:Localize Key=settings.section.uninstall}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <!-- Leftover scan after uninstall toggle -->
-            <Border Grid.Row="7"
+            <Border Grid.Row="9"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -241,28 +292,30 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Scan for leftovers after uninstall"
+                        <TextBlock Text="{loc:Localize Key=settings.leftovers.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="After a successful uninstall, scan registry uninstall keys, Program Files folders and AppData folders for leftover traces. Always preview — niets wordt verwijderd zonder bevestiging." />
+                                   Text="{loc:Localize Key=settings.leftovers.desc}" />
                     </StackPanel>
 
                     <ToggleSwitch x:Name="LeftoverToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                   Grid.Column="2"
                                   VerticalAlignment="Center"
                                   Toggled="LeftoverToggle_Toggled" />
                 </Grid>
             </Border>
 
-            <TextBlock Grid.Row="8"
-                       Text="App selection"
+            <TextBlock Grid.Row="10"
+                       Text="{loc:Localize Key=settings.section.appSelection}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <!-- Export / Import card -->
-            <Border Grid.Row="9"
+            <Border Grid.Row="11"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -282,13 +335,13 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Export / import selection"
+                        <TextBlock Text="{loc:Localize Key=settings.selection.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock x:Name="SelectionStatusText"
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="Save your current selection to a JSON file and reload it on a fresh install or share with a friend." />
+                                   Text="{loc:Localize Key=settings.selection.desc}" />
                     </StackPanel>
 
                     <StackPanel Grid.Column="2"
@@ -299,14 +352,14 @@
                                 Click="ExportButton_Click">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xEDE1;" FontSize="14" />
-                                <TextBlock Text="Export" />
+                                <TextBlock Text="{loc:Localize Key=common.export}" />
                             </StackPanel>
                         </Button>
                         <Button x:Name="ImportButton"
                                 Click="ImportButton_Click">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                                <TextBlock Text="Import" />
+                                <TextBlock Text="{loc:Localize Key=common.import}" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -314,19 +367,19 @@
             </Border>
 
             <InfoBar x:Name="SelectionResultBar"
-                     Grid.Row="10"
+                     Grid.Row="12"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
             <!-- ── TWEAK-PROFIELEN (v0.9.20) ── -->
-            <TextBlock Grid.Row="11"
-                       Text="Tweak-profielen"
+            <TextBlock Grid.Row="13"
+                       Text="{loc:Localize Key=settings.section.tweakProfiles}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="12"
+            <Border Grid.Row="14"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -346,12 +399,12 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Tweak-profiel maken / importeren"
+                        <TextBlock Text="{loc:Localize Key=settings.profiles.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="Stel zelf een set tweaks samen — 'Profiel maken' opent de Tweaks-tab met alle vinkjes uit; vink aan wat je wilt en sla het op naar een bestand. 'Importeren' zet de tweaks uit een profiel klaar als pending changes (al-actieve tweaks worden overgeslagen), waarna je op de Tweaks-tab Apply klikt." />
+                                   Text="{loc:Localize Key=settings.profiles.desc}" />
                     </StackPanel>
 
                     <StackPanel Grid.Column="2"
@@ -363,14 +416,14 @@
                                 Style="{ThemeResource AccentButtonStyle}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE710;" FontSize="14" />
-                                <TextBlock Text="Profiel maken" />
+                                <TextBlock Text="{loc:Localize Key=settings.profiles.make}" />
                             </StackPanel>
                         </Button>
                         <Button x:Name="ProfileImportButton"
                                 Click="ProfileImportButton_Click">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                                <TextBlock Text="Importeren" />
+                                <TextBlock Text="{loc:Localize Key=common.import}" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -378,19 +431,19 @@
             </Border>
 
             <InfoBar x:Name="TweakProfileResultBar"
-                     Grid.Row="13"
+                     Grid.Row="15"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
             <!-- ── BACKUP & HERSTEL (Tweaks snapshots) ── -->
-            <TextBlock Grid.Row="14"
-                       Text="Backup &amp; herstel"
+            <TextBlock Grid.Row="16"
+                       Text="{loc:Localize Key=settings.section.backup}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="15"
+            <Border Grid.Row="17"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -411,19 +464,19 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" Spacing="8">
-                        <TextBlock Text="Backup voor Tweaks Apply"
+                        <TextBlock Text="{loc:Localize Key=settings.backup.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="Wij maken een snapshot van alle registry-waardes die door je Tweaks-keuzes geraakt worden, vóór de Apply. De knop 'Vorige staat herstellen' op de Tweaks tab zet alles dan exact terug." />
+                                   Text="{loc:Localize Key=settings.backup.desc}" />
 
                         <RadioButtons x:Name="BackupModeRadios"
                                       SelectionChanged="BackupModeRadios_SelectionChanged"
                                       Margin="0,8,0,0">
-                            <RadioButton Content="Vraag elke keer (aanbevolen)" Tag="Ask" />
-                            <RadioButton Content="Altijd automatisch backup" Tag="Always" />
-                            <RadioButton Content="Nooit backup maken" Tag="Never" />
+                            <RadioButton Content="{loc:Localize Key=settings.backup.ask}" Tag="Ask" />
+                            <RadioButton Content="{loc:Localize Key=settings.backup.always}" Tag="Always" />
+                            <RadioButton Content="{loc:Localize Key=settings.backup.never}" Tag="Never" />
                         </RadioButtons>
                     </StackPanel>
 
@@ -433,19 +486,19 @@
                             VerticalAlignment="Top">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8B7;" FontSize="14" />
-                            <TextBlock x:Name="BrowseSnapshotsText" Text="Bekijk snapshots..." />
+                            <TextBlock x:Name="BrowseSnapshotsText" Text="{loc:Localize Key=settings.backup.browse}" />
                         </StackPanel>
                     </Button>
                 </Grid>
             </Border>
 
             <!-- ── SYSTEM RESTORE POINTS (Deep Clean + Debloat) ── -->
-            <TextBlock Grid.Row="16"
-                       Text="System Restore Points"
+            <TextBlock Grid.Row="18"
+                       Text="{loc:Localize Key=settings.section.restorePoints}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="17"
+            <Border Grid.Row="19"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -466,13 +519,13 @@
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Restore point voor Deep Clean"
+                            <TextBlock Text="{loc:Localize Key=settings.restore.deepClean.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock x:Name="DeepCleanRestorePointStatus"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Voor elke delete-batch een Windows System Restore Point maken. Eén UAC-prompt voor het hele scenario (checkpoint + delete samen)." />
+                                       Text="{loc:Localize Key=settings.restore.deepClean.desc}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="2"
@@ -487,6 +540,8 @@
                                       Visibility="Collapsed"
                                       ToolTipService.ToolTip="" />
                             <ToggleSwitch x:Name="DeepCleanRestoreToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                           Toggled="DeepCleanRestoreToggle_Toggled" />
                         </StackPanel>
                     </Grid>
@@ -505,13 +560,13 @@
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Restore point voor Debloat"
+                            <TextBlock Text="{loc:Localize Key=settings.restore.debloat.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock x:Name="DebloatRestorePointStatus"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Voor elke uninstall-batch een Windows System Restore Point maken. Vangt OEM-driver of Windows-feature regressies op." />
+                                       Text="{loc:Localize Key=settings.restore.debloat.desc}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="2"
@@ -526,6 +581,8 @@
                                       Visibility="Collapsed"
                                       ToolTipService.ToolTip="" />
                             <ToggleSwitch x:Name="DebloatRestoreToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                           Toggled="DebloatRestoreToggle_Toggled" />
                         </StackPanel>
                     </Grid>
@@ -552,12 +609,12 @@
                                   VerticalAlignment="Center"
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Restore points beheren / terugzetten"
+                            <TextBlock Text="{loc:Localize Key=settings.restore.manage.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Opent de Windows System Restore wizard waar je een eerder restore point kunt selecteren om je systeem terug te zetten. Reboot is vereist voor de daadwerkelijke restore." />
+                                       Text="{loc:Localize Key=settings.restore.manage.desc}" />
                         </StackPanel>
                         <Button Grid.Column="2"
                                 x:Name="OpenSystemRestoreButton"
@@ -565,7 +622,7 @@
                                 VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE8A7;" FontSize="14" />
-                                <TextBlock Text="Open wizard" />
+                                <TextBlock Text="{loc:Localize Key=settings.restore.manage.openWizard}" />
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -573,19 +630,19 @@
             </Border>
 
             <InfoBar x:Name="BackupResultBar"
-                     Grid.Row="18"
+                     Grid.Row="20"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
             <!-- ── APP-UPDATES (self-update, v0.10.1) ── -->
-            <TextBlock Grid.Row="19"
-                       Text="App-updates"
+            <TextBlock Grid.Row="21"
+                       Text="{loc:Localize Key=settings.section.appUpdates}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="20"
+            <Border Grid.Row="22"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -605,14 +662,16 @@
                                   VerticalAlignment="Center"
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Check op updates bij opstarten"
+                            <TextBlock Text="{loc:Localize Key=settings.updateCheck.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Kijkt bij het starten stil of er een nieuwere versie op GitHub staat. Vind 'ie er een, dan verschijnt bovenaan een update-balk." />
+                                       Text="{loc:Localize Key=settings.updateCheck.desc}" />
                         </StackPanel>
                         <ToggleSwitch x:Name="UpdateCheckToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       Toggled="UpdateCheckToggle_Toggled" />
@@ -631,14 +690,16 @@
                                   VerticalAlignment="Center"
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Welkomstbanner op de Apps-pagina"
+                            <TextBlock Text="{loc:Localize Key=settings.welcomeBanner.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"
-                                       Text="Toont een korte uitleg-banner bovenaan de Apps-pagina. Uit zodra je 'm wegklikt." />
+                                       Text="{loc:Localize Key=settings.welcomeBanner.desc}" />
                         </StackPanel>
                         <ToggleSwitch x:Name="WelcomeBannerToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                       Grid.Column="2"
                                       VerticalAlignment="Center"
                                       Toggled="WelcomeBannerToggle_Toggled" />
@@ -657,12 +718,14 @@
                                   VerticalAlignment="Center"
                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                            <TextBlock Text="Nu op updates controleren"
+                            <TextBlock Text="{loc:Localize Key=settings.checkNow.title}"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <!-- Tekst komt uit code (heeft het versienummer als
+                                 parameter), dus hier geen literal die anders
+                                 onvertaald zou opflitsen. -->
                             <TextBlock x:Name="AppVersionText"
                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Huidige versie: —" />
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
                         <Button Grid.Column="2"
                                 x:Name="CheckUpdatesButton"
@@ -670,7 +733,7 @@
                                 VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE72C;" FontSize="14" />
-                                <TextBlock x:Name="CheckUpdatesButtonText" Text="Check for updates now" />
+                                <TextBlock x:Name="CheckUpdatesButtonText" Text="{loc:Localize Key=settings.checkNow.button}" />
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -678,19 +741,19 @@
             </Border>
 
             <InfoBar x:Name="UpdateCheckResultBar"
-                     Grid.Row="21"
+                     Grid.Row="23"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
             <!-- ── DIAGNOSTIEK (foutlogging) ── -->
-            <TextBlock Grid.Row="22"
-                       Text="Diagnostiek"
+            <TextBlock Grid.Row="24"
+                       Text="{loc:Localize Key=settings.section.diagnostics}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="23"
+            <Border Grid.Row="25"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -710,12 +773,12 @@
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="Foutlogging"
+                        <TextBlock Text="{loc:Localize Key=settings.logging.title}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"
-                                   Text="Schrijft install- en scan-fouten (commando, exit-code, ruwe winget-output) naar een logbestand in %LocalAppData%\SetupToolbox\logs. Handig om problemen te diagnosticeren of te melden." />
+                                   Text="{loc:Localize Key=settings.logging.desc}" />
                     </StackPanel>
 
                     <StackPanel Grid.Column="2"
@@ -726,10 +789,12 @@
                                 Click="OpenLogFolderButton_Click">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE8B7;" FontSize="14" />
-                                <TextBlock Text="Open logmap" />
+                                <TextBlock Text="{loc:Localize Key=settings.logging.openFolder}" />
                             </StackPanel>
                         </Button>
                         <ToggleSwitch x:Name="ErrorLoggingToggle"
+                                      OnContent="{loc:Localize Key=common.on}"
+                                      OffContent="{loc:Localize Key=common.off}"
                                       VerticalAlignment="Center"
                                       Toggled="ErrorLoggingToggle_Toggled" />
                     </StackPanel>

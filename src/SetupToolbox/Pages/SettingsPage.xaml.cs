@@ -35,12 +35,47 @@ public sealed partial class SettingsPage : Page
         WelcomeBannerToggle.IsOn = App.Settings.ShowWelcomeBanner;
         ErrorLoggingToggle.IsOn = App.Settings.ErrorLoggingEnabled;
         SyncBackupModeRadios();
+        SyncLanguageCombo();
         _suppressToggleEvent = false;
 
-        AppVersionText.Text = $"Huidige versie: {App.GitHub.CurrentVersion}";
+        AppVersionText.Text = App.Loc.S("settings.checkNow.version", App.GitHub.CurrentVersion);
         UpdateBrowseSnapshotsLabel();
         await RefreshScheduleStatusAsync();
         await RefreshRestorePointStatusAsync();
+    }
+
+    // ── TAAL (v1.2.2) ──
+
+    // Drie opties: systeem volgen (default) + de twee talen expliciet. De
+    // systeem-optie toont welke taal dat nú oplevert, zodat de keuze niet blind is.
+    private void SyncLanguageCombo()
+    {
+        var systemName = App.Loc.S(LocalizationService.SystemLanguage == AppLanguage.Dutch
+            ? "settings.language.dutch"
+            : "settings.language.english");
+
+        LanguageCombo.Items.Clear();
+        LanguageCombo.Items.Add($"{App.Loc.S("settings.language.followSystem")} — {systemName}");
+        LanguageCombo.Items.Add(App.Loc.S("settings.language.english"));
+        LanguageCombo.Items.Add(App.Loc.S("settings.language.dutch"));
+
+        LanguageCombo.SelectedIndex = App.Loc.FollowsSystem
+            ? 0
+            : App.Loc.Current == AppLanguage.Dutch ? 2 : 1;
+    }
+
+    private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressToggleEvent) return;
+
+        // Set() vuurt LanguageChanged alleen wanneer de effectieve taal wijzigt;
+        // MainWindow bouwt deze page dan opnieuw op, dus hier verder niets doen.
+        App.Loc.Set(LanguageCombo.SelectedIndex switch
+        {
+            1 => AppLanguage.English,
+            2 => AppLanguage.Dutch,
+            _ => null
+        });
     }
 
     private void SyncBackupModeRadios()
@@ -59,7 +94,9 @@ public sealed partial class SettingsPage : Page
     private void UpdateBrowseSnapshotsLabel()
     {
         var count = App.Snapshots.List().Count;
-        BrowseSnapshotsText.Text = count == 0 ? "Geen snapshots" : $"Bekijk snapshots ({count})";
+        BrowseSnapshotsText.Text = count == 0
+            ? App.Loc.S("settings.backup.none")
+            : App.Loc.S("settings.backup.browseCount", count);
         BrowseSnapshotsButton.IsEnabled = count > 0;
     }
 
@@ -121,7 +158,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             RestorePointGlobalStatus.Severity = InfoBarSeverity.Error;
-            RestorePointGlobalStatus.Title = "Kon System Restore wizard niet openen";
+            RestorePointGlobalStatus.Title = App.Loc.S("settings.restore.wizardFailed.title");
             RestorePointGlobalStatus.Message = ex.Message;
             RestorePointGlobalStatus.IsOpen = true;
         }
@@ -148,15 +185,16 @@ public sealed partial class SettingsPage : Page
             ToolTipService.SetToolTip(DeepCleanWarningGlyph, status.BlockedReason);
             ToolTipService.SetToolTip(DebloatWarningGlyph, status.BlockedReason);
             RestorePointGlobalStatus.Severity = InfoBarSeverity.Warning;
-            RestorePointGlobalStatus.Title = "System Protection is uit";
-            RestorePointGlobalStatus.Message = "Restore points kunnen niet worden gemaakt zonder System Protection aan voor je systeemschijf. Open System Properties > System Protection om dit aan te zetten.";
+            RestorePointGlobalStatus.Title = App.Loc.S("settings.restore.protectionOff.title");
+            RestorePointGlobalStatus.Message = App.Loc.S("settings.restore.protectionOff.body");
             RestorePointGlobalStatus.IsOpen = true;
         }
         else if (!status.CanCreate && status.HoursSinceLast.HasValue)
         {
             // 24h rate-limit case
             var hours = status.HoursSinceLast.Value;
-            var tt = $"Laatste restore point was {RestorePointService.FormatAgo(TimeSpan.FromHours(hours))} geleden. Windows skipt nieuwe punten binnen 24u — bij volgende Deep Clean/Debloat wordt de checkpoint-stap silent geskipt.";
+            var tt = App.Loc.S("settings.restore.rateLimited.tooltip",
+                RestorePointService.FormatAgo(TimeSpan.FromHours(hours)));
             DeepCleanWarningGlyph.Visibility = Visibility.Visible;
             DebloatWarningGlyph.Visibility = Visibility.Visible;
             ToolTipService.SetToolTip(DeepCleanWarningGlyph, tt);
@@ -165,10 +203,8 @@ public sealed partial class SettingsPage : Page
         else if (status.HoursSinceLast.HasValue)
         {
             var ago = RestorePointService.FormatAgo(TimeSpan.FromHours(status.HoursSinceLast.Value));
-            DeepCleanRestorePointStatus.Text =
-                $"Voor elke delete-batch een Windows System Restore Point maken. Laatste restore point was {ago} geleden.";
-            DebloatRestorePointStatus.Text =
-                $"Voor elke uninstall-batch een Windows System Restore Point maken. Laatste restore point was {ago} geleden.";
+            DeepCleanRestorePointStatus.Text = App.Loc.S("settings.restore.deepClean.descWithAge", ago);
+            DebloatRestorePointStatus.Text = App.Loc.S("settings.restore.debloat.descWithAge", ago);
         }
     }
 
@@ -203,14 +239,14 @@ public sealed partial class SettingsPage : Page
 
         if (exists)
         {
-            ScheduleStatusText.Text = "A scheduled auto-update task is active. Winget upgrades all apps automatically on the configured trigger.";
-            ScheduleButtonText.Text = "Change";
+            ScheduleStatusText.Text = App.Loc.S("settings.schedule.active");
+            ScheduleButtonText.Text = App.Loc.S("settings.schedule.change");
             DisableButton.Visibility = Visibility.Visible;
         }
         else
         {
-            ScheduleStatusText.Text = "Not scheduled. Configure a Windows Task Scheduler entry that runs 'winget upgrade --all' silently on a recurring schedule.";
-            ScheduleButtonText.Text = "Set up";
+            ScheduleStatusText.Text = App.Loc.S("settings.schedule.notScheduled");
+            ScheduleButtonText.Text = App.Loc.S("settings.schedule.setUp");
             DisableButton.Visibility = Visibility.Collapsed;
         }
     }
@@ -227,10 +263,10 @@ public sealed partial class SettingsPage : Page
         var resources = Microsoft.UI.Xaml.Application.Current.Resources;
         var confirm = new ContentDialog
         {
-            Title = "Disable auto-updates?",
-            Content = "This removes the Windows scheduled task. You can re-create it any time.",
-            PrimaryButtonText = "Disable",
-            CloseButtonText = "Cancel",
+            Title = App.Loc.S("settings.schedule.disableConfirm.title"),
+            Content = App.Loc.S("settings.schedule.disableConfirm.body"),
+            PrimaryButtonText = App.Loc.S("settings.schedule.disable"),
+            CloseButtonText = App.Loc.S("common.cancel"),
             // DefaultButton.None — anders krijgt de aangewezen button auto-accent
             // styling die onze CloseButtonStyle overschrijft (beide knoppen blauw).
             // Voor destructive actions sowieso veiliger: geen Enter-shortcut.
@@ -246,11 +282,9 @@ public sealed partial class SettingsPage : Page
         var ok = await App.TaskScheduler.DeleteUpdateTaskAsync();
         var result = new ContentDialog
         {
-            Title = ok ? "Auto-updates disabled" : "Could not disable",
-            Content = ok
-                ? "The scheduled task has been removed."
-                : "schtasks.exe failed to delete the task (admin prompt geweigerd of schtasks-fout).",
-            CloseButtonText = "OK",
+            Title = App.Loc.S(ok ? "settings.schedule.disabled.title" : "settings.schedule.disableFailed.title"),
+            Content = App.Loc.S(ok ? "settings.schedule.disabled.body" : "settings.schedule.disableFailed.body"),
+            CloseButtonText = App.Loc.S("common.ok"),
             CornerRadius = new Microsoft.UI.Xaml.CornerRadius(8),
             CloseButtonStyle = (Microsoft.UI.Xaml.Style)resources["DialogDefaultButtonStyle"],
             XamlRoot = this.XamlRoot
@@ -266,8 +300,9 @@ public sealed partial class SettingsPage : Page
         var selectedCount = SelectionHelper.GetSelectedCount(db);
         if (selectedCount == 0)
         {
-            ShowSelectionInfo(InfoBarSeverity.Warning, "Niets om te exporteren",
-                "Je hebt momenteel geen apps geselecteerd. Selecteer eerst een paar apps op de Apps-pagina.");
+            ShowSelectionInfo(InfoBarSeverity.Warning,
+                App.Loc.S("settings.selection.nothing.title"),
+                App.Loc.S("settings.selection.nothing.body"));
             return;
         }
 
@@ -278,12 +313,14 @@ public sealed partial class SettingsPage : Page
         try
         {
             await App.SelectionIO.ExportAsync(file.Path, db);
-            ShowSelectionInfo(InfoBarSeverity.Success, "Selection exported",
-                $"{selectedCount} app{(selectedCount == 1 ? "" : "s")} weggeschreven naar {file.Name}.");
+            ShowSelectionInfo(InfoBarSeverity.Success,
+                App.Loc.S("settings.selection.exported.title"),
+                App.Loc.S("settings.selection.exported.body",
+                    App.Loc.Plural("common.appCount", selectedCount), file.Name));
         }
         catch (Exception ex)
         {
-            ShowSelectionInfo(InfoBarSeverity.Error, "Export failed", ex.Message);
+            ShowSelectionInfo(InfoBarSeverity.Error, App.Loc.S("settings.selection.exportFailed.title"), ex.Message);
         }
     }
 
@@ -297,15 +334,16 @@ public sealed partial class SettingsPage : Page
 
         if (result.Error != null)
         {
-            ShowSelectionInfo(InfoBarSeverity.Error, "Import failed", result.Error);
+            ShowSelectionInfo(InfoBarSeverity.Error, App.Loc.S("settings.selection.importFailed.title"), result.Error);
             return;
         }
 
         var severity = result.Skipped > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
+        var matched = App.Loc.Plural("common.appCount", result.Matched);
         var msg = result.Skipped == 0
-            ? $"{result.Matched} app{(result.Matched == 1 ? "" : "s")} geselecteerd."
-            : $"{result.Matched} app{(result.Matched == 1 ? "" : "s")} geselecteerd, {result.Skipped} niet gevonden in de huidige catalog.";
-        ShowSelectionInfo(severity, "Selection imported", msg);
+            ? App.Loc.S("settings.selection.imported.body", matched)
+            : App.Loc.S("settings.selection.imported.bodySkipped", matched, result.Skipped);
+        ShowSelectionInfo(severity, App.Loc.S("settings.selection.imported.title"), msg);
     }
 
     private void ShowSelectionInfo(InfoBarSeverity severity, string title, string message)
@@ -336,14 +374,17 @@ public sealed partial class SettingsPage : Page
         var result = await App.TweakProfileIO.ImportAsync(file.Path, App.Tweaks.All.ToList());
         if (result.Error != null)
         {
-            ShowProfileInfo(InfoBarSeverity.Error, "Import mislukt", result.Error);
+            ShowProfileInfo(InfoBarSeverity.Error, App.Loc.S("settings.profiles.importFailed.title"), result.Error);
             return;
         }
         if (result.Matched.Count == 0)
         {
-            var extra = result.SkippedIds.Count > 0 ? $" ({result.SkippedIds.Count} onbekend)" : "";
-            ShowProfileInfo(InfoBarSeverity.Warning, "Geen bekende tweaks",
-                $"Dit bestand bevat geen tweaks die in deze versie bestaan{extra}.");
+            var extra = result.SkippedIds.Count > 0
+                ? App.Loc.S("settings.profiles.noKnown.unknownSuffix", result.SkippedIds.Count)
+                : "";
+            ShowProfileInfo(InfoBarSeverity.Warning,
+                App.Loc.S("settings.profiles.noKnown.title"),
+                App.Loc.S("settings.profiles.noKnown.body", extra));
             return;
         }
 
@@ -354,29 +395,36 @@ public sealed partial class SettingsPage : Page
 
         if (staged == 0)
         {
-            ShowProfileInfo(InfoBarSeverity.Success, "Alles staat al goed",
-                $"Alle {result.Matched.Count} tweak{(result.Matched.Count == 1 ? "" : "s")} uit dit profiel staan al in de gewenste staat — niets toe te passen.");
+            ShowProfileInfo(InfoBarSeverity.Success,
+                App.Loc.S("settings.profiles.allGood.title"),
+                App.Loc.S("settings.profiles.allGood.body",
+                    App.Loc.Plural("common.tweakCount", result.Matched.Count)));
             return;
         }
 
-        var note = $"{staged} tweak{(staged == 1 ? "" : "s")} klaargezet om toe te passen.";
-        if (already > 0) note += $" {already} stond{(already == 1 ? "" : "en")} al goed.";
-        if (result.SkippedIds.Count > 0) note += $" {result.SkippedIds.Count} onbekend en overgeslagen.";
+        var note = App.Loc.S("settings.profiles.staged", App.Loc.Plural("common.tweakCount", staged));
+        if (already > 0)
+            note += App.Loc.S(already == 1
+                ? "settings.profiles.alreadyGood.one"
+                : "settings.profiles.alreadyGood.other", already);
+        if (result.SkippedIds.Count > 0)
+            note += App.Loc.S("settings.profiles.skipped", result.SkippedIds.Count);
 
         var dialog = new ContentDialog
         {
-            Title = "Profiel geïmporteerd",
-            Content = $"{note}\n\nGa je naar de Tweaks-tab om ze toe te passen?",
-            PrimaryButtonText = "Naar Tweaks",
-            CloseButtonText = "Blijf hier",
+            Title = App.Loc.S("settings.profiles.imported.title"),
+            Content = App.Loc.S("settings.profiles.imported.body", note),
+            PrimaryButtonText = App.Loc.S("settings.profiles.goToTweaks"),
+            CloseButtonText = App.Loc.S("settings.profiles.stayHere"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot
         };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             App.Window?.NavigateToTweaks();
         else
-            ShowProfileInfo(InfoBarSeverity.Informational, "Klaargezet",
-                note + " Open de Tweaks-tab en klik Apply.");
+            ShowProfileInfo(InfoBarSeverity.Informational,
+                App.Loc.S("settings.profiles.ready.title"),
+                App.Loc.S("settings.profiles.ready.body", note));
     }
 
     private void ShowProfileInfo(InfoBarSeverity severity, string title, string message)
@@ -412,7 +460,7 @@ public sealed partial class SettingsPage : Page
     private async void CheckUpdatesButton_Click(object sender, RoutedEventArgs e)
     {
         CheckUpdatesButton.IsEnabled = false;
-        CheckUpdatesButtonText.Text = "Bezig met checken...";
+        CheckUpdatesButtonText.Text = App.Loc.S("settings.checkNow.busy");
         UpdateCheckResultBar.IsOpen = false;
         try
         {
@@ -420,24 +468,27 @@ public sealed partial class SettingsPage : Page
             switch (result.Status)
             {
                 case UpdateCheckStatus.UpdateAvailable when result.Update != null:
-                    ShowUpdateCheckInfo(InfoBarSeverity.Success, "Update beschikbaar",
-                        $"Versie {result.Update.Version} is beschikbaar — bovenaan het venster kun je 'm installeren.");
+                    ShowUpdateCheckInfo(InfoBarSeverity.Success,
+                        App.Loc.S("settings.checkNow.available.title"),
+                        App.Loc.S("settings.checkNow.available.body", result.Update.Version));
                     App.Window?.ShowUpdate(result.Update);
                     break;
                 case UpdateCheckStatus.UpToDate:
-                    ShowUpdateCheckInfo(InfoBarSeverity.Success, "Up-to-date",
-                        $"Je hebt de nieuwste versie ({App.GitHub.CurrentVersion}).");
+                    ShowUpdateCheckInfo(InfoBarSeverity.Success,
+                        App.Loc.S("settings.checkNow.upToDate.title"),
+                        App.Loc.S("settings.checkNow.upToDate.body", App.GitHub.CurrentVersion));
                     break;
                 default:
-                    ShowUpdateCheckInfo(InfoBarSeverity.Error, "Check mislukt",
-                        result.Error ?? "Onbekende fout bij het ophalen van releases.");
+                    ShowUpdateCheckInfo(InfoBarSeverity.Error,
+                        App.Loc.S("settings.checkNow.failed.title"),
+                        result.Error ?? App.Loc.S("settings.checkNow.failed.body"));
                     break;
             }
         }
         finally
         {
             CheckUpdatesButton.IsEnabled = true;
-            CheckUpdatesButtonText.Text = "Check for updates now";
+            CheckUpdatesButtonText.Text = App.Loc.S("settings.checkNow.button");
         }
     }
 
