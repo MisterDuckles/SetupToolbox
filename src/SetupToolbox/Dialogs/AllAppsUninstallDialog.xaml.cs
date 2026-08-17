@@ -46,7 +46,7 @@ public sealed partial class AllAppsUninstallDialog : ContentDialog
     private async void OnOpened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
         var total = _items.Count;
-        ProgressHeader.Text = $"Uninstalling {total} app{(total == 1 ? "" : "s")}";
+        ProgressHeader.Text = App.Loc.S("progress.uninstalling", App.Loc.Plural("common.appCount", total));
 
         var progress = new System.Progress<MixedUninstallProgress>(OnProgress);
         var result = await _service.UninstallBatchAsync(_items, progress);
@@ -73,14 +73,14 @@ public sealed partial class AllAppsUninstallDialog : ContentDialog
 
         if (result.Cancelled)
         {
-            ProgressHeader.Text = "Cancelled — UAC prompt declined for Store/Other items";
+            ProgressHeader.Text = App.Loc.S("progress.cancelledUacStore");
         }
         else
         {
             var parts = new List<string>();
-            if (result.SuccessCount > 0) parts.Add($"{result.SuccessCount} uninstalled");
-            if (result.FailedCount > 0)  parts.Add($"{result.FailedCount} failed");
-            ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : "Done";
+            if (result.SuccessCount > 0) parts.Add(App.Loc.S("summary.uninstalled", result.SuccessCount));
+            if (result.FailedCount > 0)  parts.Add(App.Loc.S("summary.failed", result.FailedCount));
+            ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : App.Loc.S("common.done");
         }
         UacHint.Visibility = Visibility.Collapsed;
 
@@ -117,7 +117,7 @@ public sealed partial class AllAppsUninstallDialog : ContentDialog
             e.State is AllAppsUninstallState.Success
                     or AllAppsUninstallState.Failed
                     or AllAppsUninstallState.Cancelled);
-        ProgressHeader.Text = $"Uninstalling — {done} of {_items.Count} done";
+        ProgressHeader.Text = App.Loc.S("progress.uninstallingOf", done, _items.Count);
     }
 
     private void OnClosing(ContentDialog sender, ContentDialogClosingEventArgs args)
@@ -205,11 +205,11 @@ public sealed class AllAppsUninstallEntry : INotifyPropertyChanged
 
     public string StateLabel => _state switch
     {
-        AllAppsUninstallState.Pending => "Waiting",
-        AllAppsUninstallState.Running => "Working...",
-        AllAppsUninstallState.Success => "Removed",
-        AllAppsUninstallState.Failed => "Failed",
-        AllAppsUninstallState.Cancelled => "Cancelled",
+        AllAppsUninstallState.Pending => App.Loc.S("common.waiting"),
+        AllAppsUninstallState.Running => App.Loc.S("common.working"),
+        AllAppsUninstallState.Success => App.Loc.S("common.removed"),
+        AllAppsUninstallState.Failed => App.Loc.S("common.failed"),
+        AllAppsUninstallState.Cancelled => App.Loc.S("common.cancelled"),
         _ => string.Empty
     };
 

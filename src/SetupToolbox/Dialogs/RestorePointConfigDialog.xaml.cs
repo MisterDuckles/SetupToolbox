@@ -23,7 +23,7 @@ public sealed partial class RestorePointConfigDialog : ContentDialog
     /// <summary>
     /// "Deep Clean" of "Debloat" — wordt in de dialoog-tekst gebruikt.
     /// </summary>
-    public string OperationName { get; set; } = "deze functie";
+    public string OperationName { get; set; } = App.Loc.S("restorePoint.operationDefault");
 
     public RestorePointConfigDialog()
     {
@@ -51,13 +51,13 @@ public sealed partial class RestorePointConfigDialog : ContentDialog
             var ago = RestorePointService.FormatAgo(TimeSpan.FromHours(status.HoursSinceLast.Value));
             StatusGlyph.Glyph = "";  // checkmark
             StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
-            StatusText.Text = $"Laatste Windows restore point was {ago} geleden. System Protection is actief.";
+            StatusText.Text = App.Loc.S("restorePoint.lastWas", ago);
         }
         else
         {
             StatusGlyph.Glyph = "";
             StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
-            StatusText.Text = "System Protection is actief, nog geen restore points op dit systeem.";
+            StatusText.Text = App.Loc.S("restorePoint.noneYet");
         }
     }
 }

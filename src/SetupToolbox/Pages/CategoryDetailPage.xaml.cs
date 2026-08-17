@@ -155,16 +155,16 @@ public sealed partial class CategoryDetailPage : Page
     {
         var modeLabel = _filterMode switch
         {
-            FilterMode.Popular => "popular apps",
-            FilterMode.Installed => "installed apps",
-            _ => "apps",
+            FilterMode.Popular => App.Loc.S("category.mode.popular"),
+            FilterMode.Installed => App.Loc.S("category.mode.installed"),
+            _ => App.Loc.S("category.mode.all"),
         };
 
         if (hasSearch && hasModeFilter)
-            return $"No {modeLabel} in this category matching \"{query}\"";
+            return App.Loc.S("category.empty.modeQuery", modeLabel, query);
         if (hasSearch)
-            return $"No apps in this category matching \"{query}\"";
-        return $"No {modeLabel} in this category";
+            return App.Loc.S("category.empty.query", query);
+        return App.Loc.S("category.empty.mode", modeLabel);
     }
 
     private async Task RefreshInstalledStateAsync(bool forceRefresh = false)
@@ -284,7 +284,7 @@ public sealed partial class CategoryDetailPage : Page
     private void UpdateSelectionCount()
     {
         var count = SelectionHelper.GetSelectedCount(_db);
-        SelectionCountText.Text = $"{count} app{(count == 1 ? "" : "s")} selected";
+        SelectionCountText.Text = App.Loc.Plural("common.appsSelected", count);
         InstallButton.IsEnabled = count > 0;
         ClearSelectionButton.IsEnabled = count > 0;
     }
@@ -292,7 +292,7 @@ public sealed partial class CategoryDetailPage : Page
     private void UpdateSelectAllButton()
     {
         var allSelected = _visibleApps.Count > 0 && _visibleApps.All(a => a.IsSelected);
-        SelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        SelectAllButton.Content = App.Loc.S(allSelected ? "common.deselectAll" : "common.selectAll");
         SelectAllButton.IsEnabled = _visibleApps.Count > 0;
     }
 }

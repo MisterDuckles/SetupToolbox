@@ -95,9 +95,9 @@ public sealed partial class ScheduleDialog : ContentDialog
     private static string BuildScheduleDescription(UpdateScheduleType scheduleType, string? time) =>
         scheduleType switch
         {
-            UpdateScheduleType.Daily => $"'winget upgrade --all' draait elke dag om {time ?? "09:00"}.",
-            UpdateScheduleType.Weekly => $"'winget upgrade --all' draait elke maandag om {time ?? "09:00"}.",
-            UpdateScheduleType.OnStartup => "'winget upgrade --all' draait bij elke gebruikers-login.",
-            _ => "Scheduled task is aangemaakt."
+            UpdateScheduleType.Daily => App.Loc.S("schedule.desc.daily", time ?? "09:00"),
+            UpdateScheduleType.Weekly => App.Loc.S("schedule.desc.weekly", time ?? "09:00"),
+            UpdateScheduleType.OnStartup => App.Loc.S("schedule.desc.onStartup"),
+            _ => App.Loc.S("schedule.desc.generic")
         };
 }

@@ -121,9 +121,9 @@ public sealed class InstalledAppEntry : INotifyPropertyChanged
     // onderscheid niet betrouwbaar te maken.
     public string SourceTooltip => Source switch
     {
-        InstalledSource.Winget => "Beheerd door winget. Kan via winget geïnstalleerd zijn, of via een andere installer (vendor / Toolbox / etc.) waarna winget het package herkent.",
-        InstalledSource.Store => "Microsoft Store / AppX package. Uninstall vereist administrator rechten.",
-        InstalledSource.Web => "Geïnstalleerd via een vendor-installer (MSI / EXE) — niet bekend bij winget of Microsoft Store.",
+        InstalledSource.Winget => SetupToolbox.App.Loc.S("source.winget.desc"),
+        InstalledSource.Store => SetupToolbox.App.Loc.S("source.store.desc"),
+        InstalledSource.Web => SetupToolbox.App.Loc.S("source.web.desc"),
         _ => string.Empty
     };
 

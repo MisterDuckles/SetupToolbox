@@ -4,12 +4,13 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:SetupToolbox.Helpers"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="Backup maken voor Apply?"
-    PrimaryButtonText="Apply met backup"
-    SecondaryButtonText="Apply zonder backup"
-    CloseButtonText="Annuleer"
+    Title="{loc:Localize Key=dialog.backup.title}"
+    PrimaryButtonText="{loc:Localize Key=dialog.backup.withBackup}"
+    SecondaryButtonText="{loc:Localize Key=dialog.backup.withoutBackup}"
+    CloseButtonText="{loc:Localize Key=common.cancel}"
     DefaultButton="Primary"
     CornerRadius="8">
 
@@ -20,20 +21,20 @@
         </TextBlock>
 
         <StackPanel Spacing="4">
-            <TextBlock Text="Naam voor deze snapshot (optioneel)"
+            <TextBlock Text="{loc:Localize Key=dialog.backup.nameLabel}"
                        Style="{StaticResource CaptionTextBlockStyle}" />
             <TextBox x:Name="NameBox"
-                     PlaceholderText="Bijv. 'Voor Bing search uit'"
+                     PlaceholderText="{loc:Localize Key=dialog.backup.namePlaceholder}"
                      MaxLength="80" />
         </StackPanel>
 
         <CheckBox x:Name="DontAskCheckBox"
-                  Content="Vraag dit niet meer en maak voortaan altijd een backup" />
+                  Content="{loc:Localize Key=dialog.backup.dontAsk}" />
 
         <InfoBar Severity="Informational"
                  IsOpen="True"
                  IsClosable="False"
-                 Title="Veiligheid"
+                 Title="{loc:Localize Key=dialog.backup.safetyHeader}"
                  Message="Snapshots worden lokaal opgeslagen (max 20 stuks, oudste wordt automatisch verwijderd). Je kan alle snapshots later inzien via Settings." />
     </StackPanel>
 </ContentDialog>

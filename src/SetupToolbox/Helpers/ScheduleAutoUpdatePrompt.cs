@@ -21,11 +21,11 @@ internal static class ScheduleAutoUpdatePrompt
         var resources = Application.Current.Resources;
         var dialog = new ContentDialog
         {
-            Title = "Schedule auto-updates?",
-            Content = "Keep your installed apps up to date by running 'winget upgrade --all' on a recurring schedule. You can change or disable this any time from Settings.",
-            PrimaryButtonText = "Schedule",
-            SecondaryButtonText = "Don't ask again",
-            CloseButtonText = "Not now",
+            Title = App.Loc.S("schedulePrompt.title"),
+            Content = App.Loc.S("schedulePrompt.body"),
+            PrimaryButtonText = App.Loc.S("schedulePrompt.schedule"),
+            SecondaryButtonText = App.Loc.S("schedulePrompt.dontAsk"),
+            CloseButtonText = App.Loc.S("schedulePrompt.notNow"),
             DefaultButton = ContentDialogButton.Primary,
             CornerRadius = new CornerRadius(8),
             PrimaryButtonStyle = (Style)resources["DialogPrimaryButtonStyle"],

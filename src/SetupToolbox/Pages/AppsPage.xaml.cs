@@ -101,7 +101,7 @@ public sealed partial class AppsPage : Page
     private void UpdateSelectionFooter()
     {
         var count = SelectionHelper.GetSelectedCount(_db);
-        SelectionCountText.Text = $"{count} app{(count == 1 ? "" : "s")} selected";
+        SelectionCountText.Text = App.Loc.Plural("common.appsSelected", count);
         InstallButton.IsEnabled = count > 0;
         ClearSelectionButton.IsEnabled = count > 0;
     }
@@ -223,7 +223,7 @@ public sealed partial class AppsPage : Page
 
         if (_wingetResults.Count == 0)
         {
-            WingetEmptyText.Text = $"No winget apps matching \"{query}\" (outside our curated list).";
+            WingetEmptyText.Text = App.Loc.S("apps.noWingetMatch", query);
             WingetEmptyText.Visibility = Visibility.Visible;
         }
         else
@@ -316,7 +316,7 @@ public sealed partial class AppsPage : Page
 
         if (matchingApps.Count == 0)
         {
-            CatalogEmptyText.Text = $"No apps in your curated list matching \"{trimmed}\"";
+            CatalogEmptyText.Text = App.Loc.S("apps.noCatalogMatch", trimmed);
             CatalogEmptyText.Visibility = Visibility.Visible;
         }
         else

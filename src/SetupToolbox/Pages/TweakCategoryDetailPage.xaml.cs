@@ -118,7 +118,7 @@ public sealed partial class TweakCategoryDetailPage : Page
         });
         header.Children.Add(new TextBlock
         {
-            Text = $"{active}/{tweaks.Count} actief",
+            Text = App.Loc.S("common.activeOfTotal", active, tweaks.Count),
             Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             VerticalAlignment = VerticalAlignment.Center
@@ -175,10 +175,10 @@ public sealed partial class TweakCategoryDetailPage : Page
         var count = App.TweakPending.Count;
         ApplyButton.IsEnabled = count > 0;
         DiscardButton.IsEnabled = count > 0;
-        ApplyButtonText.Text = count > 0 ? $"Apply ({count})" : "Apply";
+        ApplyButtonText.Text = count > 0 ? App.Loc.S("common.applyWithCount", count) : App.Loc.S("common.apply");
         PendingCountText.Text = count == 0
-            ? "Geen openstaande wijzigingen"
-            : $"{count} openstaande wijziging{(count == 1 ? "" : "en")}";
+            ? App.Loc.S("tweaks.noPendingChanges")
+            : App.Loc.Plural("common.pendingChanges", count);
     }
 
     private void DiscardButton_Click(object sender, RoutedEventArgs e)
@@ -196,7 +196,7 @@ public sealed partial class TweakCategoryDetailPage : Page
 
         var outcome = await TweakApplyRunner.RunAsync(this.XamlRoot, onWorkStarting: () =>
         {
-            LoadingOverlayText.Text = "Wijzigingen toepassen...";
+            LoadingOverlayText.Text = App.Loc.S("tweaks.detail.applying");
             LoadingOverlay.Visibility = Visibility.Visible;
         });
 

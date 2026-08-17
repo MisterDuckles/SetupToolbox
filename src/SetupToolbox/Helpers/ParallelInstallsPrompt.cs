@@ -49,14 +49,14 @@ internal static class ParallelInstallsPrompt
         var content = new StackPanel { Spacing = 0 };
         content.Children.Add(new TextBlock
         {
-            Text = "Kies hoeveel apps tegelijk geïnstalleerd worden. Hoger = sneller, maar sommige installers (vooral MSI-based) kunnen botsen als ze parallel draaien. Je kunt dit altijd wijzigen in Settings.",
+            Text = App.Loc.S("parallel.body"),
             TextWrapping = TextWrapping.Wrap
         });
         content.Children.Add(numberBox);
 
         var dialog = new ContentDialog
         {
-            Title = "Parallelisme bij installs",
+            Title = App.Loc.S("parallel.title"),
             Content = content,
             PrimaryButtonText = "OK",
             DefaultButton = ContentDialogButton.Primary,

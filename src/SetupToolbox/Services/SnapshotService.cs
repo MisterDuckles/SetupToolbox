@@ -150,7 +150,7 @@ public sealed class SnapshotService
     {
         if (tweaks.Count == 1) return tweaks[0].Name;
         if (tweaks.Count <= 3) return string.Join(", ", tweaks.Select(t => t.Name));
-        return $"{tweaks[0].Name} + {tweaks.Count - 1} andere";
+        return App.Loc.S("snapshot.plusOthers", tweaks[0].Name, tweaks.Count - 1);
     }
 
     // ---------------------------------------------------------------

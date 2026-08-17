@@ -219,11 +219,11 @@ try {{
 
     public static string FormatAgo(TimeSpan span)
     {
-        if (span.TotalMinutes < 1) return "minder dan een minuut";
-        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} min";
-        if (span.TotalHours < 24) return $"{(int)span.TotalHours} uur";
+        if (span.TotalMinutes < 1) return App.Loc.S("ago.lessThanMinute");
+        if (span.TotalMinutes < 60) return App.Loc.S("ago.minutes", (int)span.TotalMinutes);
+        if (span.TotalHours < 24) return App.Loc.S("ago.hours", (int)span.TotalHours);
         var days = (int)span.TotalDays;
-        return days == 1 ? "1 dag" : $"{days} dagen";
+        return App.Loc.S("ago.days", days);
     }
 
     private static (RegistryHive hive, RegistryView view, string subPath) ParsePath(string fullPath)

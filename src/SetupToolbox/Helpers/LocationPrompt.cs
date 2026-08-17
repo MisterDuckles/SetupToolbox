@@ -38,24 +38,24 @@ internal static class LocationPrompt
             var pathBox = new TextBox
             {
                 Text = defaultPath,
-                Header = "Installatiepad",
+                Header = App.Loc.S("location.header"),
                 Margin = new Thickness(0, 12, 0, 0)
             };
 
             var content = new StackPanel { Spacing = 0 };
             content.Children.Add(new TextBlock
             {
-                Text = $"{a.Name} vereist een installatielocatie. Kies een map (of sla over om deze app niet te installeren):",
+                Text = App.Loc.S("location.body", a.Name),
                 TextWrapping = TextWrapping.Wrap
             });
             content.Children.Add(pathBox);
 
             var dialog = new ContentDialog
             {
-                Title = $"Installatielocatie — {a.Name}",
+                Title = App.Loc.S("location.title", a.Name),
                 Content = content,
-                PrimaryButtonText = "Installeren",
-                CloseButtonText = "Overslaan",
+                PrimaryButtonText = App.Loc.S("location.install"),
+                CloseButtonText = App.Loc.S("location.skip"),
                 DefaultButton = ContentDialogButton.Primary,
                 CornerRadius = new CornerRadius(8),
                 PrimaryButtonStyle = (Style)resources["DialogPrimaryButtonStyle"],

@@ -44,7 +44,7 @@ public sealed partial class TweaksPage : Page
         // re-detect). Eerste keer: overlay tonen tijdens de registry-walk.
         if (!_statesDetectedOnce)
         {
-            LoadingOverlayText.Text = "Reading Windows state...";
+            LoadingOverlayText.Text = App.Loc.S("tweaks.readingState");
             LoadingOverlay.Visibility = Visibility.Visible;
             try { await App.Tweaks.DetectStatesAsync(); }
             catch { /* cards komen met Unknown state */ }
@@ -129,8 +129,8 @@ public sealed partial class TweaksPage : Page
                     Name = g.Key.DisplayName(),
                     Icon = g.Key.Icon(),
                     Blurb = g.Key.Blurb(),
-                    CountLabel = $"{active} / {list.Count} actief",
-                    PendingLabel = pending > 0 ? $"{pending} pending" : string.Empty,
+                    CountLabel = App.Loc.S("common.activeOfTotal", active, list.Count),
+                    PendingLabel = pending > 0 ? App.Loc.S("common.pendingBadge", pending) : string.Empty,
                     IsFullyApplied = active == list.Count && list.Count > 0
                 };
             })
@@ -182,8 +182,8 @@ public sealed partial class TweaksPage : Page
             SearchResultsList.Children.Add(BuildSearchResultCard(tweak));
 
         SearchResultsHeader.Text = matches.Count == 1
-            ? "1 tweak gevonden"
-            : $"{matches.Count} tweaks gevonden";
+            ? App.Loc.Plural("common.tweaksFound", 1)
+            : App.Loc.Plural("common.tweaksFound", matches.Count);
         SearchEmptyText.Visibility = matches.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -258,7 +258,7 @@ public sealed partial class TweaksPage : Page
         {
             ProfileChecklist.Children.Add(new TextBlock
             {
-                Text = "Geen tweaks gevonden.",
+                Text = App.Loc.S("tweaks.noneFound"),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             });
@@ -315,12 +315,12 @@ public sealed partial class TweaksPage : Page
         try
         {
             await App.TweakProfileIO.ExportAsync(file.Path, App.ProfileSelection.Snapshot());
-            ShowResult(InfoBarSeverity.Success, "Profiel opgeslagen",
-                $"{n} tweak{(n == 1 ? "" : "s")} weggeschreven naar {file.Name}.");
+            ShowResult(InfoBarSeverity.Success, App.Loc.S("tweaks.profileSaved.title"),
+                App.Loc.S("tweaks.profileSaved.body", App.Loc.Plural("common.tweakCount", n), file.Name));
         }
         catch (Exception ex)
         {
-            ShowResult(InfoBarSeverity.Error, "Opslaan mislukt", ex.Message);
+            ShowResult(InfoBarSeverity.Error, App.Loc.S("tweaks.saveFailed.title"), ex.Message);
         }
     }
 
@@ -335,8 +335,8 @@ public sealed partial class TweaksPage : Page
 
         if (staged == 0)
         {
-            ShowResult(InfoBarSeverity.Informational, "Niets toe te passen",
-                $"Alle {matched.Count} tweak{(matched.Count == 1 ? "" : "s")} uit je profiel staan al in de gewenste staat.");
+            ShowResult(InfoBarSeverity.Informational, App.Loc.S("tweaks.nothingToApply.title"),
+                App.Loc.S("tweaks.nothingToApply.body", App.Loc.Plural("common.tweakCount", matched.Count)));
             return;
         }
 
@@ -348,7 +348,7 @@ public sealed partial class TweaksPage : Page
 
         var outcome = await TweakApplyRunner.RunAsync(this.XamlRoot, onWorkStarting: () =>
         {
-            LoadingOverlayText.Text = "Wijzigingen toepassen...";
+            LoadingOverlayText.Text = App.Loc.S("tweaks.detail.applying");
             LoadingOverlay.Visibility = Visibility.Visible;
         });
 
@@ -379,18 +379,18 @@ public sealed partial class TweaksPage : Page
             ProfileSaveButton.IsEnabled = sel > 0;
             ProfileApplyButton.IsEnabled = sel > 0;
             ProfileSelectedText.Text = sel == 0
-                ? "Niets geselecteerd — vink tweaks aan voor je profiel"
-                : $"{sel} tweak{(sel == 1 ? "" : "s")} geselecteerd";
+                ? App.Loc.S("tweaks.profileEmpty")
+                : App.Loc.Plural("common.tweaksSelected", sel);
             return;
         }
 
         var count = App.TweakPending.Count;
         ApplyButton.IsEnabled = count > 0;
         DiscardButton.IsEnabled = count > 0;
-        ApplyButtonText.Text = count > 0 ? $"Apply ({count})" : "Apply";
+        ApplyButtonText.Text = count > 0 ? App.Loc.S("common.applyWithCount", count) : App.Loc.S("common.apply");
         PendingCountText.Text = count == 0
-            ? "Geen openstaande wijzigingen"
-            : $"{count} openstaande wijziging{(count == 1 ? "" : "en")}";
+            ? App.Loc.S("tweaks.noPendingChanges")
+            : App.Loc.Plural("common.pendingChanges", count);
     }
 
     private void UpdateRestoreButton()
@@ -417,7 +417,7 @@ public sealed partial class TweaksPage : Page
 
         var outcome = await TweakApplyRunner.RunAsync(this.XamlRoot, onWorkStarting: () =>
         {
-            LoadingOverlayText.Text = "Wijzigingen toepassen...";
+            LoadingOverlayText.Text = App.Loc.S("tweaks.detail.applying");
             LoadingOverlay.Visibility = Visibility.Visible;
         });
 
@@ -452,7 +452,7 @@ public sealed partial class TweaksPage : Page
         var browser = new SnapshotBrowserDialog { XamlRoot = this.XamlRoot };
         await browser.ShowAsync();
         // Restore kan registry hebben gewijzigd → states re-detecten + UI bij.
-        LoadingOverlayText.Text = "Re-reading state...";
+        LoadingOverlayText.Text = App.Loc.S("tweaks.rereadingState");
         LoadingOverlay.Visibility = Visibility.Visible;
         try { await App.Tweaks.DetectStatesAsync(); }
         catch { }
@@ -465,10 +465,10 @@ public sealed partial class TweaksPage : Page
     {
         var dialog = new ContentDialog
         {
-            Title = "Restart Explorer?",
-            Content = "Sluit alle open Explorer-vensters en herstart de shell zodat tweaks die geen live-update doen direct zichtbaar worden. Documenten / Downloads etc. blijven veilig op disk.",
-            PrimaryButtonText = "Restart Explorer",
-            CloseButtonText = "Cancel",
+            Title = App.Loc.S("tweaks.restartExplorer.confirm.title"),
+            Content = App.Loc.S("tweaks.restartExplorer.confirm.body"),
+            PrimaryButtonText = App.Loc.S("tweaks.restartExplorer"),
+            CloseButtonText = App.Loc.S("common.cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot
         };
@@ -479,7 +479,7 @@ public sealed partial class TweaksPage : Page
         {
             ShellRefresh.RestartExplorerSilent();
             await Task.Delay(1500);
-            LoadingOverlayText.Text = "Re-reading state...";
+            LoadingOverlayText.Text = App.Loc.S("tweaks.rereadingState");
             LoadingOverlay.Visibility = Visibility.Visible;
             try { await App.Tweaks.DetectStatesAsync(); }
             catch { }

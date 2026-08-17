@@ -4,10 +4,11 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:SetupToolbox.Helpers"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="Registry snapshots"
-    CloseButtonText="Sluiten"
+    Title="{loc:Localize Key=dialog.snapshots.title}"
+    CloseButtonText="{loc:Localize Key=common.close}"
     DefaultButton="Close"
     CornerRadius="8">
 
@@ -21,7 +22,7 @@
         <TextBlock Grid.Row="0"
                    TextWrapping="Wrap"
                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                   Text="Elke snapshot bevat de registry-waardes zoals ze waren vóór een Tweaks Apply. Klik 'Herstel' om de registry exact terug te zetten naar dat moment. Maximaal 20 snapshots worden bewaard; oudere worden automatisch verwijderd." />
+                   Text="{loc:Localize Key=dialog.snapshots.desc}" />
 
         <ScrollView Grid.Row="1"
                     VerticalScrollBarVisibility="Auto"
@@ -44,10 +45,10 @@
                 <FontIcon Glyph="&#xE7B8;"
                           FontSize="48"
                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                <TextBlock Text="Nog geen snapshots"
+                <TextBlock Text="{loc:Localize Key=dialog.snapshots.none.title}"
                            Style="{StaticResource SubtitleTextBlockStyle}"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Snapshots worden automatisch aangemaakt voor je een Tweaks Apply uitvoert (afhankelijk van je instelling)."
+                <TextBlock Text="{loc:Localize Key=dialog.snapshots.none.desc}"
                            Style="{StaticResource CaptionTextBlockStyle}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap"

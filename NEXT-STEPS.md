@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.2** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.3** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -13,20 +13,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 ---
 
 ## Open
-
-### v1.2.3 — Multi-language fase 2: overige XAML + code-behind/services
-
-Vervolg op **v1.2.2**, waar de infra staat en werkt — zie die sectie onder *Voltooide versies* voor het mechanisme, de gemeten unpackaged-bevindingen en de sleutelconventie. Hier gaat het puur om strings verplaatsen naar de tabel.
-
-**Scope (~270 strings):**
-- De resterende **17 XAML-bestanden** (SettingsPage is in v1.2.2 gedaan). Zet `xmlns:loc="using:SetupToolbox.Helpers"` en vervang literals door `{loc:Localize Key=…}`.
-- **Code-behind van Pages en Dialogs** — de ~160 Nederlandse literals buiten `TweakService`.
-- **`WingetService`** — `FriendlyError` en `CancelledMessage` stromen door naar de InstallDialog en zijn dus gebruiker-zichtbaar. De nepdata in de `/toasttest`-tak van `App.OnLaunched` verwijst hier al naar.
-- **`DeepCleanService`** — let op: die descriptions worden **runtime met interpolatie** samengesteld (`$"Uninstall registry-entry zonder werkende paden. {aliveResult.Reason} — …"`). Die kunnen geen platte string worden; gebruik `Loc.S(key, args)` met een geparametriseerde format-string.
-
-**Let op — ingebouwde WinUI-strings volgen onze keuze niet.** Dit kostte in v1.2.2 twee ronden: het `NavigationView`-Settings-item en de `ToggleSwitch` On/Off-labels komen uit WinUI's eigen resources via MRT, en die is op unpackaged niet om te buigen. Ze moeten expliciet gezet worden (`settingsItem.Content`, `OnContent`/`OffContent`). Alle 8 ToggleSwitches stonden op SettingsPage en zijn dus al gedaan, maar **controleer per scherm op vergelijkbare ingebouwde teksten** — denk aan `ContentDialog`-knoppen zonder expliciete tekst, `NumberBox`-validatie en `AutoSuggestBox`-placeholders.
-
-**Verifiëren:** `install.log` op `LOC-MISS`-regels na het doorlopen van elk scherm — de service logt elke ontbrekende of onvertaalde key één keer.
 
 ### v1.2.4 — Multi-language fase 3: het tweak-corpus
 
@@ -70,6 +56,19 @@ De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
 **Wat er moet gebeuren:** de site is gebouwd in mei 2026 bij v1.0.0 en is sindsdien niet meer bijgewerkt, terwijl het project 14 patches verder is (toast-notificaties, install-lanes, deep clean-uitbreidingen, accu-fix). Twee doelen: (1) **professioneler uiterlijk**, (2) **inhoud synchroon met wat de app nu daadwerkelijk kan**. Versie + downloadlink komen al live uit de GitHub-API, dus die lopen automatisch mee — maar alleen als er ook echt een nieuwe Release gepubliceerd wordt (zie de release-cadans-notitie hieronder).
 
 Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zodat je in één keer een actueel verhaal kunt neerzetten.
+
+### v1.2.9 — "Wat is er nieuw"-melding na een update
+
+**Gevraagd door user op 2026-08-17.** Na een self-update en de automatische herstart krijgt de gebruiker nu niets te zien: de app komt terug en niets wijst erop dát er iets veranderd is, laat staan wát. Voorstel: bij de eerste start op een nieuw versienummer één compacte melding met de highlights — bv. "Toast-notificaties toegevoegd", "Taalkeuze NL/EN", "Auto-update draait nu ook op accu".
+
+**Wat er al is om op te bouwen:** `GitHubService` kent de huidige `AssemblyVersion` en haalt release-info op; `SettingsService` kan de laatst-getoonde versie onthouden (zelfde patroon als `ParallelInstallsAsked`); `ToastHelper` en de InfoBar in `MainWindow` zijn allebei bestaande kanalen.
+
+**Uit te werken vóór implementatie:**
+- **Waar komt de tekst vandaan?** Meegebakken in de app (een `data/whatsnew.json` per versie, offline en voorspelbaar) versus de GitHub release-notes live ophalen (altijd actueel, maar afhankelijk van netwerk én van hoe netjes de release-body geschreven is). Meegebakken sluit aan op hoe `apps.json` en de vertaaltabellen al werken — en is meteen vertaalbaar, wat bij live release-notes niet kan.
+- **Toast of in-app?** Een toast is makkelijk te missen en werkt niet elevated (zie het MSIX-onderzoek); de InfoBar bovenaan `MainWindow` staat er al voor de update-melding en is de logische plek. Mogelijk allebei.
+- **Trigger-conditie.** "Eerste start nadat het versienummer wijzigde" is de simpele regel, maar die vuurt ook bij een schone eerste installatie — daar wil je 'm juist níét. Onderscheid nodig tussen "geüpdatet" en "nieuw geïnstalleerd".
+- **Hoeveel regels?** Compact houden was de expliciete wens: een handvol bullets, niet de volledige changelog.
+- **Vertaling.** Valt onder de multi-language-reeks: de highlights moeten in beide talen bestaan, dus het formaat moet daar rekening mee houden.
 
 ### Zonder versienummer — release-cadans
 
@@ -135,6 +134,27 @@ Concreet waar dat stukloopt:
 > **Eerlijk over de methode:** dit is beslist op basis van de Microsoft-documentatie plus een inventarisatie van onze eigen call-sites, **niet** met een daadwerkelijk gebouwd en geïnstalleerd MSIX-package. Dat was de oorspronkelijk voorgestelde aanpak, maar de bewijsketen liep al dood vóór dat nodig was: elevatie-model en toast-ondersteuning spreken elkaar tegen ongeacht wat een PoC zou laten zien. Een PoC zou nog wél de AppData-tegenspraak in de docs kunnen beslechten en het split-brain-gedrag hard aantonen — de moeite waard alleen als we hier ooit op terugkomen.
 >
 > **Wat de conclusie zou kúnnen omdraaien:** als Microsoft app-notificaties voor elevated apps gaat ondersteunen, óf als er een manier komt om een packaged app on-demand te eleveren zonder `requireAdministrator`. Tot die tijd: niet heropenen zonder nieuw bewijs.
+
+### v1.2.3 — Multi-language fase 2: alle overige XAML + code-behind en services
+
+**Tweede van vijf fasen.** De infra uit v1.2.2 is nu over de hele app uitgerold, op het tweak-corpus, de bloatware-metadata en de catalogus na (v1.2.4 t/m v1.2.6). De stringtabellen groeiden van **~180 naar 439 keys**, in beide talen even groot.
+
+**Wat er omgezet is:**
+- **Alle 17 resterende XAML-bestanden** — 141 tekstattributen. Enige literal die bewust blijft staan is `Title="Setup Toolbox"` in `MainWindow.xaml`: dat is de app-naam, identiek in beide talen, en wordt bij het starten sowieso vanuit code gezet.
+- **Code-behind van alle Pages en Dialogs** — inclusief de samengestelde voortgangsteksten ("Installing — 3 of 12 done"), de statuslabels van de uninstall-dialogs (`Waiting` / `Working...` / `Removed`) en de samenvattingsregels die met `string.Join` opgebouwd worden.
+- **`WingetService.FriendlyError`** — de complete exit-code-mapping (13 meldingen). Deze stromen door naar de InstallDialog en waren het meest zichtbare stuk Nederlands dat overbleef.
+- **`DeepCleanService`** — alle 17 item-descriptions, waarvan 10 runtime met interpolatie worden samengesteld; die zijn geparametriseerde format-strings geworden.
+- **`RestorePointService.FormatAgo`**, `SnapshotService`, `ScheduleDialog`-omschrijvingen en de `InstalledAppEntry`-brontoelichtingen.
+
+**De drie sentinel-constanten in `WingetService` zijn van `const` naar `static` property gegaan.** `RequiresUnelevatedMessage`, `CancelledMessage` en `MsStoreOpenedMessage` worden zowel getóónd als vergeleken (`message == MsStoreOpenedMessage`). Vertaald blijft die vergelijking kloppen zolang schrijven en vergelijken in dezelfde taal gebeuren, en dat is gegarandeerd: de install-dialog is modaal, dus de taalkeuze in Settings is tijdens een batch niet bereikbaar. Staat als comment bij de declaratie.
+
+**Meervoud opgelost, niet ontweken.** De `item(s)`-constructie is vervangen door `Loc.Plural(key, count)` met `.one`/`.other`-varianten — die haakjes-ontwijking werkt in het Nederlands sowieso niet.
+
+> **Geverifieerd (2026-08-17):** build 0 errors; app gestart en door de Tweaks-pagina gelopen met de taal op *Windows volgen* → Engels. Alle fase-2-strings resolven (`Restart Explorer`, `Search tweaks`, `6 / 11 active`, `Fully applied`, `Discard`). **Geen enkele `LOC-MISS`** in `install.log`, geen `crash.log`. De nog Nederlandse tekst die je op dat scherm ziet — de categorie-blurbs zoals "File Explorer weergave & gedrag" — is exact het corpus dat in v1.2.4 aan de beurt is.
+>
+> **Niet getest:** de install-, uninstall- en deep-clean-flows zijn niet end-to-end gedraaid; die vereisen echte installs. De strings erin zijn wel geverifieerd op resolutie via de tabelvergelijking (beide tabellen 439 keys, geen verschil).
+
+**Werkwijze-notitie voor de volgende fasen:** de vervangingen zijn gedaan met een mappingbestand (`FILE|||OUD|||NIEUW`) dat door één perl-pass wordt toegepast, met letterlijke matching. Twee lessen die tijd kostten: een multi-byte delimiter (`§`) breekt `IFS`-splitsing in bash en produceerde onbruikbare bestanden — gebruik ASCII; en patronen met em-dashes moeten uit een als UTF-8 gedecodeerd bestand komen, niet uit de perl-broncode, anders matchen ze niet.
 
 ### v1.2.2 — Multi-language fase 1: infra + live toggle + SettingsPage als proof
 

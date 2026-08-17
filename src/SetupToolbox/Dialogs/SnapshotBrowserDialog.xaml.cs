@@ -81,21 +81,21 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
         };
         var restoreBtn = new Button
         {
-            Content = "Herstel",
+            Content = App.Loc.S("snapshot.restore"),
             Style = (Style)Application.Current.Resources["AccentButtonStyle"],
             Flyout = BuildConfirmFlyout(
-                title: "Registry herstellen?",
-                body: $"Alle registry-waardes worden teruggezet naar {snap.CreatedAt.ToLocalTime():dd MMM HH:mm}. Mogelijk vraagt Windows UAC voor policy-keys.",
-                confirmText: "Ja, herstel",
+                title: App.Loc.S("snapshot.restore.title"),
+                body: App.Loc.S("snapshot.restore.body", snap.CreatedAt.ToLocalTime().ToString("dd MMM HH:mm", App.Loc.Culture)),
+                confirmText: App.Loc.S("snapshot.restore.confirm"),
                 onConfirm: async () => await OnRestoreConfirmed(snap))
         };
         var deleteBtn = new Button
         {
-            Content = "Verwijder",
+            Content = App.Loc.S("snapshot.delete"),
             Flyout = BuildConfirmFlyout(
-                title: "Snapshot verwijderen?",
+                title: App.Loc.S("snapshot.delete.title"),
                 body: $"\"{snap.Description}\" wordt permanent van schijf verwijderd.",
-                confirmText: "Verwijder",
+                confirmText: App.Loc.S("snapshot.delete.confirm"),
                 onConfirm: () => { OnDeleteConfirmed(snap); return Task.CompletedTask; })
         };
         buttonStack.Children.Add(restoreBtn);
@@ -134,7 +134,7 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
             Spacing = 6,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var cancelBtn = new Button { Content = "Annuleer" };
+        var cancelBtn = new Button { Content = App.Loc.S("common.cancel") };
         cancelBtn.Click += (s, e) => flyout.Hide();
         var confirmBtn = new Button
         {
@@ -159,28 +159,28 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
 
         if (result.Cancelled)
         {
-            ShowResult(InfoBarSeverity.Warning, "Herstel onderbroken",
+            ShowResult(InfoBarSeverity.Warning, App.Loc.S("snapshot.restore.interrupted"),
                 "UAC werd geweigerd voor de elevated registry-keys. De HKCU-keys zijn wel teruggezet.");
         }
         else if (result.FailedCount == 0)
         {
-            ShowResult(InfoBarSeverity.Success, $"Hersteld ({result.SuccessCount} keys)",
-                "Registry-staat is teruggezet. Herstart eventueel Explorer (Tweaks tab > 'Restart Explorer') om shell-cached changes door te voeren.");
+            ShowResult(InfoBarSeverity.Success, App.Loc.S("snapshot.restore.ok.title", result.SuccessCount),
+                App.Loc.S("snapshot.restore.ok.body"));
             // Tweaks tab re-detect gebeurt automatisch bij volgende OnNavigatedTo.
         }
         else
         {
             var preview = string.Join("\n", result.FailureMessages);
             if (preview.Length > 240) preview = preview.Substring(0, 240) + "…";
-            ShowResult(InfoBarSeverity.Error, $"{result.FailedCount} keys faalden",
-                $"{result.SuccessCount} succesvol hersteld.\n{preview}");
+            ShowResult(InfoBarSeverity.Error, App.Loc.S("snapshot.restore.failed.title", result.FailedCount),
+                App.Loc.S("snapshot.restore.failed.body", result.SuccessCount, preview));
         }
     }
 
     private void OnDeleteConfirmed(SnapshotMetadata snap)
     {
         App.Snapshots.Delete(snap.Id);
-        ShowResult(InfoBarSeverity.Success, "Snapshot verwijderd",
+        ShowResult(InfoBarSeverity.Success, App.Loc.S("snapshot.deleted.title"),
             $"\"{snap.Description}\" is van schijf verwijderd.");
         RefreshList();
     }

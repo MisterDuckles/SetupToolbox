@@ -586,10 +586,17 @@ public sealed class WingetService
     // exit 0x8A150056 "The installer cannot be run from an administrator context").
     // De InstallDialog detecteert deze message na een elevated batch en draait die
     // apps automatisch nog een keer in-process (onge-eleveerd).
-    public const string RequiresUnelevatedMessage = "Vereist onge-eleveerde install";
+    //
+    // v1.2.3: deze drie sentinels zijn van const naar property gegaan omdat ze
+    // óók aan de gebruiker getoond worden. Ze blijven daarnaast als sentinel
+    // vergeleken (message == MsStoreOpenedMessage), en dat blijft kloppen zolang
+    // schrijven en vergelijken in dezelfde taal gebeuren. Dat is gegarandeerd: de
+    // install-dialog is modaal, dus de taalkeuze in Settings is tijdens een batch
+    // niet bereikbaar.
+    public static string RequiresUnelevatedMessage => App.Loc.S("winget.requiresUnelevated");
 
     // Sentinel (v1.0.7): user heeft de batch geannuleerd via de Annuleren-knop.
-    public const string CancelledMessage = "Geannuleerd";
+    public static string CancelledMessage => App.Loc.S("winget.cancelled");
 
     // Sentinel (v1.0.7 D): winget kon de msstore-install niet via z'n eigen IPC
     // doen (cert-error 0x8A15005E — gebroken cert-pin laag tussen winget en
@@ -598,7 +605,7 @@ public sealed class WingetService
     // rechtstreeks openen op de productpagina (`ms-windows-store://pdp/?productid=…`).
     // User moet daar 1× op "Halen" klikken; updates lopen daarna via winget
     // (healthy) of via de Store-app zelf in de achtergrond (broken).
-    public const string MsStoreOpenedMessage = "Geopend in Microsoft Store";
+    public static string MsStoreOpenedMessage => App.Loc.S("winget.openedInStore");
 
     // Sentinel (E1): winget geeft aan dat de installer een installatielocatie
     // vereist. InstallDialog toont een pad-dialog en herprobeert in-process
@@ -904,37 +911,37 @@ public sealed class WingetService
         {
             case 0x800704C7: // ERROR_CANCELLED — UAC-prompt niet (op tijd) geaccepteerd
             case 0x8A15010C: // INSTALL_CANCELLED_BY_USER
-                return "Geannuleerd — UAC niet (op tijd) geaccepteerd. Probeer opnieuw.";
+                return App.Loc.S("winget.err.cancelledUac");
             case 0x8A150006: // SHELLEXEC_INSTALL_FAILED — installer gaf een fout terug
-                return "Installer mislukte (afgebroken, UAC geweigerd of al bezig). Probeer opnieuw.";
+                return App.Loc.S("winget.err.installerFailed");
             case 0x8A150011: // INSTALLER_HASH_MISMATCH — download corrupt of manifest-hash verouderd
-                return "Download-verificatie faalde (hash). Probeer later opnieuw.";
+                return App.Loc.S("winget.err.hashMismatch");
             case 0x8A150101: // INSTALL_PACKAGE_IN_USE
             case 0x8A150103: // INSTALL_FILE_IN_USE
             case 0x8A150111: // INSTALL_PACKAGE_IN_USE_BY_APPLICATION
-                return "App of bestand is in gebruik — sluit 'm en probeer opnieuw.";
+                return App.Loc.S("winget.err.inUse");
             case 0x8A150102: // INSTALL_INSTALL_IN_PROGRESS
-                return "Er loopt al een installatie — even wachten en opnieuw proberen.";
+                return App.Loc.S("winget.err.installInProgress");
             case 0x8A150105: // INSTALL_DISK_FULL
-                return "Schijf vol — maak ruimte vrij en probeer opnieuw.";
+                return App.Loc.S("winget.err.diskFull");
             case 0x8A150001: // INTERNAL_ERROR (o.a. na VM-pauze / onverwachte winget-staat)
-                return "Winget interne fout. Probeer opnieuw.";
+                return App.Loc.S("winget.err.internal");
             case 0x8A15005E: // PINNED_CERTIFICATE_MISMATCH — msstore-bronfout op verse machines
-                return "Winget-bronfout (certificaat). Draai in een terminal: winget source reset --force";
+                return App.Loc.S("winget.err.certificate");
             case 0x80070005: // E_ACCESSDENIED
-                return "Toegang geweigerd — vereist mogelijk admin-rechten.";
+                return App.Loc.S("winget.err.accessDenied");
         }
 
         // Tekst-fallback voor codes die we niet expliciet mappen.
         if (combined.Contains("No applicable installer", StringComparison.OrdinalIgnoreCase))
-            return "Geen geschikte installer voor dit systeem (architectuur/scope).";
+            return App.Loc.S("winget.err.noInstaller");
         if (combined.Contains("No package found", StringComparison.OrdinalIgnoreCase))
-            return "Pakket niet gevonden in winget.";
+            return App.Loc.S("winget.err.noPackage");
         if (combined.Contains("server certificate did not match", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("Failed when searching source", StringComparison.OrdinalIgnoreCase))
-            return "Winget-bronfout (certificaat). Draai in een terminal: winget source reset --force";
+            return App.Loc.S("winget.err.certificate");
 
-        return $"Install mislukt (winget exit 0x{exitCode:X8}). Details in de log (Settings → Diagnostiek → Open logmap).";
+        return App.Loc.S("winget.err.generic", exitCode.ToString("X8"));
     }
 
     // Install-logging via de gedeelde Diagnostics-gate (Settings-toggle

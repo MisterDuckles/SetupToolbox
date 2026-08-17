@@ -65,7 +65,7 @@ public sealed partial class InstallDialog : ContentDialog
         if (_installFinished) return;            // Sluiten — laat de default-close door
         args.Cancel = true;                      // dialog open houden tijdens cancel-wind-down
         _cancelCts?.Cancel();
-        PrimaryButtonText = "Annuleren...";
+        PrimaryButtonText = App.Loc.S("common.cancelling");
         IsPrimaryButtonEnabled = false;
     }
 
@@ -87,7 +87,7 @@ public sealed partial class InstallDialog : ContentDialog
 
             if (!fallbackEnabled)
             {
-                item.Message = "Manual downloads disabled in Settings";
+                item.Message = App.Loc.S("install.manualDisabled");
                 item.State = InstallItemState.Skipped;
                 continue;
             }
@@ -99,12 +99,12 @@ public sealed partial class InstallDialog : ContentDialog
                     FileName = app.DownloadUrl,
                     UseShellExecute = true   // routes via shell → opent default browser
                 });
-                item.Message = "Opened vendor download page in browser";
+                item.Message = App.Loc.S("install.openedVendorPage");
                 item.State = InstallItemState.ManualOpened;
             }
             catch (Exception ex)
             {
-                item.Message = $"Could not open URL: {ex.Message}";
+                item.Message = App.Loc.S("install.couldNotOpenUrl", ex.Message);
                 item.State = InstallItemState.Failed;
             }
         }
@@ -121,7 +121,7 @@ public sealed partial class InstallDialog : ContentDialog
     private async Task RunWingetInstallsAsync(IReadOnlyList<AppModel> apps)
     {
         var maxParallelism = App.Settings.MaxParallelInstalls;
-        _parallelLabel = maxParallelism > 1 ? $" ({maxParallelism} in parallel)" : string.Empty;
+        _parallelLabel = maxParallelism > 1 ? App.Loc.S("progress.parallelSuffix", maxParallelism) : string.Empty;
         _wingetTotal = apps.Count;
         _completedCount = 0;
 
@@ -132,10 +132,10 @@ public sealed partial class InstallDialog : ContentDialog
         // cancelt de CTS en houdt de dialog open). Na de batch zet UpdateSummaryAndButtons
         // de tekst weer terug naar "Sluiten".
         _cancelCts = new CancellationTokenSource();
-        PrimaryButtonText = "Annuleren";
+        PrimaryButtonText = App.Loc.S("common.cancel");
         IsPrimaryButtonEnabled = true;
 
-        ProgressHeader.Text = $"Installing {_wingetTotal} app{(_wingetTotal == 1 ? "" : "s")}{_parallelLabel}";
+        ProgressHeader.Text = App.Loc.S("progress.installing", App.Loc.Plural("common.appCount", _wingetTotal), _parallelLabel);
 
         var progress = new Progress<InstallProgress>(OnProgress);
 
@@ -181,7 +181,7 @@ public sealed partial class InstallDialog : ContentDialog
                         var it = _items.First(i => i.WingetId == a.WingetId);
                         it.Reset();
                         it.State = InstallItemState.Installing;
-                        it.Message = "Herprobeert zonder admin...";
+                        it.Message = App.Loc.S("install.retryUnelevated");
                     }
                     _completedCount -= retryApps.Count;   // worden opnieuw geteld in OnProgress
                     await App.Winget.InstallAppsAsync(retryApps, progress, maxParallelism, _cancelCts.Token);
@@ -219,7 +219,7 @@ public sealed partial class InstallDialog : ContentDialog
         _cancelCts = null;
 
         // Knop terug naar "Sluiten" (default close-gedrag via de Primary-handler).
-        PrimaryButtonText = "Sluiten";
+        PrimaryButtonText = App.Loc.S("common.close");
 
         UpdateSummaryAndButtons();
     }
@@ -238,15 +238,15 @@ public sealed partial class InstallDialog : ContentDialog
             || string.IsNullOrWhiteSpace(chosenPath))
         {
             item.State = InstallItemState.Skipped;
-            item.Message = "Overgeslagen — geen locatie gekozen";
+            item.Message = App.Loc.S("install.skippedNoLocation");
             _completedCount++;
-            ProgressHeader.Text = $"Installing — {_completedCount} of {_wingetTotal} done{_parallelLabel}";
+            ProgressHeader.Text = App.Loc.S("progress.installingOf", _completedCount, _wingetTotal, _parallelLabel);
             return;
         }
 
         item.State = InstallItemState.Installing;
         item.AdvanceStage(1);
-        item.Message = "Installeert op opgegeven locatie...";
+        item.Message = App.Loc.S("install.installingToLocation");
 
         var locationProgress = new Progress<string>(msg =>
             OnProgress(new InstallProgress(0, _wingetTotal, a, InstallPhase.Running, msg)));
@@ -282,20 +282,20 @@ public sealed partial class InstallDialog : ContentDialog
         HadSuccessfulInstall = installed > 0 || already > 0 || openedInStore > 0;
 
         var parts = new List<string>();
-        if (installed > 0)     parts.Add($"{installed} installed");
-        if (already > 0)       parts.Add($"{already} already installed");
-        if (failed > 0)        parts.Add($"{failed} failed");
-        if (manualOpened > 0)  parts.Add($"{manualOpened} manual download{(manualOpened == 1 ? "" : "s")} opened");
-        if (openedInStore > 0) parts.Add($"{openedInStore} opened in Store");
-        if (skipped > 0)       parts.Add($"{skipped} skipped");
-        ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : "No installable apps selected";
+        if (installed > 0)     parts.Add(App.Loc.S("summary.installed", installed));
+        if (already > 0)       parts.Add(App.Loc.S("summary.alreadyInstalled", already));
+        if (failed > 0)        parts.Add(App.Loc.S("summary.failed", failed));
+        if (manualOpened > 0)  parts.Add(App.Loc.S("summary.manualOpened", manualOpened));
+        if (openedInStore > 0) parts.Add(App.Loc.S("summary.openedInStore", openedInStore));
+        if (skipped > 0)       parts.Add(App.Loc.S("summary.skipped", skipped));
+        ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : App.Loc.S("progress.noInstallable");
 
         _installFinished = true;
         IsPrimaryButtonEnabled = true;
 
         if (failedWinget > 0)
         {
-            SecondaryButtonText = failedWinget == 1 ? "Retry failed app" : $"Retry {failedWinget} failed apps";
+            SecondaryButtonText = failedWinget == 1 ? App.Loc.S("install.retryOne") : App.Loc.S("install.retryMany", failedWinget);
             IsSecondaryButtonEnabled = true;
         }
         else
@@ -404,7 +404,7 @@ public sealed partial class InstallDialog : ContentDialog
         // tegelijk, name flikkert tussen winners). Tonen we count-based:
         // "Installing 3 of 8 done (2 in parallel)". Bij sequential is het
         // gedrag effectief identiek aan de oude per-app header.
-        ProgressHeader.Text = $"Installing — {_completedCount} of {_wingetTotal} done{_parallelLabel}";
+        ProgressHeader.Text = App.Loc.S("progress.installingOf", _completedCount, _wingetTotal, _parallelLabel);
     }
 
     private void InstallDialog_Closing(ContentDialog sender, ContentDialogClosingEventArgs args)

@@ -271,17 +271,17 @@ public sealed partial class DebloatPage : Page
             InstalledList.ItemsSource = null;
             InstalledList.Visibility = Visibility.Collapsed;
             InstalledEmptyText.Text = q.Length > 0
-                ? $"No installed apps matching \"{q}\""
+                ? App.Loc.S("debloat.empty.query", q)
                 : _filter == InstalledFilter.System
-                    ? "Geen Windows system components gedetecteerd."
-                    : $"No apps in source filter \"{_filter}\"";
+                    ? App.Loc.S("debloat.empty.system")
+                    : App.Loc.S("debloat.empty.filter", _filter);
             InstalledEmptyText.Visibility = Visibility.Visible;
         }
         else if (_allEntries.Count == 0)
         {
             InstalledList.ItemsSource = null;
             InstalledList.Visibility = Visibility.Collapsed;
-            InstalledEmptyText.Text = "Geen geïnstalleerde apps gedetecteerd.";
+            InstalledEmptyText.Text = App.Loc.S("debloat.empty.none");
             InstalledEmptyText.Visibility = Visibility.Visible;
         }
         else
@@ -392,7 +392,7 @@ public sealed partial class DebloatPage : Page
     private void UpdateBloatwareSelectAllButton()
     {
         var allSelected = _visibleMicrosoftItems.Count > 0 && _visibleMicrosoftItems.All(b => b.IsSelected);
-        BloatwareSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        BloatwareSelectAllButton.Content = App.Loc.S(allSelected ? "common.deselectAll" : "common.selectAll");
         BloatwareSelectAllButton.IsEnabled = _visibleMicrosoftItems.Count > 0;
     }
 
@@ -415,7 +415,7 @@ public sealed partial class DebloatPage : Page
     private void UpdateOemSelectAllButton()
     {
         var allSelected = _oemItems.Count > 0 && _oemItems.All(b => b.IsSelected);
-        OemSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        OemSelectAllButton.Content = App.Loc.S(allSelected ? "common.deselectAll" : "common.selectAll");
         OemSelectAllButton.IsEnabled = _oemItems.Count > 0;
     }
 
@@ -491,17 +491,17 @@ public sealed partial class DebloatPage : Page
         // zelf naar voren via headers en source-badges.
         var hasElevated = bloatwareSelected.Count > 0 || appsSelected.Any(en => en.Source != InstalledSource.Winget);
         var content = hasElevated
-            ? "This removes the selected apps. A UAC prompt will appear because some items require administrator rights. Continue?"
-            : "This removes the selected apps via winget. Continue?";
+            ? App.Loc.S("debloat.uninstall.confirm.uac")
+            : App.Loc.S("debloat.uninstall.confirm.plain");
 
         var confirm = new ContentDialog
         {
             Title = totalCount == 1
-                ? $"Uninstall {(bloatwareSelected.Count == 1 ? bloatwareSelected[0].DisplayName : appsSelected[0].DisplayName)}?"
-                : $"Uninstall {totalCount} apps?",
+                ? App.Loc.S("debloat.uninstall.confirm.titleOne", bloatwareSelected.Count == 1 ? bloatwareSelected[0].DisplayName : appsSelected[0].DisplayName)
+                : App.Loc.S("debloat.uninstall.confirm.titleMany", totalCount),
             Content = content,
-            PrimaryButtonText = "Uninstall",
-            CloseButtonText = "Cancel",
+            PrimaryButtonText = App.Loc.S("debloat.uninstall.button"),
+            CloseButtonText = App.Loc.S("common.cancel"),
             DefaultButton = ContentDialogButton.None,
             PrimaryButtonStyle = (Style)Application.Current.Resources["DialogPrimaryButtonStyle"],
             CloseButtonStyle = (Style)Application.Current.Resources["DialogDefaultButtonStyle"],
@@ -622,19 +622,19 @@ public sealed partial class DebloatPage : Page
         // ie "het werkt niet" wanneer de scan niets vindt (= meestal het geval bij
         // winget-uninstalls die zichzelf netjes opruimen). InfoBar blijft staan
         // tot user 'm zelf sluit.
-        var appsLabel = refs.Count == 1 ? refs[0].DisplayName : $"{refs.Count} apps";
+        var appsLabel = refs.Count == 1 ? refs[0].DisplayName : App.Loc.S("debloat.appsLabel", refs.Count);
         if (leftovers.Count == 0)
         {
             CleanupResultBar.Severity = InfoBarSeverity.Success;
-            CleanupResultBar.Title = "Cleanup scan: no leftovers found";
-            CleanupResultBar.Message = $"Scanned registry / Program Files / AppData for traces of {appsLabel}. Niets gevonden — opruiming compleet.";
+            CleanupResultBar.Title = App.Loc.S("debloat.cleanup.noneFound.title");
+            CleanupResultBar.Message = App.Loc.S("debloat.cleanup.noneFound.body", appsLabel);
             CleanupResultBar.IsOpen = true;
             return;
         }
 
         CleanupResultBar.Severity = InfoBarSeverity.Informational;
-        CleanupResultBar.Title = $"Cleanup scan: {leftovers.Count} leftover item(s) found";
-        CleanupResultBar.Message = $"Found possible traces of {appsLabel} — review and pick what to delete.";
+        CleanupResultBar.Title = App.Loc.S("debloat.cleanup.found.title", App.Loc.Plural("common.itemCount", leftovers.Count));
+        CleanupResultBar.Message = App.Loc.S("debloat.cleanup.found.body", appsLabel);
         CleanupResultBar.IsOpen = true;
 
         var cleanup = new LeftoverCleanupDialog(leftovers, App.LeftoverScanner) { XamlRoot = this.XamlRoot };
@@ -646,17 +646,17 @@ public sealed partial class DebloatPage : Page
         if (cleanup.DeleteResult is { SuccessCount: > 0 })
         {
             CleanupResultBar.Severity = InfoBarSeverity.Success;
-            CleanupResultBar.Title = $"Cleanup done: {cleanup.DeleteResult.SuccessCount} item(s) deleted";
+            CleanupResultBar.Title = App.Loc.S("debloat.cleanup.done.title", App.Loc.Plural("common.itemCount", cleanup.DeleteResult.SuccessCount));
             CleanupResultBar.Message = cleanup.DeleteResult.FailedCount > 0
-                ? $"{cleanup.DeleteResult.FailedCount} item(s) couldn't be deleted — see details in the dialog log."
-                : "All selected leftovers were removed.";
+                ? App.Loc.S("debloat.cleanup.done.partial", App.Loc.Plural("common.itemCount", cleanup.DeleteResult.FailedCount))
+                : App.Loc.S("debloat.cleanup.done.all");
             await LoadInstalledAsync(forceRefresh: false);
         }
         else if (cleanup.DeleteResult is { Cancelled: true })
         {
             CleanupResultBar.Severity = InfoBarSeverity.Warning;
-            CleanupResultBar.Title = "Cleanup cancelled";
-            CleanupResultBar.Message = "UAC prompt was declined — no leftovers were deleted.";
+            CleanupResultBar.Title = App.Loc.S("debloat.cleanup.cancelled.title");
+            CleanupResultBar.Message = App.Loc.S("debloat.cleanup.cancelled.body");
         }
     }
 

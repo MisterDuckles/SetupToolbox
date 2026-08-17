@@ -39,14 +39,14 @@ public sealed partial class UninstallDialog : ContentDialog
         var total = _apps.Count;
         if (total == 0)
         {
-            ProgressHeader.Text = "No apps to uninstall";
+            ProgressHeader.Text = App.Loc.S("progress.noApps");
             _finished = true;
             IsPrimaryButtonEnabled = true;
             return;
         }
 
         _completedCount = 0;
-        ProgressHeader.Text = $"Uninstalling {total} app{(total == 1 ? "" : "s")}";
+        ProgressHeader.Text = App.Loc.S("progress.uninstalling", App.Loc.Plural("common.appCount", total));
 
         var progress = new System.Progress<UninstallProgress>(OnProgress);
         var results = await App.Winget.UninstallAppsAsync(_apps, progress);
@@ -56,9 +56,9 @@ public sealed partial class UninstallDialog : ContentDialog
         if (successCount > 0) HadSuccessfulUninstall = true;
 
         var parts = new List<string>();
-        if (successCount > 0) parts.Add($"{successCount} uninstalled");
-        if (failCount > 0)    parts.Add($"{failCount} failed");
-        ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : "Done";
+        if (successCount > 0) parts.Add(App.Loc.S("summary.uninstalled", successCount));
+        if (failCount > 0)    parts.Add(App.Loc.S("summary.failed", failCount));
+        ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : App.Loc.S("common.done");
 
         _finished = true;
         IsPrimaryButtonEnabled = true;
@@ -94,7 +94,7 @@ public sealed partial class UninstallDialog : ContentDialog
                 break;
         }
 
-        ProgressHeader.Text = $"Uninstalling — {_completedCount} of {_apps.Count} done";
+        ProgressHeader.Text = App.Loc.S("progress.uninstallingOf", _completedCount, _apps.Count);
     }
 
     private void UninstallDialog_Closing(ContentDialog sender, ContentDialogClosingEventArgs args)
@@ -176,10 +176,10 @@ public sealed class UninstallItem : INotifyPropertyChanged
 
     public string StateLabel => _state switch
     {
-        UninstallItemState.Pending => "Waiting",
-        UninstallItemState.Running => "Working...",
-        UninstallItemState.Success => "Uninstalled",
-        UninstallItemState.Failed => "Failed",
+        UninstallItemState.Pending => App.Loc.S("common.waiting"),
+        UninstallItemState.Running => App.Loc.S("common.working"),
+        UninstallItemState.Success => App.Loc.S("common.uninstalled"),
+        UninstallItemState.Failed => App.Loc.S("common.failed"),
         _ => string.Empty
     };
 

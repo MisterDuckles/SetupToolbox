@@ -110,7 +110,7 @@ public sealed partial class DeepCleanPage : Page
             ScanOrphanedButton.IsEnabled = true;
         }
 
-        var label = kind == ScanKind.Caches ? "Windows caches" : "Leftovers";
+        var label = App.Loc.S(kind == ScanKind.Caches ? "deepclean.label.caches" : "deepclean.label.leftovers");
         if (items.Count == 0)
         {
             // Empty-state panel toont een groen check-icon + heading + uitleg.
@@ -120,13 +120,13 @@ public sealed partial class DeepCleanPage : Page
             // het empty-panel zegt al hetzelfde.
             if (!isAutoRefresh) CleanupResultBar.IsOpen = false;
             EmptyStateTitle.Text = isAutoRefresh
-                ? $"{label}: cleanup verified"
-                : "Looking clean!";
+                ? App.Loc.S("deepclean.verified.title", label)
+                : App.Loc.S("deepclean.clean.title");
             EmptyStateDescription.Text = isAutoRefresh
-                ? "Alle aangevinkte items zijn verwijderd en blijken nu echt weg te zijn."
+                ? App.Loc.S("deepclean.verified.body")
                 : kind == ScanKind.Caches
-                    ? "Alle bekende cache-locaties zijn al leeg of bestaan niet."
-                    : "Geen leftovers gevonden — alles op je systeem matcht met een geïnstalleerde app.";
+                    ? App.Loc.S("deepclean.caches.empty")
+                    : App.Loc.S("deepclean.leftovers.empty");
             EmptyStatePanel.Visibility = Visibility.Visible;
             return;
         }
@@ -139,18 +139,18 @@ public sealed partial class DeepCleanPage : Page
         if (isAutoRefresh)
         {
             CleanupResultBar.Severity = InfoBarSeverity.Warning;
-            CleanupResultBar.Title = $"{label}: {items.Count} item(s) still present after cleanup";
-            CleanupResultBar.Message = "Sommige items konden niet verwijderd worden (typisch: in gebruik, of permissions). Klik nogmaals \"Scan\" om opnieuw te proberen.";
+            CleanupResultBar.Title = App.Loc.S("deepclean.stillPresent.title", label, App.Loc.Plural("common.itemCount", items.Count));
+            CleanupResultBar.Message = App.Loc.S("deepclean.stillPresent.body");
             CleanupResultBar.IsOpen = true;
             return;
         }
 
         var totalSize = items.Sum(i => i.SizeBytes);
         CleanupResultBar.Severity = InfoBarSeverity.Informational;
-        CleanupResultBar.Title = $"{label}: {items.Count} item(s) found ({App.Loc.FormatBytes(totalSize)})";
+        CleanupResultBar.Title = App.Loc.S("deepclean.found.title", label, App.Loc.Plural("common.itemCount", items.Count), App.Loc.FormatBytes(totalSize));
         if (kind == ScanKind.Caches)
         {
-            CleanupResultBar.Message = "Review and pick what to delete.";
+            CleanupResultBar.Message = App.Loc.S("deepclean.found.simple");
         }
         else
         {
@@ -166,17 +166,17 @@ public sealed partial class DeepCleanPage : Page
             var serviceCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedService);
             var hkcuCount = items.Count(i => i.Category == DeepCleanCategory.OrphanedHkcuVendor);
             var parts = new List<string>();
-            if (folderCount > 0) parts.Add($"{folderCount} folders");
-            if (regCount > 0) parts.Add($"{regCount} registry");
-            if (appPathCount > 0) parts.Add($"{appPathCount} App Paths");
-            if (muiCount > 0) parts.Add($"{muiCount} MUIcache");
-            if (classCount > 0) parts.Add($"{classCount} class handlers");
-            if (shortcutCount > 0) parts.Add($"{shortcutCount} shortcuts");
-            if (taskCount > 0) parts.Add($"{taskCount} scheduled tasks");
-            if (firewallCount > 0) parts.Add($"{firewallCount} firewall rules");
-            if (serviceCount > 0) parts.Add($"{serviceCount} services");
+            if (folderCount > 0) parts.Add(App.Loc.S("deepclean.part.folders", folderCount));
+            if (regCount > 0) parts.Add(App.Loc.S("deepclean.part.registry", regCount));
+            if (appPathCount > 0) parts.Add(App.Loc.S("deepclean.part.appPaths", appPathCount));
+            if (muiCount > 0) parts.Add(App.Loc.S("deepclean.part.muicache", muiCount));
+            if (classCount > 0) parts.Add(App.Loc.S("deepclean.part.classHandlers", classCount));
+            if (shortcutCount > 0) parts.Add(App.Loc.S("deepclean.part.shortcuts", shortcutCount));
+            if (taskCount > 0) parts.Add(App.Loc.S("deepclean.part.tasks", taskCount));
+            if (firewallCount > 0) parts.Add(App.Loc.S("deepclean.part.firewall", firewallCount));
+            if (serviceCount > 0) parts.Add(App.Loc.S("deepclean.part.services", serviceCount));
             if (hkcuCount > 0) parts.Add($"{hkcuCount} HKCU vendor keys");
-            CleanupResultBar.Message = $"{string.Join(" · ", parts)}. Review and pick what to delete.";
+            CleanupResultBar.Message = App.Loc.S("deepclean.found.breakdown", string.Join(" · ", parts));
         }
         CleanupResultBar.IsOpen = true;
 
@@ -203,10 +203,10 @@ public sealed partial class DeepCleanPage : Page
         if (dialog.DeleteResult is { SuccessCount: > 0 })
         {
             CleanupResultBar.Severity = InfoBarSeverity.Success;
-            CleanupResultBar.Title = $"{label}: {dialog.DeleteResult.SuccessCount} item(s) deleted";
+            CleanupResultBar.Title = App.Loc.S("deepclean.deleted.title", label, App.Loc.Plural("common.itemCount", dialog.DeleteResult.SuccessCount));
             CleanupResultBar.Message = dialog.DeleteResult.FailedCount > 0
-                ? $"{App.Loc.FormatBytes(dialog.DeleteResult.BytesFreed)} freed · {dialog.DeleteResult.FailedCount} item(s) couldn't be deleted."
-                : $"{App.Loc.FormatBytes(dialog.DeleteResult.BytesFreed)} freed.";
+                ? App.Loc.S("deepclean.deleted.partial", App.Loc.FormatBytes(dialog.DeleteResult.BytesFreed), App.Loc.Plural("common.itemCount", dialog.DeleteResult.FailedCount))
+                : App.Loc.S("deepclean.deleted.all", App.Loc.FormatBytes(dialog.DeleteResult.BytesFreed));
             CleanupResultBar.IsOpen = true;
 
             // Auto-refresh: na een succesvolle delete-batch dezelfde scan
@@ -221,8 +221,8 @@ public sealed partial class DeepCleanPage : Page
         else if (dialog.DeleteResult is { Cancelled: true })
         {
             CleanupResultBar.Severity = InfoBarSeverity.Warning;
-            CleanupResultBar.Title = $"{label}: cleanup cancelled";
-            CleanupResultBar.Message = "UAC prompt was declined — nothing was deleted.";
+            CleanupResultBar.Title = App.Loc.S("deepclean.cancelled.title", label);
+            CleanupResultBar.Message = App.Loc.S("deepclean.cancelled.body");
             CleanupResultBar.IsOpen = true;
         }
     }

@@ -51,7 +51,7 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
     private async void OnOpened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
         var total = _items.Count;
-        ProgressHeader.Text = $"Removing {total} bloatware item{(total == 1 ? "" : "s")}";
+        ProgressHeader.Text = App.Loc.S("progress.removing", App.Loc.Plural("common.itemCount", total));
 
         var progress = new System.Progress<BloatwareProgress>(OnProgress);
         var result = await _service.UninstallBatchAsync(_items, progress, _restorePointDescription);
@@ -78,14 +78,14 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
 
         if (result.Cancelled)
         {
-            ProgressHeader.Text = "Cancelled — UAC prompt declined";
+            ProgressHeader.Text = App.Loc.S("progress.cancelledUac");
         }
         else
         {
             var parts = new List<string>();
-            if (result.SuccessCount > 0) parts.Add($"{result.SuccessCount} removed");
-            if (result.FailedCount > 0)  parts.Add($"{result.FailedCount} failed");
-            ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : "Done";
+            if (result.SuccessCount > 0) parts.Add(App.Loc.S("summary.removed", result.SuccessCount));
+            if (result.FailedCount > 0)  parts.Add(App.Loc.S("summary.failed", result.FailedCount));
+            ProgressHeader.Text = parts.Count > 0 ? string.Join(", ", parts) : App.Loc.S("common.done");
         }
         UacHint.Visibility = Visibility.Collapsed;
 
@@ -119,7 +119,7 @@ public sealed partial class BloatwareUninstallDialog : ContentDialog
         }
 
         var done = _entries.Count(e => e.State is BloatwareUninstallState.Success or BloatwareUninstallState.Failed);
-        ProgressHeader.Text = $"Removing — {done} of {_items.Count} done";
+        ProgressHeader.Text = App.Loc.S("progress.removingOf", done, _items.Count);
     }
 
     private void OnClosing(ContentDialog sender, ContentDialogClosingEventArgs args)
@@ -199,11 +199,11 @@ public sealed class BloatwareUninstallEntry : INotifyPropertyChanged
 
     public string StateLabel => _state switch
     {
-        BloatwareUninstallState.Pending => "Waiting",
-        BloatwareUninstallState.Running => "Working...",
-        BloatwareUninstallState.Success => "Removed",
-        BloatwareUninstallState.Failed => "Failed",
-        BloatwareUninstallState.Cancelled => "Cancelled",
+        BloatwareUninstallState.Pending => App.Loc.S("common.waiting"),
+        BloatwareUninstallState.Running => App.Loc.S("common.working"),
+        BloatwareUninstallState.Success => App.Loc.S("common.removed"),
+        BloatwareUninstallState.Failed => App.Loc.S("common.failed"),
+        BloatwareUninstallState.Cancelled => App.Loc.S("common.cancelled"),
         _ => string.Empty
     };
 

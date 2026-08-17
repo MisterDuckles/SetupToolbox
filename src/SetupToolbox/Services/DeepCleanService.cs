@@ -109,7 +109,7 @@ public sealed class DeepCleanService
                 DeepCleanCategory.UserTemp,
                 requiresElevation: false,
                 isSafe: true,
-                description: "Files in %TEMP% van je user account. Kan vrij weg zonder problemen — Windows en apps maken ze opnieuw aan.",
+                description: App.Loc.S("deepclean.desc.userTemp"),
                 log),
             ScanCacheTargetAsync(
                 "System Temp folder",
@@ -117,7 +117,7 @@ public sealed class DeepCleanService
                 DeepCleanCategory.SystemTemp,
                 requiresElevation: true,
                 isSafe: true,
-                description: "Tijdelijke files van system services en installers. Veilig om weg te gooien.",
+                description: App.Loc.S("deepclean.desc.systemTemp"),
                 log),
             ScanCacheTargetAsync(
                 "Windows Update cache",
@@ -125,7 +125,7 @@ public sealed class DeepCleanService
                 DeepCleanCategory.UpdateCache,
                 requiresElevation: true,
                 isSafe: true,
-                description: "Gedownloade Windows Update payloads die al geïnstalleerd zijn. Windows downloadt opnieuw als er een nieuwe update is.",
+                description: App.Loc.S("deepclean.desc.updateCache"),
                 log),
             ScanCacheTargetAsync(
                 "Prefetch",
@@ -133,7 +133,7 @@ public sealed class DeepCleanService
                 DeepCleanCategory.Prefetch,
                 requiresElevation: true,
                 isSafe: true,
-                description: "Cache van app-startup metadata. Wordt opnieuw opgebouwd na cleanup — apps starten een paar keer iets trager tot 'ie weer gevuld is.",
+                description: App.Loc.S("deepclean.desc.prefetch"),
                 log),
             ScanCacheTargetAsync(
                 "Windows.old",
@@ -141,7 +141,7 @@ public sealed class DeepCleanService
                 DeepCleanCategory.WindowsOld,
                 requiresElevation: true,
                 isSafe: false,
-                description: "Backup van je vorige Windows-install na een upgrade. Verwijderen = geen rollback meer mogelijk naar de oudere versie.",
+                description: App.Loc.S("deepclean.desc.windowsOld"),
                 log)
         };
 
@@ -184,7 +184,7 @@ public sealed class DeepCleanService
                         DeepCleanCategory.BrowserCache,
                         requiresElevation: false,
                         isSafe: false,
-                        description: "Browser cache van Firefox-profiel. Sites moeten resources opnieuw laden.",
+                        description: App.Loc.S("deepclean.desc.browserCache"),
                         log));
                 }
             }
@@ -207,7 +207,7 @@ public sealed class DeepCleanService
                 sizeBytes: recycleSize,
                 requiresElevation: false,
                 isSafe: true,
-                description: "Bestanden die je naar de Prullenbak hebt gestuurd. Verwijderen = definitief weg, geen ongedaan-maken meer."));
+                description: App.Loc.S("deepclean.desc.recycleBin")));
         }
 
         var scanned = await Task.WhenAll(tasks);
@@ -302,7 +302,7 @@ public sealed class DeepCleanService
                             sizeBytes: 0,
                             requiresElevation: requiresElev,
                             isSafe: false,
-                            description: $"Uninstall registry-entry zonder werkende paden. {aliveResult.Reason} — Windows zou deze key normaal opruimen tijdens een uninstall, maar dat is hier niet gebeurd. Veilig om te verwijderen, ruimt alleen registry op."));
+                            description: App.Loc.S("deepclean.desc.orphanRegistry", aliveResult.Reason)));
                     }
                 }
                 catch (Exception ex)
@@ -705,7 +705,7 @@ public sealed class DeepCleanService
                             sizeBytes: 0,
                             requiresElevation: requiresElev,
                             isSafe: false,
-                            description: $"App Paths registry-entry voor '{subName}' wijst naar een exe die niet meer bestaat. Windows gebruikt deze entries om 'Start > Run > {subName}' te resolven; bij een dood pad faalt dat."));
+                            description: App.Loc.S("deepclean.desc.appPath", subName)));
                     }
                 }
                 catch (Exception ex)
@@ -773,7 +773,7 @@ public sealed class DeepCleanService
                         sizeBytes: 0,
                         requiresElevation: false,
                         isSafe: false,
-                        description: $"MUIcache entry voor '{friendlyName}' wijst naar exe '{exePath}' die niet meer bestaat. Windows shell onthoudt zo het laatst-gebruikte programma; bij dode entries is het pure ruis.",
+                        description: App.Loc.S("deepclean.desc.muiCache", friendlyName, exePath),
                         registryValueName: valueName));
                 }
             }
@@ -860,7 +860,7 @@ public sealed class DeepCleanService
                             sizeBytes: 0,
                             requiresElevation: requiresElev,
                             isSafe: false,
-                            description: $"File-association registry-entry voor '{exeName}' wijst naar exe '{exePath}' die niet meer bestaat. Veroorzaakt failed Open With dialogs en lege right-click menu's."));
+                            description: App.Loc.S("deepclean.desc.classHandler", exeName, exePath)));
                     }
                 }
                 catch (Exception ex)
@@ -923,7 +923,7 @@ public sealed class DeepCleanService
                             sizeBytes: size,
                             requiresElevation: requiresElev,
                             isSafe: false,
-                            description: $"Shortcut wijst naar target '{target}' die niet meer bestaat. Klikken doet niets — kan veilig weg."));
+                            description: App.Loc.S("deepclean.desc.shortcut", target)));
                     }
                     catch (Exception ex)
                     {
@@ -1034,7 +1034,7 @@ public sealed class DeepCleanService
                         sizeBytes: 0,
                         requiresElevation: requiresElev,
                         isSafe: false,
-                        description: $"Scheduled task '{taskName}' verwijst naar een exe die niet meer bestaat ({deadList}). Veilig om te deleten — Windows Task Scheduler probeert anders periodiek een dood programma te starten."));
+                        description: App.Loc.S("deepclean.desc.scheduledTask", taskName, deadList)));
                 }
                 catch (Exception ex)
                 {
@@ -1131,7 +1131,7 @@ public sealed class DeepCleanService
                         sizeBytes: 0,
                         requiresElevation: true,
                         isSafe: false,
-                        description: $"Firewall rule '{friendlyName}' verwijst naar program '{appPath}' die niet meer bestaat. De rule heeft geen effect meer — verwijderen is veilig.",
+                        description: App.Loc.S("deepclean.desc.firewallRule", friendlyName, appPath),
                         registryValueName: ruleName));
                 }
 
@@ -1270,7 +1270,7 @@ public sealed class DeepCleanService
                 sizeBytes: 0,
                 requiresElevation: true,
                 isSafe: false,
-                description: $"Windows service '{friendlyName}' verwijst naar exe '{resolvedExe}' die niet meer bestaat (Stopped, StartMode={startMode}). Veilig om te deleten via sc.exe — de service kan nooit meer starten.",
+                description: App.Loc.S("deepclean.desc.service", friendlyName, resolvedExe, startMode),
                 registryValueName: name));
         }
 
@@ -1413,7 +1413,7 @@ public sealed class DeepCleanService
                             sizeBytes: 0,
                             requiresElevation: false,
                             isSafe: false,
-                            description: $"HKCU registry-key voor '{appName}' (van {vendorName}) heeft {pathValues.Count} pad-value(s) die allemaal dood zijn. Vendor-residue uit een uninstall die HKCU niet ruimde — kan weg."));
+                            description: App.Loc.S("deepclean.desc.hkcuVendor", appName, vendorName, pathValues.Count)));
                     }
                 }
 
@@ -1902,7 +1902,7 @@ public sealed class DeepCleanService
                 requiresElevation: requiresElevation,
                 isSafe: false,
                 lastModified: lastWrite,
-                description: "Geen geïnstalleerde app gevonden die bij deze folder hoort. Kan een leftover zijn van een eerder verwijderde app, een portable app, of een vendor-folder die meerdere subapps deelt.");
+                description: App.Loc.S("deepclean.desc.orphanFolder"));
         }
         catch (Exception ex)
         {

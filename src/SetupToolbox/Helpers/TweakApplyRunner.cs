@@ -161,23 +161,23 @@ public static class TweakApplyRunner
         if (o.Cancelled)
         {
             bar.Severity = InfoBarSeverity.Warning;
-            bar.Title = "Apply geannuleerd";
-            bar.Message = "UAC werd geweigerd — een deel van de wijzigingen kan al geschreven zijn.";
+            bar.Title = App.Loc.S("apply.cancelled.title");
+            bar.Message = App.Loc.S("apply.cancelled.body");
         }
         else if (o.FailedCount == 0)
         {
             bar.Severity = InfoBarSeverity.Success;
-            bar.Title = $"{o.ChangeCount} wijziging{(o.ChangeCount == 1 ? "" : "en")} toegepast";
+            bar.Title = App.Loc.S("apply.done.title", App.Loc.Plural("common.changeCount", o.ChangeCount));
             bar.Message = o.AnySignOut
-                ? "Sommige tweaks hebben pas effect nadat je uitlogt of de PC herstart."
+                ? App.Loc.S("apply.done.reboot")
                 : o.AnyExplorerRestart
-                    ? "Explorer herstart — wacht ~1s tot de taskbar terug is."
-                    : "Klaar.";
+                    ? App.Loc.S("apply.done.explorer")
+                    : App.Loc.S("apply.done.plain");
         }
         else
         {
             bar.Severity = InfoBarSeverity.Error;
-            bar.Title = $"{o.FailedCount} wijziging(en) mislukt";
+            bar.Title = App.Loc.S("apply.failed.title", App.Loc.Plural("common.changeCount", o.FailedCount));
             var preview = o.FailureMessages.Take(4).ToList();
             var more = o.FailureMessages.Count - preview.Count;
             var body = string.Join("\n", preview);

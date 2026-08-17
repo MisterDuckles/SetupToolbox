@@ -4,11 +4,12 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:SetupToolbox.Helpers"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="Schedule auto-updates"
-    PrimaryButtonText="Create schedule"
-    CloseButtonText="Cancel"
+    Title="{loc:Localize Key=dialog.schedule.title}"
+    PrimaryButtonText="{loc:Localize Key=dialog.schedule.create}"
+    CloseButtonText="{loc:Localize Key=common.cancel}"
     DefaultButton="Primary"
     CornerRadius="8"
     PrimaryButtonStyle="{StaticResource DialogPrimaryButtonStyle}"
@@ -20,31 +21,31 @@
     </ContentDialog.Resources>
 
     <StackPanel Spacing="16">
-        <TextBlock Text="Windows Task Scheduler runs this app with /autoupdate op het gekozen moment. Dan draait 'winget upgrade --all' stil op de achtergrond, zonder UI."
+        <TextBlock Text="{loc:Localize Key=dialog.schedule.desc}"
                    Style="{StaticResource CaptionTextBlockStyle}"
                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                    TextWrapping="Wrap" />
 
         <StackPanel Spacing="8">
-            <TextBlock Text="Frequency"
+            <TextBlock Text="{loc:Localize Key=dialog.schedule.frequency}"
                        Style="{StaticResource BodyStrongTextBlockStyle}" />
             <RadioButton x:Name="DailyRadio"
-                         Content="Daily"
+                         Content="{loc:Localize Key=dialog.schedule.daily}"
                          GroupName="ScheduleType"
                          IsChecked="True"
                          Checked="ScheduleRadio_Changed" />
             <RadioButton x:Name="WeeklyRadio"
-                         Content="Weekly (every Monday)"
+                         Content="{loc:Localize Key=dialog.schedule.weekly}"
                          GroupName="ScheduleType"
                          Checked="ScheduleRadio_Changed" />
             <RadioButton x:Name="OnStartupRadio"
-                         Content="On user logon"
+                         Content="{loc:Localize Key=dialog.schedule.logon}"
                          GroupName="ScheduleType"
                          Checked="ScheduleRadio_Changed" />
         </StackPanel>
 
         <StackPanel x:Name="TimePanel" Spacing="8">
-            <TextBlock Text="Time"
+            <TextBlock Text="{loc:Localize Key=dialog.schedule.time}"
                        Style="{StaticResource BodyStrongTextBlockStyle}" />
             <TimePicker x:Name="TimePickerCtrl"
                         ClockIdentifier="24HourClock"
