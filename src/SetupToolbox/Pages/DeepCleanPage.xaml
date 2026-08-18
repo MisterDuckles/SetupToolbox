@@ -26,7 +26,7 @@
         <InfoBar Grid.Row="1"
                  Severity="Informational"
                  Title="{loc:Localize Key=deepclean.header}"
-                 Message="Maakt schijfruimte vrij door Windows caches en orphan-folders op te ruimen — los van een specifieke uninstall. Altijd preview vóór delete: niets wordt verwijderd zonder bevestiging."
+                 Message="{loc:Localize Key=deepclean.intro.body}"
                  IsOpen="True"
                  IsClosable="True"
                  MaxWidth="720"

@@ -486,7 +486,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         {
             sizePanel.Children.Add(new TextBlock
             {
-                Text = "admin",
+                Text = App.Loc.S("common.adminBadge"),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
                 TextAlignment = TextAlignment.Right
@@ -727,7 +727,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         {
             sizePanel.Children.Add(new TextBlock
             {
-                Text = "admin",
+                Text = App.Loc.S("common.adminBadge"),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
                 TextAlignment = TextAlignment.Right
@@ -775,7 +775,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
 
         if (selectedItems.Count == 0)
         {
-            SelectionStatusText.Text = "Nothing selected";
+            SelectionStatusText.Text = App.Loc.S("common.nothingSelected");
         }
         else
         {
@@ -783,7 +783,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
             if (elevated > 0) label += $" · {elevated} need administrator rights";
             SelectionStatusText.Text = label;
         }
-        ToggleAllButton.Content = _items.All(i => i.IsSelected) ? "Deselect all" : "Select all";
+        ToggleAllButton.Content = App.Loc.S(_items.All(i => i.IsSelected) ? "common.deselectAll" : "common.selectAll");
     }
 
     private void UpdatePrimaryEnabled()
@@ -830,7 +830,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
             ProgressBar.Value = 100;
             if (DeleteResult.Cancelled)
             {
-                ProgressStatusText.Text = "Cancelled — UAC prompt declined.";
+                ProgressStatusText.Text = App.Loc.S("deepclean.cancelledUac.status");
             }
             else if (DeleteResult.FailedCount == 0)
             {
@@ -844,7 +844,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
             }
 
             _deleteCompleted = true;
-            PrimaryButtonText = "Close";
+            PrimaryButtonText = App.Loc.S("common.close");
             SecondaryButtonText = string.Empty;
             IsPrimaryButtonEnabled = true;
         }

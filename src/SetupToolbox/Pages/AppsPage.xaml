@@ -29,7 +29,7 @@
                      IsClosable="True"
                      Severity="Informational"
                      Title="{loc:Localize Key=apps.welcome.title}"
-                     Message="Selecteer apps en installeer ze in bulk via winget. Gebruik de Tweaks-tab voor Windows-aanpassingen en Debloat om bloatware op te ruimen. Sluit deze tip met de X."
+                     Message="{loc:Localize Key=apps.welcome.body}"
                      CloseButtonClick="WelcomeBanner_CloseButtonClick" />
 
             <Grid Margin="0,0,0,16">
@@ -75,7 +75,7 @@
             <InfoBar x:Name="ErrorBar"
                      Severity="Error"
                      Title="{loc:Localize Key=apps.loadFailed.title}"
-                     Message="Check your internet connection and try again."
+                     Message="{loc:Localize Key=apps.loadFailed.body}"
                      IsOpen="False"
                      IsClosable="False"
                      VerticalAlignment="Top"

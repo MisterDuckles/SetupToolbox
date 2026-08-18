@@ -193,7 +193,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         {
             meta.Children.Add(new TextBlock
             {
-                Text = "· admin",
+                Text = "· " + App.Loc.S("common.adminBadge"),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCautionBrush"]
             });
@@ -320,7 +320,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         var elevated = _items.Count(i => i.IsSelected && i.RequiresElevation);
         if (selected == 0)
         {
-            SelectionStatusText.Text = "Nothing selected";
+            SelectionStatusText.Text = App.Loc.S("common.nothingSelected");
         }
         else
         {
@@ -328,7 +328,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
                 ? $"{selected} selected · {elevated} need administrator rights"
                 : $"{selected} selected";
         }
-        ToggleAllButton.Content = _items.All(i => i.IsSelected) ? "Deselect all" : "Select all";
+        ToggleAllButton.Content = App.Loc.S(_items.All(i => i.IsSelected) ? "common.deselectAll" : "common.selectAll");
     }
 
     private void UpdatePrimaryEnabled()
@@ -373,7 +373,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
             ProgressBar.Value = 100;
             if (DeleteResult.Cancelled)
             {
-                ProgressStatusText.Text = "Cancelled — UAC prompt declined. No leftovers were deleted.";
+                ProgressStatusText.Text = App.Loc.S("leftover.cancelledUac.status");
             }
             else if (DeleteResult.FailedCount == 0)
             {
@@ -386,7 +386,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
 
             // Primary wordt nu een Close-knop (geen extra delete meer mogelijk).
             _deleteCompleted = true;
-            PrimaryButtonText = "Close";
+            PrimaryButtonText = App.Loc.S("common.close");
             SecondaryButtonText = string.Empty;
             IsPrimaryButtonEnabled = true;
         }

@@ -94,7 +94,7 @@
                              IsClosable="False"
                              Severity="Informational"
                              Title="{loc:Localize Key=tweaks.profileMode.title}"
-                             Message="Alle vinkjes staan uit. Vink de tweaks aan die je in je profiel wilt — dit verandert nog niets aan je systeem. Klik daarna 'Opslaan profiel' of 'Toepassen'." />
+                             Message="{loc:Localize Key=tweaks.profileMode.body}" />
 
                     <!-- Category-grid (zichtbaar buiten search-modus). -->
                     <ItemsRepeater x:Name="CategoryGrid">

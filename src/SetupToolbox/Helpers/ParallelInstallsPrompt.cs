@@ -58,7 +58,7 @@ internal static class ParallelInstallsPrompt
         {
             Title = App.Loc.S("parallel.title"),
             Content = content,
-            PrimaryButtonText = "OK",
+            PrimaryButtonText = App.Loc.S("common.ok"),
             DefaultButton = ContentDialogButton.Primary,
             CornerRadius = new CornerRadius(8),
             PrimaryButtonStyle = (Style)resources["DialogPrimaryButtonStyle"],

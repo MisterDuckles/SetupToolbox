@@ -35,6 +35,6 @@
                  IsOpen="True"
                  IsClosable="False"
                  Title="{loc:Localize Key=dialog.backup.safetyHeader}"
-                 Message="Snapshots worden lokaal opgeslagen (max 20 stuks, oudste wordt automatisch verwijderd). Je kan alle snapshots later inzien via Settings." />
+                 Message="{loc:Localize Key=dialog.backup.safetyBody}" />
     </StackPanel>
 </ContentDialog>

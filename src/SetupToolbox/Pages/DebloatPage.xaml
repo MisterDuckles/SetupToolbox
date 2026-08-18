@@ -190,7 +190,7 @@
         <InfoBar Grid.Row="1"
                  Severity="Informational"
                  Title="{loc:Localize Key=debloat.header}"
-                 Message="Verwijder geïnstalleerde apps — Microsoft pre-install bloat, OEM bundleware, en alles uit deze catalog / Store / Web. Voor system-wide cache- en orphan-folder cleanup kies je &quot;Deep clean&quot; in de sidebar. Na een uninstall scant de app automatisch naar leftovers."
+                 Message="{loc:Localize Key=debloat.intro.body}"
                  IsOpen="True"
                  IsClosable="True"
                  MaxWidth="720"

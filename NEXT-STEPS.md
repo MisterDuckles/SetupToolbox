@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.4** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.5** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -13,10 +13,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 ---
 
 ## Open
-
-### v1.2.5 — Multi-language fase 4: bloatware-metadata
-
-68 `BloatwareItem.CuratedMetadata`-entries: display-naam + description + de categorie-labels ("Games", "Gaming", "Communication", …). Grotendeels Engels, dus vooral NL-vertaling toevoegen; een deel van de descriptions is Nederlands en heeft een Engelse bron nodig.
 
 ### v1.2.6 — Multi-language fase 5: de catalogus (`data/apps.json`)
 
@@ -90,6 +86,45 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.5 — Multi-language fase 4: bloatware-metadata (+ de fase-2-restjes)
+
+**Vierde van vijf fasen.** De stringtabellen gaan van 881 naar **1018 keys**, in beide talen even groot.
+
+**68 dict-entries zijn 55 producten.** Dertien packages zijn aliassen van hetzelfde product — dezelfde app heet op verschillende Windows-versies anders (`HP.JumpStart` / `HPInc.HPJumpStart`, `MicrosoftTeams` / `MSTeams`, `MSI.MSICenter` / `9099B36F.MSICenter`, `AD2F1837.HPSmart` / `HPInc.HPSmart`, …). De key is daarom **per product**, niet per package: die aliassen delen één vertaling in plaats van dat je dezelfde zin twee keer onderhoudt.
+
+**Twee categorie-labels stonden niet in de dict.** `BloatwareService.CategoryFromVendor` gaf een niet-gecureerd package de categorie `"Microsoft"` of `"OEM"` — óók zichtbare chips, en ze stonden in geen enkele scope-lijst. Meegenomen, dus 17 chips in plaats van 15.
+
+**Totaal 127 nieuwe keys:** 55 namen + 55 omschrijvingen + 17 categorie-chips.
+
+**Het ging twee kanten op.** De bestaande metadata was een mix: **25** omschrijvingen waren Nederlands (Engelse bron geschreven), **30** waren Engels (Nederlandse vertaling geschreven). Per product is de bestaande kant letterlijk overgenomen; een scriptmatige check vergelijkt elke overgenomen regel met de oude metadata en faalt bij één karakter verschil.
+
+**Het mechanisme,** hetzelfde patroon als v1.2.4:
+- `BloatwareMetadata(DisplayName, Description, Category)` → `(Key, CategoryKey)`.
+- `BloatwareItem.DisplayName` / `.Description` / `.Category` zijn lookups geworden. Een **onbekend** package heeft geen vertaling en valt terug op de opgeschoonde package-naam — dat is een identifier en dus taalonafhankelijk, die blijft een gewone string.
+- Sorteren gebruikt nu `IsCurated` in plaats van `!string.IsNullOrEmpty(Description)`. Zelfde volgorde, maar de sortering hangt niet meer af van of een vertáálde string leeg is.
+- **Nederlandse app-namen volgen wat Nederlands Windows zelf toont**, want het doel is dat je de regel in je eigen Startmenu terugkent: Foto's, Kladblok, Kaarten, Films en tv, Plaknotities, Personen, Mobiel verbonden, Snelle hulp, Geluidsrecorder, Hulp vragen, Feedback-hub, Mail en Agenda, 3D-viewer, Mixed Reality-portal. Merknamen blijven staan (Xbox, Skype, Clipchamp, HP Smart, MyASUS, Lenovo Vantage, MSI Center …).
+- `Games` en `Gaming` zijn in deze app twee verschillende categorieën (échte spellen vs. gaming-plumbing zoals de Xbox-overlays en de identity-broker). In het Nederlands blijft dat onderscheid overeind als **Spellen** en **Gaming**.
+
+#### Bijvangst: 16 strings die fase 2 gemist had
+
+Tijdens het naspelen van de Debloat-pagina viel op dat de InfoBar-**body** Nederlands bleef terwijl de **titel** wel meewisselde. Dat bleek geen incident, dus is er een scanner op de hele app gezet — alle XAML-tekstattributen die nog een letterlijke waarde hebben in plaats van een markup-extension, plus alle C#-literals die aan een `.Text` / `.Content` / `.Title` / `.Message` / `*ButtonText` worden toegekend. Uitkomst: **16 treffers**, nu allemaal om.
+
+- **7 InfoBar-bodies** waarvan de titel al wél vertaald was: de welkomstbanner op Apps, de laadfout op Apps, de intro op Debloat, de intro op Deep clean, de profiel-modus-banner op Tweaks, de veiligheidsuitleg in `BackupPromptDialog` en de restore-point-uitleg in `RestorePointConfigDialog`. Zes waren Nederlands (Engelse bron geschreven), één was Engels (`apps.loadFailed.body`).
+- **9 C#-toekenningen**, waarvan 3 een key hergebruiken die al bestond (`common.close` ×2, `common.done`, `common.ok`) en de rest nieuw: het `admin`-badge en de twee UAC-geweigerd-statusregels in `DeepCleanDialog` en `LeftoverCleanupDialog`.
+- Eerder in dezelfde ronde waren op dezelfde manier al `"Select all"` / `"Deselect all"` / `"Nothing selected"` gevonden op 3 plekken (`DebloatPage`, `DeepCleanDialog`, `LeftoverCleanupDialog`) — hardcoded Engels terwijl `common.selectAll` / `.deselectAll` / `.nothingSelected` allang in beide tabellen stonden.
+
+**De scanner staat er nu**, dus fase 5 kan ermee beginnen in plaats van erop te stuiten. Hij loopt nu schoon: 0 XAML-literals, 0 C#-literals.
+
+> **Geverifieerd (2026-08-18) — draaiende app, beide talen:**
+> - Build: **0 errors, 0 warnings**.
+> - Debloat → Apps in **Nederlands én Engels**, met de Microsoft-bloatware-sectie uitgeklapt (35 gedetecteerde packages op deze machine). Cards tonen de vertaalde naam, omschrijving én categorie-chip: *Camera / Hardware / "Microsoft Camera — overbodig zonder webcam."* ↔ *Camera / Hardware / "Microsoft Camera — pointless without a webcam."*, en *Kladblok / Hulpprogramma's* ↔ *Notepad / Tools*.
+> - **Het fallback-pad voor een onbekend package is ook echt gezien:** `aimgr` staat er met de opgeschoonde package-naam en de `Microsoft`-chip, zonder omschrijving — precies zoals bedoeld.
+> - De omgezette InfoBar-bodies wisselen mee (Debloat-intro en Deep-clean-intro nagelopen in beide talen), en `Alles selecteren` / `Niets geselecteerd` ↔ `Select all` / `Nothing selected`.
+> - **Geen enkele `LOC-MISS`**, geen `crash.log`.
+> - **Volledigheid is niet op de UI-run gebaseerd** — die toont alleen de packages die op déze machine staan. Er is een checker die de keys uit de *code* haalt (de 68 dict-entries plus de twee vendor-fallbacks in `BloatwareService`) en aantoont dat alle 127 in beide tabellen bestaan. Daarmee is een `LOC-MISS` op dit scherm onmogelijk, ongeacht wat er geïnstalleerd is.
+>
+> **Niet getest:** een echte uninstall-batch (dat verwijdert apps), en de OEM-sectie — op deze machine staat geen HP/Dell/Lenovo/ASUS/Acer/MSI-bundleware, dus die 20 producten zijn alleen via de tabelcheck geverifieerd, niet visueel.
 
 ### v1.2.4 — Multi-language fase 3: het tweak-corpus
 

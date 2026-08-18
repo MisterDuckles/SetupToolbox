@@ -672,7 +672,7 @@ public sealed partial class DebloatPage : Page
         var total = msCount + oemCount + appCount;
 
         InstalledSelectionCountText.Text = total == 0
-            ? "Nothing selected"
+            ? App.Loc.S("common.nothingSelected")
             : $"{total} app{(total == 1 ? "" : "s")} selected" +
               BuildSelectionBreakdown(msCount, oemCount, appCount);
         InstalledUninstallButton.IsEnabled = total > 0;
@@ -698,7 +698,7 @@ public sealed partial class DebloatPage : Page
     private void UpdateInstalledSelectAllButton()
     {
         var allSelected = _visibleEntries.Count > 0 && _visibleEntries.All(en => en.IsSelected);
-        InstalledSelectAllButton.Content = allSelected ? "Deselect all" : "Select all";
+        InstalledSelectAllButton.Content = App.Loc.S(allSelected ? "common.deselectAll" : "common.selectAll");
         InstalledSelectAllButton.IsEnabled = _visibleEntries.Count > 0;
     }
 

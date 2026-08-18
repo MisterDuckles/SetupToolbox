@@ -47,7 +47,7 @@ public sealed partial class ScheduleDialog : ContentDialog
                     var description = BuildScheduleDescription(scheduleType, timeString);
                     ShowInfo(InfoBarSeverity.Success, "Scheduled task created", description);
                     IsPrimaryButtonEnabled = false;
-                    CloseButtonText = "Done";
+                    CloseButtonText = App.Loc.S("common.done");
                     // Ook buiten de app bevestigen (v1.0.13) — meteen een voorproefje
                     // van de meldingen die de geplande run straks geeft.
                     Helpers.ToastHelper.ShowScheduleEnabled(description);

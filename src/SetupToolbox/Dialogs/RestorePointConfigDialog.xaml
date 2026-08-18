@@ -22,7 +22,7 @@
                  IsOpen="True"
                  IsClosable="False"
                  Title="{loc:Localize Key=dialog.restorePoint.whatHeader}"
-                 Message="Een Windows System Restore Point is een momentopname van je registry + system files + installed programs. Bij problemen kan je het systeem terugzetten via 'System Properties > System Protection > System Restore'." />
+                 Message="{loc:Localize Key=dialog.restorePoint.whatBody}" />
 
         <Grid x:Name="StatusGrid" ColumnSpacing="8">
             <Grid.ColumnDefinitions>

@@ -73,12 +73,14 @@ public sealed class BloatwareService
                 var vendor = ClassifyVendor(name, entry.publisher);
                 if (vendor == null) continue;  // niet Microsoft, niet OEM → niet voor deze sectie
 
+                // Naam / omschrijving / categorie zijn vertaald (v1.2.5): we geven de
+                // stabiele keys door, BloatwareItem doet de lookup. Een onbekend package
+                // heeft geen vertaling en valt terug op de opgeschoonde package-naam.
                 var metadata = BloatwareItem.LookupMetadata(name);
-                var displayName = metadata?.DisplayName ?? StripCommonPrefix(name);
-                var description = metadata?.Description ?? string.Empty;
-                var category = metadata?.Category ?? CategoryFromVendor(vendor.Value);
+                var categoryKey = metadata?.CategoryKey ?? CategoryKeyFromVendor(vendor.Value);
 
-                var item = new BloatwareItem(displayName, description, category, vendor.Value, name);
+                var item = new BloatwareItem(metadata?.Key, StripCommonPrefix(name),
+                                             categoryKey, vendor.Value, name);
                 item.InstalledPackageFullNames.AddRange(entry.fullNames);
                 item.IsInstalled = true;
                 items.Add(item);
@@ -89,11 +91,11 @@ public sealed class BloatwareService
             // PS-failure → lege lijst, andere bronnen blijven werken.
         }
 
-        // Sort: bekende items met description eerst (alfabetisch op DisplayName),
+        // Sort: bekende (gecureerde) items eerst (alfabetisch op DisplayName),
         // daarna onbekende — zo zien power-users de zooi waarvan we weten "ja dit
         // is bloat" eerst.
         return items
-            .OrderByDescending(i => !string.IsNullOrEmpty(i.Description))
+            .OrderByDescending(i => i.IsCurated)
             .ThenBy(i => i.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -164,8 +166,10 @@ public sealed class BloatwareService
         return packageName;
     }
 
-    private static string CategoryFromVendor(BloatwareVendor vendor) =>
-        vendor == BloatwareVendor.Microsoft ? "Microsoft" : "OEM";
+    // Categorie-key voor een package dat niet in de curated lijst staat. Key, niet
+    // label: de weergave komt uit de vertaaltabel (bloatware.category.*).
+    private static string CategoryKeyFromVendor(BloatwareVendor vendor) =>
+        vendor == BloatwareVendor.Microsoft ? "microsoft" : "oem";
 
     /// <summary>
     /// Uninstall een batch bloatware items via één elevated PowerShell-call. UAC

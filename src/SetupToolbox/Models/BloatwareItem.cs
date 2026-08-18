@@ -18,28 +18,55 @@ public enum BloatwareVendor
 // Optionele metadata voor bekende bloatware items. Als een gedetecteerd AppX-package
 // in deze dict staat krijgen we een nette display-naam, beschrijving en categorie;
 // anders vallen we terug op de raw package name.
-public sealed record BloatwareMetadata(string DisplayName, string Description, string Category);
+//
+// Sinds v1.2.5 staan naam en omschrijving niet meer hier maar in de vertaaltabel;
+// dit record houdt alleen de stabiele keys over. Key is per PRODUCT, niet per
+// package: dezelfde app heet op verschillende Windows-versies anders
+// (HP.JumpStart / HPInc.HPJumpStart), en die aliassen delen dus één vertaling.
+public sealed record BloatwareMetadata(string Key, string CategoryKey);
 
 // Runtime-construct: één instance per gedetecteerd Microsoft/OEM AppX package.
 // Vroeger was dit een gecureerde lijst die we matchten tegen Get-AppxPackage —
 // nu draaien we het om: detect alles, optioneel verrijken met curated metadata.
 public sealed class BloatwareItem : INotifyPropertyChanged
 {
-    public string DisplayName { get; }
-    public string Description { get; }
-    public string Category { get; }
     public BloatwareVendor Vendor { get; }
 
     // Het AppX `Name`-veld (bv. "Microsoft.MicrosoftSolitaireCollection"). Bewaard
     // voor display-fallback en lookup van curated metadata.
     public string PackageName { get; }
 
-    public BloatwareItem(string displayName, string description, string category,
+    // Stabiele loc-key van het gecureerde product, of null wanneer we dit package
+    // niet kennen. Vertaalde tekst bestaat alleen voor wat we kennen.
+    private readonly string? _metadataKey;
+
+    // Weergave voor een ONBEKEND package: de opgeschoonde package-naam. Die is
+    // taalonafhankelijk (het is een identifier), dus die mag een gewone string zijn.
+    private readonly string _fallbackDisplayName;
+
+    public string CategoryKey { get; }
+
+    /// <summary>Staat dit package in de curated lijst? Alleen dan is er uitleg.</summary>
+    public bool IsCurated => _metadataKey != null;
+
+    // Naam / omschrijving / categorie zijn sinds v1.2.5 VERTAALD en worden dus
+    // opgezocht in plaats van in de constructor meegegeven.
+    public string DisplayName => _metadataKey == null
+        ? _fallbackDisplayName
+        : SetupToolbox.App.Loc.S($"bloatware.{_metadataKey}.name");
+
+    public string Description => _metadataKey == null
+        ? string.Empty
+        : SetupToolbox.App.Loc.S($"bloatware.{_metadataKey}.desc");
+
+    public string Category => SetupToolbox.App.Loc.S($"bloatware.category.{CategoryKey}");
+
+    public BloatwareItem(string? metadataKey, string fallbackDisplayName, string categoryKey,
                          BloatwareVendor vendor, string packageName)
     {
-        DisplayName = displayName;
-        Description = description;
-        Category = category;
+        _metadataKey = metadataKey;
+        _fallbackDisplayName = fallbackDisplayName;
+        CategoryKey = categoryKey;
         Vendor = vendor;
         PackageName = packageName;
     }
@@ -96,92 +123,92 @@ public sealed class BloatwareItem : INotifyPropertyChanged
         new Dictionary<string, BloatwareMetadata>(StringComparer.OrdinalIgnoreCase)
     {
         // Microsoft — Games / Gaming
-        ["Microsoft.MicrosoftSolitaireCollection"] = new("Solitaire Collection", "Microsoft Solitaire — bevat advertenties.", "Games"),
-        ["Microsoft.XboxApp"] = new("Xbox", "Xbox companion app.", "Gaming"),
-        ["Microsoft.GamingApp"] = new("Xbox (Gaming app)", "Vervanger van XboxApp op Win11.", "Gaming"),
-        ["Microsoft.XboxGameOverlay"] = new("Xbox Game Overlay", "In-game overlay (FPS, screenshots).", "Gaming"),
-        ["Microsoft.XboxGamingOverlay"] = new("Xbox Gaming Overlay", "Win+G game bar overlay.", "Gaming"),
-        ["Microsoft.XboxIdentityProvider"] = new("Xbox Identity", "Xbox Live login broker.", "Gaming"),
-        ["Microsoft.XboxSpeechToTextOverlay"] = new("Xbox Speech-to-Text", "Live captions in Xbox party chat.", "Gaming"),
-        ["Microsoft.Xbox.TCUI"] = new("Xbox TCUI", "Trusted-clean UI shell voor Xbox.", "Gaming"),
+        ["Microsoft.MicrosoftSolitaireCollection"] = new("solitaireCollection", "games"),
+        ["Microsoft.XboxApp"] = new("xbox", "gaming"),
+        ["Microsoft.GamingApp"] = new("xboxGamingApp", "gaming"),
+        ["Microsoft.XboxGameOverlay"] = new("xboxGameOverlay", "gaming"),
+        ["Microsoft.XboxGamingOverlay"] = new("xboxGamingOverlay", "gaming"),
+        ["Microsoft.XboxIdentityProvider"] = new("xboxIdentity", "gaming"),
+        ["Microsoft.XboxSpeechToTextOverlay"] = new("xboxSpeechToText", "gaming"),
+        ["Microsoft.Xbox.TCUI"] = new("xboxTcui", "gaming"),
 
         // Microsoft — Communication
-        ["Microsoft.SkypeApp"] = new("Skype", "Microsoft Skype consumer-versie.", "Communication"),
-        ["MicrosoftTeams"] = new("Teams (consumer)", "De gratis consumer-versie van Teams die met Win11 meekomt.", "Communication"),
-        ["MSTeams"] = new("Teams (consumer)", "De gratis consumer-versie van Teams die met Win11 meekomt.", "Communication"),
-        ["microsoft.windowscommunicationsapps"] = new("Mail and Calendar", "Microsoft's Mail & Calendar apps.", "Communication"),
-        ["Microsoft.YourPhone"] = new("Phone Link", "Synchroniseert je Android/iPhone met Windows.", "Communication"),
-        ["Microsoft.People"] = new("People", "Stand-alone contacts manager.", "Communication"),
+        ["Microsoft.SkypeApp"] = new("skype", "communication"),
+        ["MicrosoftTeams"] = new("teamsConsumer", "communication"),
+        ["MSTeams"] = new("teamsConsumer", "communication"),
+        ["microsoft.windowscommunicationsapps"] = new("mailAndCalendar", "communication"),
+        ["Microsoft.YourPhone"] = new("phoneLink", "communication"),
+        ["Microsoft.People"] = new("people", "communication"),
 
         // Microsoft — Bing
-        ["Microsoft.BingNews"] = new("Bing News", "Microsoft News (Bing-feed).", "Information"),
-        ["Microsoft.BingWeather"] = new("Bing Weather", "Microsoft Weather (Bing-feed).", "Information"),
+        ["Microsoft.BingNews"] = new("bingNews", "information"),
+        ["Microsoft.BingWeather"] = new("bingWeather", "information"),
 
         // Microsoft — Personalization / extras
-        ["Microsoft.549981C3F5F10"] = new("Cortana", "Microsoft's voice assistant.", "Personalization"),
-        ["Microsoft.MixedReality.Portal"] = new("Mixed Reality Portal", "Voor Windows Mixed Reality headsets.", "Hardware"),
-        ["Microsoft.Microsoft3DViewer"] = new("3D Viewer", "Bekijk 3D modellen.", "Tools"),
-        ["Microsoft.MSPaint"] = new("Paint 3D", "Paint 3D — door Microsoft gedeprecateerd.", "Tools"),
-        ["Microsoft.GetHelp"] = new("Get Help", "Help-app — links naar Microsoft support docs.", "Tools"),
-        ["Microsoft.Getstarted"] = new("Tips", "Windows getting-started tips.", "Tools"),
-        ["Microsoft.WindowsFeedbackHub"] = new("Feedback Hub", "Stuur feedback naar Microsoft.", "Tools"),
-        ["Microsoft.MicrosoftOfficeHub"] = new("Office Hub", "Office app launcher.", "Productivity"),
-        ["Microsoft.WindowsMaps"] = new("Maps", "Bing Maps app.", "Tools"),
-        ["Microsoft.Office.OneNote"] = new("OneNote", "Microsoft OneNote (niet de Office-versie).", "Productivity"),
-        ["Microsoft.ZuneMusic"] = new("Groove Music", "Microsoft's music player.", "Media"),
-        ["Microsoft.ZuneVideo"] = new("Movies & TV", "Microsoft's video player.", "Media"),
-        ["Microsoft.MicrosoftStickyNotes"] = new("Sticky Notes", "Sommige users vinden dit handig — let op voor je verwijdert.", "Productivity"),
-        ["Microsoft.WindowsNotepad"] = new("Notepad", "Sinds Win11 een Store-app. Verwijder als je een andere editor gebruikt.", "Tools"),
-        ["Microsoft.Windows.Photos"] = new("Photos", "Microsoft's foto-viewer — relatief zwaar.", "Media"),
-        ["Microsoft.WindowsCamera"] = new("Camera", "Microsoft Camera — overbodig zonder webcam.", "Hardware"),
-        ["Microsoft.WindowsSoundRecorder"] = new("Sound Recorder", "Microsoft Sound Recorder.", "Tools"),
-        ["MicrosoftCorporationII.QuickAssist"] = new("Quick Assist", "Microsoft's remote-support tool.", "Tools"),
-        ["Microsoft.PowerAutomateDesktop"] = new("Power Automate", "Robotic-process-automation tool. Voor enterprise.", "Productivity"),
-        ["Clipchamp.Clipchamp"] = new("Clipchamp", "Microsoft's video editor (overgenomen 2021).", "Media"),
+        ["Microsoft.549981C3F5F10"] = new("cortana", "personalization"),
+        ["Microsoft.MixedReality.Portal"] = new("mixedRealityPortal", "hardware"),
+        ["Microsoft.Microsoft3DViewer"] = new("3dViewer", "tools"),
+        ["Microsoft.MSPaint"] = new("paint3d", "tools"),
+        ["Microsoft.GetHelp"] = new("getHelp", "tools"),
+        ["Microsoft.Getstarted"] = new("tips", "tools"),
+        ["Microsoft.WindowsFeedbackHub"] = new("feedbackHub", "tools"),
+        ["Microsoft.MicrosoftOfficeHub"] = new("officeHub", "productivity"),
+        ["Microsoft.WindowsMaps"] = new("maps", "tools"),
+        ["Microsoft.Office.OneNote"] = new("oneNote", "productivity"),
+        ["Microsoft.ZuneMusic"] = new("grooveMusic", "media"),
+        ["Microsoft.ZuneVideo"] = new("moviesTv", "media"),
+        ["Microsoft.MicrosoftStickyNotes"] = new("stickyNotes", "productivity"),
+        ["Microsoft.WindowsNotepad"] = new("notepad", "tools"),
+        ["Microsoft.Windows.Photos"] = new("photos", "media"),
+        ["Microsoft.WindowsCamera"] = new("camera", "hardware"),
+        ["Microsoft.WindowsSoundRecorder"] = new("soundRecorder", "tools"),
+        ["MicrosoftCorporationII.QuickAssist"] = new("quickAssist", "tools"),
+        ["Microsoft.PowerAutomateDesktop"] = new("powerAutomate", "productivity"),
+        ["Clipchamp.Clipchamp"] = new("clipchamp", "media"),
 
         // OEM — HP
-        ["HP.JumpStart"] = new("HP JumpStart", "Een HP setup-tour app.", "HP"),
-        ["HPInc.HPJumpStart"] = new("HP JumpStart", "Een HP setup-tour app.", "HP"),
-        ["HP.SupportAssistant"] = new("HP Support Assistant", "HP's support tool — opdringerig met meldingen.", "HP"),
-        ["HPInc.SupportAssistant"] = new("HP Support Assistant", "HP's support tool — opdringerig met meldingen.", "HP"),
-        ["AD2F1837.HPSmart"] = new("HP Smart", "HP's printer-app. Nuttig met HP printer.", "HP"),
-        ["HPInc.HPSmart"] = new("HP Smart", "HP's printer-app. Nuttig met HP printer.", "HP"),
-        ["AD2F1837.HPPrinterControl"] = new("HP Printer Control", "HP printer settings app.", "HP"),
-        ["HPInc.myHP"] = new("MyHP", "HP's eigen welcome-app + ad-spam.", "HP"),
-        ["HP.MyHP"] = new("MyHP", "HP's eigen welcome-app + ad-spam.", "HP"),
-        ["HP.QuickDrop"] = new("HP QuickDrop", "HP's bestand-naar-telefoon transfer-tool.", "HP"),
-        ["AD2F1837.HPQuickDrop"] = new("HP QuickDrop", "HP's bestand-naar-telefoon transfer-tool.", "HP"),
+        ["HP.JumpStart"] = new("hpJumpStart", "hp"),
+        ["HPInc.HPJumpStart"] = new("hpJumpStart", "hp"),
+        ["HP.SupportAssistant"] = new("hpSupportAssistant", "hp"),
+        ["HPInc.SupportAssistant"] = new("hpSupportAssistant", "hp"),
+        ["AD2F1837.HPSmart"] = new("hpSmart", "hp"),
+        ["HPInc.HPSmart"] = new("hpSmart", "hp"),
+        ["AD2F1837.HPPrinterControl"] = new("hpPrinterControl", "hp"),
+        ["HPInc.myHP"] = new("myHP", "hp"),
+        ["HP.MyHP"] = new("myHP", "hp"),
+        ["HP.QuickDrop"] = new("hpQuickDrop", "hp"),
+        ["AD2F1837.HPQuickDrop"] = new("hpQuickDrop", "hp"),
 
         // OEM — Dell
-        ["DellInc.DellSupportAssist"] = new("Dell SupportAssist", "Dell's support tool.", "Dell"),
-        ["DellInc.DellSupportAssistforPCs"] = new("Dell SupportAssist", "Dell's support tool.", "Dell"),
-        ["DellInc.DellOptimizer"] = new("Dell Optimizer", "Dell's 'AI-powered performance' tool.", "Dell"),
-        ["DellInc.PartnerPromo"] = new("Dell PartnerPromo", "Trial-software van Dell partners — pure bloat.", "Dell"),
+        ["DellInc.DellSupportAssist"] = new("dellSupportAssist", "dell"),
+        ["DellInc.DellSupportAssistforPCs"] = new("dellSupportAssist", "dell"),
+        ["DellInc.DellOptimizer"] = new("dellOptimizer", "dell"),
+        ["DellInc.PartnerPromo"] = new("dellPartnerPromo", "dell"),
 
         // OEM — Lenovo
-        ["E0469640.LenovoCompanion"] = new("Lenovo Vantage", "Lenovo's all-in-one settings/update app.", "Lenovo"),
-        ["LenovoCorporation.LenovoVantage"] = new("Lenovo Vantage", "Lenovo's all-in-one settings/update app.", "Lenovo"),
-        ["E0469640.LenovoUtility"] = new("Lenovo Utility", "Lenovo's hotkey/system-utility app.", "Lenovo"),
-        ["LenovoCorporation.LenovoUtility"] = new("Lenovo Utility", "Lenovo's hotkey/system-utility app.", "Lenovo"),
-        ["E0469640.LenovoSettings"] = new("Lenovo Settings", "Lenovo's settings-launcher.", "Lenovo"),
-        ["LenovoCorporation.LenovoSettings"] = new("Lenovo Settings", "Lenovo's settings-launcher.", "Lenovo"),
-        ["LenovoCorporation.LenovoSmartConnect"] = new("Lenovo Smart Connect", "Lenovo's phone-to-laptop sync app.", "Lenovo"),
+        ["E0469640.LenovoCompanion"] = new("lenovoVantage", "lenovo"),
+        ["LenovoCorporation.LenovoVantage"] = new("lenovoVantage", "lenovo"),
+        ["E0469640.LenovoUtility"] = new("lenovoUtility", "lenovo"),
+        ["LenovoCorporation.LenovoUtility"] = new("lenovoUtility", "lenovo"),
+        ["E0469640.LenovoSettings"] = new("lenovoSettings", "lenovo"),
+        ["LenovoCorporation.LenovoSettings"] = new("lenovoSettings", "lenovo"),
+        ["LenovoCorporation.LenovoSmartConnect"] = new("lenovoSmartConnect", "lenovo"),
 
         // OEM — ASUS
-        ["B9ECED6F.ASUSPCAssistant"] = new("MyASUS", "ASUS's support/update/welcome app.", "ASUS"),
-        ["AsusTekComputerInc.MyASUS"] = new("MyASUS", "ASUS's support/update/welcome app.", "ASUS"),
-        ["AsusTekComputerInc.ASUSGiftBox"] = new("ASUS GiftBox", "ASUS partner-software promotie (trials).", "ASUS"),
-        ["AsusTek.AsusGlideX"] = new("ASUS GlideX", "ASUS's screen-sharing tool.", "ASUS"),
-        ["AsusTekComputerInc.AsusGlideX"] = new("ASUS GlideX", "ASUS's screen-sharing tool.", "ASUS"),
+        ["B9ECED6F.ASUSPCAssistant"] = new("myASUS", "asus"),
+        ["AsusTekComputerInc.MyASUS"] = new("myASUS", "asus"),
+        ["AsusTekComputerInc.ASUSGiftBox"] = new("asusGiftBox", "asus"),
+        ["AsusTek.AsusGlideX"] = new("asusGlideX", "asus"),
+        ["AsusTekComputerInc.AsusGlideX"] = new("asusGlideX", "asus"),
 
         // OEM — Acer
-        ["AcerInc.AcerCareCenter"] = new("Acer Care Center", "Acer's support/update center.", "Acer"),
-        ["AcerInc.AcerQuickAccess"] = new("Acer Quick Access", "Acer's hotkey/system-utility app.", "Acer"),
-        ["AcerInc.AcerJumpStart"] = new("Acer JumpStart", "Acer's welcome/setup app.", "Acer"),
+        ["AcerInc.AcerCareCenter"] = new("acerCareCenter", "acer"),
+        ["AcerInc.AcerQuickAccess"] = new("acerQuickAccess", "acer"),
+        ["AcerInc.AcerJumpStart"] = new("acerJumpStart", "acer"),
 
         // OEM — MSI
-        ["MSI.MSICenter"] = new("MSI Center", "MSI's all-in-one support/utility app.", "MSI"),
-        ["9099B36F.MSICenter"] = new("MSI Center", "MSI's all-in-one support/utility app.", "MSI"),
+        ["MSI.MSICenter"] = new("msiCenter", "msi"),
+        ["9099B36F.MSICenter"] = new("msiCenter", "msi"),
     };
 
     /// <summary>
