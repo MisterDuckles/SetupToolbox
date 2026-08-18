@@ -131,6 +131,25 @@ public sealed class LocalizationService
     }
 
     /// <summary>
+    /// Bestaat deze key in de brontaal? Voor optionele teksten (een tweak zonder
+    /// use-case) — die mogen ontbreken en zijn dus géén LOC-MISS. Logt daarom niet.
+    /// </summary>
+    public bool Has(string key) => !string.IsNullOrEmpty(key) && _english.ContainsKey(key);
+
+    /// <summary>
+    /// Zoekt op in een EXPLICIETE taal in plaats van de actieve. Nodig waar een
+    /// string ook buiten de UI leeft: een tweak-profiel bewaart het choice-label,
+    /// en dat bestand moet leesbaar blijven als je later van taal wisselt (of het
+    /// met iemand deelt die de app in de andere taal draait). Zie TweakProfileService.
+    /// Geen fallback en geen LOC-MISS: dit is een vergelijking, geen weergave.
+    /// </summary>
+    public string? Raw(string key, AppLanguage language)
+    {
+        var table = language == AppLanguage.Dutch ? _dutch : _english;
+        return table.TryGetValue(key, out var value) ? value : null;
+    }
+
+    /// <summary>
     /// Zoekt op en formatteert met de culture van de gekozen taal, zodat getallen
     /// in de tekst bij de taal passen en niet bij de systeem-locale.
     /// </summary>

@@ -49,7 +49,7 @@ public sealed class SelectionImportExportService
     public async Task<SelectionImportResult> ImportAsync(string filePath, AppDatabase? db, bool clearFirst = true)
     {
         if (!File.Exists(filePath))
-            return new SelectionImportResult(0, 0, "File niet gevonden.");
+            return new SelectionImportResult(0, 0, App.Loc.S("io.fileNotFound"));
 
         SelectionExportPayload? payload;
         try
@@ -59,11 +59,11 @@ public sealed class SelectionImportExportService
         }
         catch (Exception ex)
         {
-            return new SelectionImportResult(0, 0, $"Kon JSON niet lezen: {ex.Message}");
+            return new SelectionImportResult(0, 0, App.Loc.S("io.jsonReadFailed", ex.Message));
         }
 
         if (payload?.Apps == null || payload.Apps.Count == 0)
-            return new SelectionImportResult(0, 0, "Bestand bevat geen apps.");
+            return new SelectionImportResult(0, 0, App.Loc.S("io.noAppsInFile"));
 
         if (clearFirst) SelectionHelper.ClearSelection(db);
 

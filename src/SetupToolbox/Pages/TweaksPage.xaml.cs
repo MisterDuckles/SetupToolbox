@@ -229,7 +229,10 @@ public sealed partial class TweaksPage : Page
         var total = 0;
         foreach (var grp in byCat)
         {
-            var list = grp.OrderBy(t => t.Group).ThenBy(t => t.Name).ToList();
+            // Sorteren op de stabiele GroupKey, niet op de vertaalde weergave —
+            // anders verspringt de groepsvolgorde bij een taalwissel.
+            var list = grp.OrderBy(t => t.GroupKey, StringComparer.Ordinal)
+                          .ThenBy(t => t.Name).ToList();
             if (list.Count == 0) continue;
             total += list.Count;
 

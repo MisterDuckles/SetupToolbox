@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.3** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.4** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -13,14 +13,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 ---
 
 ## Open
-
-### v1.2.4 — Multi-language fase 3: het tweak-corpus
-
-Het grootste blok en het enige dat **auteurswerk** is in plaats van vertaalwerk: de Engelse zinnen bestaan nog niet.
-
-**Scope (~390 strings):** 117 × `name` (al Engels, verplaatsen), 117 × `description` en 115 × `useCase` (nu Nederlands → Engelse bron schrijven, huidige NL wordt de vertaling), 27 `TweakChoice`-labels verspreid over **7** choice-tweaks, en de 12 `TweakCategory`-blurbs uit `Models/Tweak.cs`.
-
-**Mechanisch aandachtspunt:** `Tweak.Name`/`Description`/`UseCase` zijn nu constructor-velden. Voor live wisselen moeten dat lookups worden op basis van de stabiele `Id` (bv. `tweak.Explorer.ShowFileExtensions.desc`) — `Tweak` implementeert al `INotifyPropertyChanged`, dus na een taalwissel volstaat het om `PropertyChanged` voor die drie te vuren. Ook `StateLabel` en `AdminTooltip` in `Models/Tweak.cs` staan nog hardcoded.
 
 ### v1.2.5 — Multi-language fase 4: bloatware-metadata
 
@@ -70,6 +62,15 @@ Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zoda
 - **Hoeveel regels?** Compact houden was de expliciete wens: een handvol bullets, niet de volledige changelog.
 - **Vertaling.** Valt onder de multi-language-reeks: de highlights moeten in beide talen bestaan, dus het formaat moet daar rekening mee houden.
 
+### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.4
+
+Losse punten die in de weg lagen of opvielen, geen van alle blokkerend. Los oppakken of meenemen met een volgende patch.
+
+- **Stijlafspraken voor `strings.en.json` staan nergens vast, en het bestand is nu inconsistent.** Drie dingen die per categorie anders uitpakten en één keer besloten moeten worden: (1) **US vs Brits Engels** — geteld in de huidige tabel: 1× `recognise` tegenover 2× `recognize`, 8× `cancelled` (Brits) naast 10× `color` en 5× `behavior` (US); (2) de **`N-op`-notatie** uit de Nederlandse bron is als "N keys" vertaald, maar "N operations" of "N values" is net zo verdedigbaar en komt in tientallen descriptions voor; (3) **`LET OP:`** staat 6× in het Nederlands en is 5× als `NOTE:` en 1× als `WARNING:` gerenderd (die ene is Take Ownership op systeemmappen). `NOTE:` is zwakker dan het Nederlandse `LET OP:`; kies één marker en voer 'm door.
+- **Een paar Nederlandse tweak-namen gebruiken een andere term dan hun eigen omschrijving.** De namen zijn nieuw vertaald en volgen de term die Nederlands Windows gebruikt; de omschrijvingen zijn de bestaande tekst en gebruiken soms het leenwoord. Concreet: *navigatiebalk* (naam) vs Windows' *navigatiedeelvenster*, *aanmeldscherm* vs *login-scherm*, *Schuifbalken* vs *scrollbars*, *taakbalkanimaties* vs *taskbar-animaties*, *Deze PC* vs Windows' *Deze pc*. Cosmetisch, maar het staat op dezelfde card onder elkaar. Fixen betekent de Nederlandse omschrijvingen aanpassen — bewust niet gedaan in v1.2.4, want dat is de "bestaande tekst blijft staan"-regel van deze fase.
+- **Accessibility: het NavigationView-Settings-item blijft zijn oude automation-naam houden na een taalwissel.** Visueel klopt het (het label wórdt "Settings"), maar de UI-Automation `Name` van dat ene item blijft op de vorige taal staan — WinUI ververst de automation peer niet wanneer je `Content` na het laden zet. Een schermlezer noemt het item dus verkeerd tot de app herstart. Vermoedelijke fix: naast `Content` ook `AutomationProperties.SetName(settingsItem, …)` zetten in `MainWindow.ApplyLanguage()`. Niet gemeten met een echte schermlezer.
+- **De geplande auto-update-task op deze dev-machine wijst naar `bin\Debug`.** `Execute = D:\WinAppInstaller\src\SetupToolbox\bin\Debug\…\SetupToolbox.exe /autoupdate`. Precies waar de v1.0.14-notitie voor waarschuwde. Gevolg tijdens deze sessie: die run hield het exe-bestand vast, waardoor `dotnet build` niet kon kopiëren (`MSB3021`), en hij draait ge-eleveerd dus je kunt 'm niet zomaar killen. Opnieuw aanmaken vanuit de geïnstalleerde app.
+
 ### Zonder versienummer — release-cadans
 
 **Besloten op 2026-08-16: v1.2.0 is gecut** en als GitHub Release gepubliceerd — zie de v1.2.0-sectie onder *Voltooide versies*. Daarmee is de achterstand weg: self-update levert nu alles uit v1.0.1 t/m v1.0.14 in één keer af. Het openstaande besluit ("wanneer komt de volgende milestone?") is hiermee beantwoord voor deze ronde.
@@ -89,6 +90,46 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.4 — Multi-language fase 3: het tweak-corpus
+
+**Derde van vijf fasen**, en het enige blok dat **auteurswerk** was in plaats van vertaalwerk: de Engelse zinnen bestónden niet. De stringtabellen groeiden van **439 naar 881 keys**, in beide talen even groot.
+
+**De inventarisatie klopte niet — het zijn 124 tweaks, geen 117.** Nageteld met een parser over `BuildAll()` in plaats van met de hand: 115 directe `new Tweak(`-registraties plus 9 via twee lokale factories (`BlockedTweak` ×7, `HideNavPaneItem` ×2). Die 9 zaten niet in de oude telling. Definitieve cijfers: 124 × `name`, 124 × `description`, **122** × `useCase` (de twee `HideNavPaneItem`-tweaks hebben er geen), 27 `TweakChoice`-labels over 7 choice-tweaks.
+
+**Niet eerder geïnventariseerd: 12 sub-groep-headers.** `Tweak.Group` was een Nederlandse literal (`"Thema & kleuren"`, `"Items verwijderen"`, …) uit twaalf `const string`-declaraties in `BuildAll()`. Die staan als sub-headers op de detail-pagina en waren dus gewoon zichtbaar Nederlands; ze stonden in geen enkele scope-lijst. Meegenomen.
+
+**Totaal 442 nieuwe keys:** 124 name + 124 desc + 122 useCase + 27 choice-labels + 12 sub-groepen + 12 categorie-namen + 12 categorie-blurbs + 4 status-pills + 1 admin-tooltip + 4 import/export-foutmeldingen.
+
+**Het mechanisme.** `Tweak.Name`/`Description`/`UseCase` zijn van constructor-velden naar lookups op de stabiele `Id` gegaan (`tweak.<Id>.name` / `.desc` / `.useCase`). Daarmee verdwenen 350 argument-regels uit `TweakService.cs` (het bestand ging van 3412 naar 3037 regels) en is de tekst niet langer verdeeld over code en tabel. Verder:
+
+- **`UseCase` is optioneel**, dus "key ontbreekt" is daar een geldige toestand. Nieuwe `LocalizationService.Has(key)` kijkt in de brontabel zónder een `LOC-MISS` te loggen — anders zouden die twee tweaks elke sessie een valse melding opleveren.
+- **`TweakChoice` kent zijn eigen label niet meer.** De constructor is `new TweakChoice(values)`; de `Tweak`-constructor deelt bij het opbouwen de key uit op index (`tweak.<Id>.choice<N>`). De choice kende zijn index niet, de tweak wel.
+- **`Tweak.Group` is gesplitst in `GroupKey` (stabiel) en `Group` (vertaald).** Groeperen en sorteren gaat op `GroupKey`; alleen de header-tekst komt uit `Group`. Groeperen op de vertaling zou twee groepen samenvoegen zodra beide talen dezelfde tekst opleveren, en de groepsvolgorde laten verspringen bij een taalwissel.
+- **`StateLabel`, `AdminTooltip` en `TweakCategoryExtensions.DisplayName`/`Blurb`** lopen nu ook via de tabel; `Icon()` blijft hardcoded (emoji, taalonafhankelijk).
+
+**`PropertyChanged` bleek niet het mechanisme.** De roadmap ging ervan uit dat een taalwissel opgelost is door `PropertyChanged` te vuren voor die drie properties. Dat klopt niet: `TweakCardFactory` bouwt de cards imperatief op (`Text = tweak.Name`, geen binding), dus er is niets om aan te hangen. Wat het écht doet is de bestaande v1.2.2-mechaniek — `MainWindow` navigeert de huidige page opnieuw, de cards worden vers opgebouwd en lezen dan de nieuwe tabel. `RaiseLocalizedTextChanged()` is er alsnog (en `TweakService` roept 'm aan op `LanguageChanged`), maar als vangnet voor toekomstige `x:Bind`-consumers, niet als het werkende pad.
+
+**Tweak-profielen zouden stukgaan op vertaalde labels — opgelost.** `TweakProfileService` bewaart bij een multi-choice tweak het gekozen optie-**label** (bewuste v0.9.20-keuze: label i.p.v. index, zodat herordening het profiel niet corrumpeert). Met vertaalde labels zou een profiel dat je in het Nederlands exporteert niet meer importeren in het Engels. Nu: **export schrijft altijd het Engelse label** (brontaal, bestaat gegarandeerd), en `ResolveChoiceIndex` matcht bij het inlezen tegen de actieve taal **én** beide tabellen. Daarmee blijven ook profielen van vóór v1.2.4 werken — die bevatten de toen hardcoded mix van Engels ("Search box") en Nederlands ("5 seconden (standaard)"). Nieuwe `LocalizationService.Raw(key, language)` doet die taal-expliciete lookup zonder fallback en zonder `LOC-MISS`, want het is een vergelijking en geen weergave.
+
+**Twee restjes uit fase 2 opgeruimd.** `TweakProfileService` en `SelectionImportExportService` gooiden nog vier hardcoded Nederlandse foutmeldingen naar de UI ("Bestand niet gevonden.", "Kon JSON niet lezen: …", "Bestand bevat geen apps./tweaks."). Nu `io.*`-keys.
+
+**De Nederlandse tekst is één-op-één overgezet** — geverifieerd met een vergelijking tegen de vorige commit: 124/124 descriptions en 122/122 use-cases byte-voor-byte identiek. Eén bewuste uitzondering: in `Security.DisableBitLockerAutoEncryption` stond "vóór je Windows opnieuw installeert of *resetten*", dat is "of *reset*" geworden. Bestaande fout, geen vertaalfout, maar hij staat wel in de UI.
+
+**Eén echte UI-bug gevonden en gefixt.** De categorie-tile voor Notifications & Lock Screen toonde na het vertalen van de categorie-naam twee keer dezelfde regel: naam én blurb waren "Meldingen & vergrendelscherm" (en in het Engels "Notifications & Lock Screen" / "Notifications & lock screen"). Zichtbaar geworden doordat de naam vertaald werd — daarvóór maskeerde het Engels/Nederlands-verschil het. De blurb is aangepast naar de vorm van zijn buren, die opsommen wat er ín de categorie zit: "Pop-ups, sounds & lock screen options" / "Pop-ups, geluiden & vergrendelscherm-opties".
+
+> **Geverifieerd (2026-08-17) — draaiende app, beide talen, niet alleen een geslaagde build:**
+> - Build: **0 errors, 0 warnings**.
+> - **Alle 124 tweak-cards daadwerkelijk gerenderd, in beide talen.** De zoekbalk op de Tweaks-landing is daarvoor de volledige sweep: `Matches()` leest `Name` + `Description` + `UseCase` + categorie-naam van élke tweak, en elke treffer bouwt een echte card (inclusief status-pill, admin-tooltip en de ComboBox-labels van de choice-tweaks). Eén letter typen levert **"124 tweaks gevonden" / "124 tweaks found"** op — het hele corpus resolvet dus in één actie.
+> - **Geen enkele `LOC-MISS`** in `install.log` over de hele sessie, en geen `crash.log`.
+> - Detail-pagina UI/Thema met de vijf sub-groepen in beide talen: *Thema & kleuren / Desktop & vensters / Boot & login / Geluid / Invoer & weergave* ↔ *Theme & colors / Desktop & windows / Boot & login / Sound / Input & display*, mét de "1 / 4 actief"-tellers.
+> - Choice-labels in de ComboBox: *Light / Dark / Custom (dark apps, light shell)*.
+> - Live wisselen NL → EN → NL zonder herstart; de taalkeuze blijft in `settings.json` staan.
+> - **De v1.2.2-valkuil is niet teruggekomen:** het NavigationView-Settings-item wisselt netjes mee (visueel gecontroleerd op een screenshot — zie de a11y-noot in *Open*). Op de Tweaks-pagina's staan geen `ToggleSwitch`-controls, dus het On/Off-probleem speelt daar niet.
+>
+> **Niet getest:** een echte Apply op een tweak (dat schrijft naar het register), en export/import van een tweak-profiel over een taalwissel heen. De export/import-code is wel op de vergelijkingslogica nagelopen, maar niet end-to-end gedraaid.
+
+**Werkwijze-notitie.** De 350 argument-regels en 27 choice-labels zijn niet met de hand of met een regex weggehaald maar met een **C#-string-literal-parser** die per `new Tweak(`-blok de named arguments op diepte 1 opzoekt en op karakteroffset knipt. Reden: verbatim strings (`@"..."`), escapes (`\\`) en `//`-commentaar binnen de blokken maken een regex-aanpak onbetrouwbaar, en bij 124 registraties merk je één stille misser niet op. Dezelfde parser leverde ook de corpus-extractie voor het vertaalwerk. **Let op bij het herhalen hiervan:** lees en schrijf met expliciete `newline=''`, anders converteert Python het hele bestand stilletjes van CRLF naar LF en is de diff onleesbaar.
 
 ### Zonder versienummer — MSIX-onderzoek: afgerond, conclusie is **niet doen**
 
@@ -219,6 +260,8 @@ Er is op een unpackaged WinUI 3-app **geen enkele manier om de app-brede taal te
 > Dit is precies de aanname die getest moest worden. `.resw` blijft bruikbaar als *opslagformaat* met een expliciete context per lookup — maar `x:Uid`, de enige reden om voor `.resw` te kiezen boven een gewone tabel, valt weg.
 
 #### Inventarisatie bijgesteld na narekenen
+
+> **Nogmaals bijgesteld in v1.2.4:** de tweak-regel hieronder klopt niet. Het zijn **124** tweaks, niet 117 — 9 registraties lopen via twee lokale factories en werden met de hand niet meegeteld. Zie de v1.2.4-sectie voor de definitieve cijfers.
 
 De eerdere telling was te laag; hij dekte alleen het tweak-blok. Gemeten aantallen:
 

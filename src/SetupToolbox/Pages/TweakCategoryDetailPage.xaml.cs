@@ -69,7 +69,7 @@ public sealed partial class TweakCategoryDetailPage : Page
     {
         ContentContainer.Children.Clear();
         var tweaks = App.Tweaks.InCategory(_category).ToList();
-        var hasGroups = tweaks.Any(t => t.Group != null);
+        var hasGroups = tweaks.Any(t => t.GroupKey != null);
 
         if (!hasGroups)
         {
@@ -80,19 +80,21 @@ public sealed partial class TweakCategoryDetailPage : Page
         }
 
         // Ongegroepeerde tweaks eerst (plat).
-        foreach (var tweak in tweaks.Where(t => t.Group == null))
+        foreach (var tweak in tweaks.Where(t => t.GroupKey == null))
             ContentContainer.Children.Add(TweakCardFactory.Build(tweak));
 
-        // Groepen in insertievolgorde.
-        var groupNames = tweaks.Where(t => t.Group != null)
-            .Select(t => t.Group!)
+        // Groepen in insertievolgorde. Groeperen gaat op de stabiele GroupKey,
+        // niet op de vertaalde weergave (Group).
+        var groupKeys = tweaks.Where(t => t.GroupKey != null)
+            .Select(t => t.GroupKey!)
             .Distinct()
             .ToList();
         var collapsible = tweaks.Count >= CollapsibleGroupThreshold;
 
-        foreach (var gName in groupNames)
+        foreach (var gKey in groupKeys)
         {
-            var inGroup = tweaks.Where(t => t.Group == gName).ToList();
+            var inGroup = tweaks.Where(t => t.GroupKey == gKey).ToList();
+            var gName = App.Loc.S(gKey);
             if (collapsible)
                 ContentContainer.Children.Add(BuildCollapsibleGroup(gName, inGroup));
             else

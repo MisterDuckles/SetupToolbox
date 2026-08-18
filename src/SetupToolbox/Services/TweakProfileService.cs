@@ -41,7 +41,16 @@ public sealed class TweakProfileService
             {
                 string? choice = null;
                 if (kv.Value is int idx && kv.Key.Choices != null && idx >= 0 && idx < kv.Key.Choices.Count)
-                    choice = kv.Key.Choices[idx].Label;
+                {
+                    // Bewust het ENGELSE label, niet het actieve: sinds v1.2.4 zijn
+                    // choice-labels vertaald, en een profiel moet leesbaar blijven
+                    // als je later van taal wisselt of het bestand deelt met iemand
+                    // die de app in de andere taal draait. Engels is de brontaal en
+                    // bestaat dus gegarandeerd. ResolveChoiceIndex accepteert bij het
+                    // inlezen beide talen, zodat oudere profielen blijven werken.
+                    var c = kv.Key.Choices[idx];
+                    choice = App.Loc.Raw(c.Key, AppLanguage.English) ?? c.Label;
+                }
                 return new TweakProfileEntry { Id = kv.Key.Id, Choice = choice };
             })
             .ToList();
@@ -65,7 +74,7 @@ public sealed class TweakProfileService
     public async Task<TweakProfileImportResult> ImportAsync(string filePath, IEnumerable<Tweak> catalog)
     {
         if (!File.Exists(filePath))
-            return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), "Bestand niet gevonden.");
+            return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), App.Loc.S("io.fileNotFound"));
 
         TweakProfilePayload? payload;
         try
@@ -75,11 +84,11 @@ public sealed class TweakProfileService
         }
         catch (Exception ex)
         {
-            return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), $"Kon JSON niet lezen: {ex.Message}");
+            return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), App.Loc.S("io.jsonReadFailed", ex.Message));
         }
 
         if (payload?.Tweaks == null || payload.Tweaks.Count == 0)
-            return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), "Bestand bevat geen tweaks.");
+            return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), App.Loc.S("io.noTweaksInFile"));
 
         var lookup = catalog
             .GroupBy(t => t.Id, StringComparer.OrdinalIgnoreCase)
@@ -110,13 +119,26 @@ public sealed class TweakProfileService
         return new TweakProfileImportResult(matched, skipped, null);
     }
 
+    // Matcht het opgeslagen label tegen ALLE talen, niet alleen de actieve. Nieuwe
+    // exports schrijven het Engelse label, maar profielen van vóór v1.2.4 bevatten
+    // het label zoals het toen hardcoded stond — dat was een mix van Engels
+    // ("Search box") en Nederlands ("5 seconden (standaard)"). Beide tabellen
+    // afgaan houdt die bestanden dus gewoon importeerbaar.
     private static int ResolveChoiceIndex(Tweak tweak, string? label)
     {
         if (label == null || tweak.Choices == null) return -1;
         for (int i = 0; i < tweak.Choices.Count; i++)
-            if (string.Equals(tweak.Choices[i].Label, label, StringComparison.OrdinalIgnoreCase))
+        {
+            var c = tweak.Choices[i];
+            if (Eq(c.Label, label)
+                || Eq(App.Loc.Raw(c.Key, AppLanguage.English), label)
+                || Eq(App.Loc.Raw(c.Key, AppLanguage.Dutch), label))
                 return i;
+        }
         return -1;
+
+        static bool Eq(string? a, string b) =>
+            a != null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 
     // Zet alléén de DELTA van een matched-set in de pending-store: tweaks die al

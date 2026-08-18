@@ -120,18 +120,32 @@ public sealed record TweakChoiceValue
 // Een keuze in een multi-state tweak. Bijv. Search heeft 4 modes (Hide /
 // Icon only / Search box / Icon + label) — elk een TweakChoice met een set
 // (Path, ValueName, Value) writes die gezamenlijk die mode realiseren.
+//
+// Het label is sinds v1.2.4 vertaald en staat dus niet meer in de constructor.
+// De Tweak-constructor deelt bij het opbouwen een stabiele key uit op basis van
+// zijn eigen Id + de index van de choice: "tweak.<Id>.choice<N>". Die index is
+// bewust de volgorde in BuildAll — herordenen van choices betekent dus keys
+// hernummeren (en dat is ook precies wat de registry-detectie al aanneemt).
 public sealed class TweakChoice
 {
-    public string Label { get; }            // displayed in ComboBox
-    public string? Description { get; }     // optional caption onder de label
     public IReadOnlyList<TweakChoiceValue> Values { get; }
 
-    public TweakChoice(string label, IReadOnlyList<TweakChoiceValue> values, string? description = null)
+    public TweakChoice(IReadOnlyList<TweakChoiceValue> values)
     {
-        Label = label;
-        Description = description;
         Values = values;
     }
+
+    /// <summary>Loc-key, gezet door de Tweak-constructor. Stabiel, taalonafhankelijk.</summary>
+    public string Key { get; private set; } = string.Empty;
+
+    internal void BindKey(string key) => Key = key;
+
+    public string Label => SetupToolbox.App.Loc.S(Key);
+
+    // Optionele caption onder de label — geen enkele choice heeft er nu één,
+    // maar de key wordt wél gehonoreerd zodra 'ie in de tabel gezet wordt.
+    public string? Description =>
+        SetupToolbox.App.Loc.Has(Key + ".desc") ? SetupToolbox.App.Loc.S(Key + ".desc") : null;
 }
 
 // Een toggle-able item in de Tweaks tab. Definitions worden statisch in
@@ -151,17 +165,31 @@ public sealed class Tweak : INotifyPropertyChanged
 {
     public string Id { get; }                          // stable ID voor presets/profiles later
     public TweakCategory Category { get; }
-    public string Name { get; }                        // korte regel, mens-leesbaar
-    public string Description { get; }                 // wat doet 't kort (1 zin)
-    public string? UseCase { get; }                    // waarom willen power-users dit (optional)
     public IReadOnlyList<TweakOperation> Operations { get; }
     public IReadOnlyList<TweakChoice>? Choices { get; }
     public RestartRequirement Restart { get; }
+
+    // Naam / omschrijving / use-case zijn sinds v1.2.4 VERTAALD en worden dus
+    // opgezocht op de stabiele Id in plaats van in de constructor meegegeven.
+    // Zie data/strings.en.json — Engels is de brontaal en de fallback.
+    public string Name => SetupToolbox.App.Loc.S($"tweak.{Id}.name");
+    public string Description => SetupToolbox.App.Loc.S($"tweak.{Id}.desc");
+
+    // Optioneel: twee tweaks hebben geen use-case. "Ontbreekt" is hier dus een
+    // geldige toestand en géén LOC-MISS — vandaar Has() i.p.v. een lege S().
+    public string? UseCase =>
+        SetupToolbox.App.Loc.Has($"tweak.{Id}.useCase") ? SetupToolbox.App.Loc.S($"tweak.{Id}.useCase") : null;
+
     // Optionele sub-groep BINNEN een categorie — puur cosmetisch voor de
     // TweaksPage-rendering (sub-headers in een grote categorie zoals UI/Theme).
     // null = geen sub-groep, tweak rendert plat. Apply/detect-logica leest dit
     // veld NOOIT — toevoegen verandert niets aan tweak-gedrag.
-    public string? Group { get; }
+    //
+    // GroupKey is de stabiele loc-key en het enige waarop gegroepeerd/gesorteerd
+    // mag worden; Group is de vertaalde weergave. Groeperen op de vertaling zou
+    // twee groepen samenvoegen zodra twee talen dezelfde tekst opleveren.
+    public string? GroupKey { get; }
+    public string? Group => GroupKey == null ? null : SetupToolbox.App.Loc.S(GroupKey);
 
     public bool IsChoice => Choices != null;
     public bool RequiresElevation =>
@@ -205,36 +233,30 @@ public sealed class Tweak : INotifyPropertyChanged
     public bool IsPartial => _state == TweakState.Partial;
     public string StateLabel => _state switch
     {
-        TweakState.Enabled => "Active",
-        TweakState.Disabled => "Default",
-        TweakState.Partial => "Partial",
-        TweakState.Unknown => "Unknown",
+        TweakState.Enabled => SetupToolbox.App.Loc.S("tweak.state.active"),
+        TweakState.Disabled => SetupToolbox.App.Loc.S("tweak.state.default"),
+        TweakState.Partial => SetupToolbox.App.Loc.S("tweak.state.partial"),
+        TweakState.Unknown => SetupToolbox.App.Loc.S("tweak.state.unknown"),
         _ => string.Empty
     };
 
     public string AdminGlyph => RequiresElevation ? "" : string.Empty;  // Lock
-    public string AdminTooltip => RequiresElevation ? "Vereist administrator (UAC)" : string.Empty;
+    public string AdminTooltip => RequiresElevation ? SetupToolbox.App.Loc.S("tweak.admin.tooltip") : string.Empty;
 
     // Constructor voor toggle-tweaks (Operations met EnabledValue/DisabledValue).
     public Tweak(
         string id,
         TweakCategory category,
-        string name,
-        string description,
         IReadOnlyList<TweakOperation> operations,
         RestartRequirement restart = RestartRequirement.None,
-        string? useCase = null,
         string? group = null)
     {
         Id = id;
         Category = category;
-        Name = name;
-        Description = description;
-        UseCase = useCase;
         Operations = operations;
         Choices = null;
         Restart = restart;
-        Group = group;
+        GroupKey = group;
     }
 
     // Constructor voor multi-choice tweaks (ComboBox in UI, mirror van Windows
@@ -243,22 +265,37 @@ public sealed class Tweak : INotifyPropertyChanged
     public Tweak(
         string id,
         TweakCategory category,
-        string name,
-        string description,
         IReadOnlyList<TweakChoice> choices,
         RestartRequirement restart = RestartRequirement.None,
-        string? useCase = null,
         string? group = null)
     {
         Id = id;
         Category = category;
-        Name = name;
-        Description = description;
-        UseCase = useCase;
         Operations = Array.Empty<TweakOperation>();
         Choices = choices;
         Restart = restart;
-        Group = group;
+        GroupKey = group;
+
+        // De choices krijgen hier hun loc-key — zij kennen hun eigen index niet.
+        for (int i = 0; i < choices.Count; i++)
+            choices[i].BindKey($"tweak.{id}.choice{i}");
+    }
+
+    /// <summary>
+    /// Na een taalwissel: laat de vertaalde teksten opnieuw uitlezen. De
+    /// Tweaks-pagina's bouwen hun cards imperatief op (TweakCardFactory zet
+    /// Text=, geen binding) en worden bij een taalwissel sowieso opnieuw
+    /// genavigeerd — dit is er voor eventuele x:Bind-consumers en om de
+    /// tweak-objecten zelf niet stil achter te laten lopen.
+    /// </summary>
+    public void RaiseLocalizedTextChanged()
+    {
+        OnChanged(nameof(Name));
+        OnChanged(nameof(Description));
+        OnChanged(nameof(UseCase));
+        OnChanged(nameof(Group));
+        OnChanged(nameof(StateLabel));
+        OnChanged(nameof(AdminTooltip));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -269,22 +306,9 @@ public sealed class Tweak : INotifyPropertyChanged
 // UI-helper voor category-grouping op de TweaksPage.
 public static class TweakCategoryExtensions
 {
-    public static string DisplayName(this TweakCategory cat) => cat switch
-    {
-        TweakCategory.Explorer => "Explorer",
-        TweakCategory.Taskbar => "Taskbar",
-        TweakCategory.StartMenu => "Start Menu",
-        TweakCategory.AdsBloat => "Ads & Tracking",
-        TweakCategory.AiCopilot => "AI / Copilot",
-        TweakCategory.Privacy => "Privacy",
-        TweakCategory.UiTheme => "UI / Theme",
-        TweakCategory.Performance => "Performance",
-        TweakCategory.ContextMenu => "Context Menu",
-        TweakCategory.NotificationsLock => "Notifications & Lock Screen",
-        TweakCategory.Updates => "Updates",
-        TweakCategory.Security => "Security",
-        _ => cat.ToString()
-    };
+    // Naam en blurb zijn vertaald (v1.2.4); de enum-naam is de stabiele key.
+    public static string DisplayName(this TweakCategory cat) =>
+        SetupToolbox.App.Loc.S($"tweakCategory.{cat}.name");
 
     // Emoji-icoon per categorie — gebruikt als tile-icoon op de Tweaks-landing,
     // consistent met de emoji-iconen van de Apps-tab category-tiles.
@@ -306,22 +330,8 @@ public static class TweakCategoryExtensions
     };
 
     // Korte één-regel omschrijving per categorie voor de landing-tiles.
-    public static string Blurb(this TweakCategory cat) => cat switch
-    {
-        TweakCategory.Explorer => "File Explorer weergave & gedrag",
-        TweakCategory.Taskbar => "Taskbar knoppen, zoekbalk & gedrag",
-        TweakCategory.StartMenu => "Start menu layout & aanbevelingen",
-        TweakCategory.AdsBloat => "Suggesties, ads & tracking-toggles",
-        TweakCategory.AiCopilot => "Recall, Click to Do & AI-features",
-        TweakCategory.Privacy => "Telemetrie, activity history & meer",
-        TweakCategory.UiTheme => "Thema, kleuren, animaties & login",
-        TweakCategory.Performance => "Opstart, opslag, netwerk & snelheid",
-        TweakCategory.ContextMenu => "Rechtermuisknop-menu aanpassingen",
-        TweakCategory.NotificationsLock => "Meldingen & vergrendelscherm",
-        TweakCategory.Updates => "Windows Update gedrag",
-        TweakCategory.Security => "Versleuteling & beveiliging",
-        _ => string.Empty
-    };
+    public static string Blurb(this TweakCategory cat) =>
+        SetupToolbox.App.Loc.S($"tweakCategory.{cat}.blurb");
 }
 
 // View-model voor één category-tile op de Tweaks-landing. Wordt in code
