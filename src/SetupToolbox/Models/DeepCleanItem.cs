@@ -101,24 +101,34 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
 
     // ── UI helpers ─────────────────────────────────────────────────
 
+    // Badge-chip op elke card. Vertaald sinds v1.2.7 — vijf armen bewust niet:
+    // Prefetch, Windows.old, App Paths, MUIcache en HKCU zijn de LETTERLIJKE
+    // namen van Windows-artefacten (map-, registry-key- en hive-namen), geen
+    // woorden. Zelfde regel als de merknamen in v1.2.5 en de app-namen in
+    // v1.2.6: identifiers horen bij de code, proza hoort in de tabel. Ze staan
+    // met die reden in de ALLOW-lijst van scripts/scan-untranslated.py.
+    //
+    // Groeperen en sorteren gaat op de enum (zie DeepCleanDialog), niet op deze
+    // tekst — de GroupKey-vs-Group-val uit v1.2.4 speelt hier dus niet. Het
+    // filter matcht er wél op, en dat is de bedoeling: je zoekt op wat je ziet.
     public string CategoryLabel => Category switch
     {
-        DeepCleanCategory.UserTemp => "User temp",
-        DeepCleanCategory.SystemTemp => "System temp",
-        DeepCleanCategory.UpdateCache => "Update cache",
+        DeepCleanCategory.UserTemp => SetupToolbox.App.Loc.S("deepclean.cat.userTemp"),
+        DeepCleanCategory.SystemTemp => SetupToolbox.App.Loc.S("deepclean.cat.systemTemp"),
+        DeepCleanCategory.UpdateCache => SetupToolbox.App.Loc.S("deepclean.cat.updateCache"),
         DeepCleanCategory.Prefetch => "Prefetch",
-        DeepCleanCategory.RecycleBin => "Recycle Bin",
+        DeepCleanCategory.RecycleBin => SetupToolbox.App.Loc.S("deepclean.cat.recycleBin"),
         DeepCleanCategory.WindowsOld => "Windows.old",
-        DeepCleanCategory.BrowserCache => "Browser cache",
-        DeepCleanCategory.OrphanedFolder => "Orphaned folder",
-        DeepCleanCategory.OrphanedRegistry => "Orphaned registry",
+        DeepCleanCategory.BrowserCache => SetupToolbox.App.Loc.S("deepclean.cat.browserCache"),
+        DeepCleanCategory.OrphanedFolder => SetupToolbox.App.Loc.S("deepclean.cat.orphanFolder"),
+        DeepCleanCategory.OrphanedRegistry => SetupToolbox.App.Loc.S("deepclean.cat.orphanRegistry"),
         DeepCleanCategory.OrphanedAppPath => "App Paths",
         DeepCleanCategory.OrphanedMuiCache => "MUIcache",
-        DeepCleanCategory.OrphanedClassHandler => "Class handler",
-        DeepCleanCategory.OrphanedShortcut => "Shortcut",
-        DeepCleanCategory.OrphanedScheduledTask => "Scheduled task",
-        DeepCleanCategory.OrphanedFirewallRule => "Firewall rule",
-        DeepCleanCategory.OrphanedService => "Service",
+        DeepCleanCategory.OrphanedClassHandler => SetupToolbox.App.Loc.S("deepclean.cat.classHandler"),
+        DeepCleanCategory.OrphanedShortcut => SetupToolbox.App.Loc.S("deepclean.cat.shortcut"),
+        DeepCleanCategory.OrphanedScheduledTask => SetupToolbox.App.Loc.S("deepclean.cat.scheduledTask"),
+        DeepCleanCategory.OrphanedFirewallRule => SetupToolbox.App.Loc.S("deepclean.cat.firewallRule"),
+        DeepCleanCategory.OrphanedService => SetupToolbox.App.Loc.S("deepclean.cat.service"),
         DeepCleanCategory.OrphanedHkcuVendor => "HKCU vendor",
         _ => string.Empty
     };
@@ -128,7 +138,7 @@ public sealed class DeepCleanItem : INotifyPropertyChanged
         : (Brush)Application.Current.Resources["SystemFillColorCautionBackgroundBrush"];
 
     public string SizeLabel => SizeBytes <= 0
-        ? "empty"
+        ? SetupToolbox.App.Loc.S("deepclean.size.empty")
         : SetupToolbox.App.Loc.FormatBytes(SizeBytes);
 
     public string LastModifiedLabel => LastModified == null

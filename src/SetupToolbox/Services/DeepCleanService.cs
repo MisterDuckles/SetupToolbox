@@ -44,10 +44,10 @@ public sealed class DeepCleanService
         var result = paths.Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
         // Ook de "soft" categorie-locations meenemen zodat de scan-summary
         // tekst dekkend is — anders denkt user dat we alleen folders scanden.
-        result.Add("Uninstall registry keys + App Paths + MUIcache + class handlers");
-        result.Add("Start Menu / Desktop shortcuts");
-        result.Add("Scheduled tasks + Firewall rules");
-        result.Add("Windows services + HKCU\\Software vendor keys");
+        result.Add(App.Loc.S("deepclean.scanloc.registryEntries"));
+        result.Add(App.Loc.S("deepclean.scanloc.shortcuts"));
+        result.Add(App.Loc.S("deepclean.scanloc.tasksFirewall"));
+        result.Add(App.Loc.S("deepclean.scanloc.servicesHkcu"));
         return result;
     }
 
@@ -70,15 +70,17 @@ public sealed class DeepCleanService
     /// </summary>
     public static IReadOnlyList<string> GetCacheScanLocations()
     {
+        // De kale paden blijven letterlijk — dat zijn Windows-mapnamen, geen
+        // tekst. Alleen de regels met echte woorden erin lopen via de tabel.
         return new List<string>
         {
-            "%TEMP% (user temp)",
+            App.Loc.S("deepclean.scanloc.userTemp"),
             "%WINDIR%\\Temp",
             "%WINDIR%\\SoftwareDistribution\\Download",
             "%WINDIR%\\Prefetch",
             "%WINDIR%.old (Windows.old)",
-            "Edge / Chrome / Brave / Firefox caches",
-            "Recycle Bin"
+            App.Loc.S("deepclean.scanloc.browserCaches"),
+            App.Loc.S("deepclean.cat.recycleBin")
         };
     }
 
@@ -148,17 +150,25 @@ public sealed class DeepCleanService
         // Browser caches — alleen toevoegen als de browser geïnstalleerd lijkt
         // (default-pad bestaat). Voorkomt dat we een Firefox-entry tonen aan
         // een user die alleen Edge gebruikt.
+        //
+        // De Description liep hier tot v1.2.7 als hardcoded NEDERLANDSE zin mee,
+        // terwijl de Firefox-tak eronder al deepclean.desc.browserCache gebruikte
+        // — twee talen op dezelfde lijst cards. De DisplayName blijft bewust wél
+        // Engels: BundleByTokenOverlap in DeepCleanDialog tokeniseert 'm, en een
+        // Nederlandse variant kan tokens gaan delen die het Engels niet deelt
+        // ("Tijdelijke bestanden (gebruiker)" vs "(systeem)"), waardoor de cards
+        // per taal anders zouden bundelen. Zie NEXT-STEPS.md v1.2.7.
         var browserTargets = new (string Name, string Path, string Description)[]
         {
             ("Edge cache",
              Path.Combine(localAppData, "Microsoft", "Edge", "User Data", "Default", "Cache"),
-             "Browser cache van Microsoft Edge. Sites moeten resources opnieuw laden, login-state blijft typisch behouden."),
+             App.Loc.S("deepclean.desc.browserCache.edge")),
             ("Chrome cache",
              Path.Combine(localAppData, "Google", "Chrome", "User Data", "Default", "Cache"),
-             "Browser cache van Google Chrome. Sites moeten resources opnieuw laden."),
+             App.Loc.S("deepclean.desc.browserCache.chrome")),
             ("Brave cache",
              Path.Combine(localAppData, "BraveSoftware", "Brave-Browser", "User Data", "Default", "Cache"),
-             "Browser cache van Brave. Sites moeten resources opnieuw laden.")
+             App.Loc.S("deepclean.desc.browserCache.brave"))
         };
         foreach (var (name, path, desc) in browserTargets)
         {

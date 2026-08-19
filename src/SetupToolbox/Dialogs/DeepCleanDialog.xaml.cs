@@ -442,7 +442,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
                 Tag = member
             };
             pathBtn.Click += PathLink_Click;
-            ToolTipService.SetToolTip(pathBtn, "Click to open in Explorer / Regedit");
+            ToolTipService.SetToolTip(pathBtn, App.Loc.S("deepclean.openInExplorer"));
             Grid.SetColumn(pathBtn, 1);
             pathGrid.Children.Add(pathBtn);
 
@@ -691,7 +691,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
             Tag = item
         };
         pathButton.Click += PathLink_Click;
-        ToolTipService.SetToolTip(pathButton, "Click to open in Explorer / Regedit");
+        ToolTipService.SetToolTip(pathButton, App.Loc.S("deepclean.openInExplorer"));
         content.Children.Add(pathButton);
 
         // Geen per-item description meer — de generieke uitleg per category
@@ -779,8 +779,10 @@ public sealed partial class DeepCleanDialog : ContentDialog
         }
         else
         {
-            var label = $"{selectedItems.Count} selected · {App.Loc.FormatBytes(totalBytes)} to free";
-            if (elevated > 0) label += $" · {elevated} need administrator rights";
+            var label = App.Loc.S("deepclean.selected",
+                selectedItems.Count, App.Loc.FormatBytes(totalBytes));
+            if (elevated > 0)
+                label += App.Loc.Plural("deepclean.selected.elevation", elevated);
             SelectionStatusText.Text = label;
         }
         ToggleAllButton.Content = App.Loc.S(_items.All(i => i.IsSelected) ? "common.deselectAll" : "common.selectAll");

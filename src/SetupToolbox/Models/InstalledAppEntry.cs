@@ -102,6 +102,14 @@ public sealed class InstalledAppEntry : INotifyPropertyChanged
     }
 
     // ── UI helpers (badges, visibility) ───────────────────────────
+
+    // Bewust NIET vertaald (besloten in v1.2.7). "Winget" is de productnaam van
+    // Microsofts package manager, "Store" is de Microsoft Store — die heet in
+    // Nederlands Windows ook zo — en "Web" is in beide talen hetzelfde woord.
+    // Drie keys die in beide tabellen dezelfde waarde zouden hebben is alleen
+    // maar onderhoud; zelfde afweging als de app-namen in v1.2.6. De prozaïsche
+    // tooltip hieronder loopt wél via de tabel, want dát is een zin.
+    // Staan met die reden in de ALLOW-lijst van scripts/scan-untranslated.py.
     public string SourceBadgeText => Source switch
     {
         InstalledSource.Winget => "Winget",

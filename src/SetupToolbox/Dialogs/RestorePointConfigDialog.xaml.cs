@@ -38,11 +38,12 @@ public sealed partial class RestorePointConfigDialog : ContentDialog
         ContextText.Text = App.Loc.S("restorePoint.body", OperationName);
 
         var status = await App.RestorePoint.GetStatusAsync();
-        if (status.BlockedReason != null && status.BlockedReason.Contains("System Protection"))
+        if (status.ProtectionOff)
         {
             StatusGlyph.Glyph = "";  // warning
             StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
-            StatusText.Text = status.BlockedReason + App.Loc.S("restorePoint.protectionOffSuffix");
+            StatusText.Text = App.Loc.S("restorePoint.protectionOff")
+                              + App.Loc.S("restorePoint.protectionOffSuffix");
         }
         else if (status.HoursSinceLast.HasValue)
         {

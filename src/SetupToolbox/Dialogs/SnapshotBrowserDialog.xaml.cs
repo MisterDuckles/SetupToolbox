@@ -63,10 +63,18 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
             Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
             TextWrapping = TextWrapping.Wrap
         });
+        // snapshot.entryLabel bestond al sinds v1.2.3 maar deze call-site was
+        // nooit omgezet. Het datumformaat kon niet mee in die key: het bevat het
+        // woord 'om', dus dat is een eigen key geworden. Twee argumenten, dus
+        // geen Loc.Plural — het meervoud hangt aan het aantal waardes.
         var localTime = snap.CreatedAt.ToLocalTime();
+        var stamp = localTime.ToString(App.Loc.S("snapshot.entryDateFormat"), App.Loc.Culture);
         content.Children.Add(new TextBlock
         {
-            Text = $"{localTime:dd MMM yyyy 'om' HH:mm} · {snap.Entries.Count} registry-waardes",
+            Text = App.Loc.S(snap.Entries.Count == 1
+                    ? "snapshot.entryLabel.one"
+                    : "snapshot.entryLabel.other",
+                stamp, snap.Entries.Count),
             Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
         });
@@ -160,7 +168,7 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
         if (result.Cancelled)
         {
             ShowResult(InfoBarSeverity.Warning, App.Loc.S("snapshot.restore.interrupted"),
-                "UAC werd geweigerd voor de elevated registry-keys. De HKCU-keys zijn wel teruggezet.");
+                App.Loc.S("snapshot.restore.interrupted.body"));
         }
         else if (result.FailedCount == 0)
         {

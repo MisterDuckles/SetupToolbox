@@ -312,7 +312,8 @@ public sealed partial class TweaksPage : Page
         if (n == 0) return;
 
         var file = await FilePickerHelper.PickSaveFileAsync(
-            $"my-tweaks-{DateTime.Now:yyyy-MM-dd}", "SetupToolbox tweak-profiel", ".json");
+            $"my-tweaks-{DateTime.Now:yyyy-MM-dd}",
+            App.Loc.S("io.fileType.tweakProfile"), ".json");
         if (file == null) return;
 
         try

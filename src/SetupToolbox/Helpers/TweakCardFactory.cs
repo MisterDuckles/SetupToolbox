@@ -122,7 +122,7 @@ public static class TweakCardFactory
         {
             // Clean slate: een "— niet in profiel —" sentinel op index 0, daarna
             // de echte opties. Selectie schrijft naar App.ProfileSelection.
-            var labels = new List<string> { "— niet in profiel —" };
+            var labels = new List<string> { App.Loc.S("tweak.profile.notInProfile") };
             labels.AddRange(tweak.Choices!.Select(c => c.Label));
             var initial = 0;
             if (App.ProfileSelection.TryGet(tweak, out var pv) && pv is int pidx) initial = pidx + 1;

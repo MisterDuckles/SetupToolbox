@@ -180,24 +180,37 @@ try {{
     /// <summary>
     /// Combineert IsSystemProtectionEnabled + GetLastRestorePoint om te
     /// adviseren of een nieuwe checkpoint zinvol is. Returnt (canCreate,
-    /// hoursSinceLastPoint, reasonIfNot).
+    /// hoursSinceLastPoint, protectionOff).
     /// </summary>
+    /// <remarks>
+    /// v1.2.7: dit gaf eerder een <c>BlockedReason</c>-STRING terug die door
+    /// beide consumers zowel getoond als vergeleken werd
+    /// (<c>BlockedReason.Contains("System Protection")</c>). Zodra die zin
+    /// vertaald wordt, matcht die vergelijking in het Nederlands niet meer —
+    /// de "schrijven en vergelijken in dezelfde taal"-ontsnapping van de
+    /// WingetService-sentinels helpt hier niet, want de Nederlandse tekst bevat
+    /// de woorden "System Protection" helemaal niet. Vandaar een bool als
+    /// discriminant; de zin zelf bouwen de call-sites uit
+    /// <c>restorePoint.protectionOff</c>.
+    ///
+    /// De tweede zin (de 24u-rate-limit) is bij die verbouwing weggehaald in
+    /// plaats van vertaald: beide consumers nemen voor dat geval een eigen,
+    /// al vertaalde tak (settings.restore.rateLimited.tooltip respectievelijk
+    /// restorePoint.lastWas), dus die string werd nooit gerenderd.
+    /// </remarks>
     public async Task<RestorePointStatus> GetStatusAsync()
     {
         var enabled = await IsSystemProtectionEnabledAsync();
-        if (!enabled) return new RestorePointStatus(false, null, "System Protection is uit op deze PC.");
+        if (!enabled) return new RestorePointStatus(false, null, ProtectionOff: true);
 
         var last = await GetLastRestorePointAsync();
-        if (last == null) return new RestorePointStatus(true, null, null);
+        if (last == null) return new RestorePointStatus(true, null, ProtectionOff: false);
 
         var sinceLast = DateTime.Now - last.Value;
-        if (sinceLast < TimeSpan.FromHours(24))
-        {
-            var hoursAgo = sinceLast.TotalHours;
-            return new RestorePointStatus(false, hoursAgo,
-                $"Laatste restore point was {FormatAgo(sinceLast)} geleden — Windows skipt nieuwe punten binnen 24u.");
-        }
-        return new RestorePointStatus(true, sinceLast.TotalHours, null);
+        // Binnen 24u skipt Windows een nieuw punt sowieso — CanCreate op false,
+        // maar System Protection staat gewoon aan.
+        return new RestorePointStatus(
+            sinceLast >= TimeSpan.FromHours(24), sinceLast.TotalHours, ProtectionOff: false);
     }
 
     /// <summary>
@@ -247,4 +260,4 @@ public sealed record RestorePointResult(bool Success, string Message);
 
 // canCreate=false betekent: rate-limited of System Protection uit. Hours
 // is null als er nog nooit een restore point is geweest.
-public sealed record RestorePointStatus(bool CanCreate, double? HoursSinceLast, string? BlockedReason);
+public sealed record RestorePointStatus(bool CanCreate, double? HoursSinceLast, bool ProtectionOff);

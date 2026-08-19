@@ -75,14 +75,14 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
 
     private static string SectionTitle(LeftoverType type, int count) => type switch
     {
-        LeftoverType.RegistryKey => $"Registry uninstall keys ({count})",
-        LeftoverType.ProgramFilesFolder => $"Program Files folders ({count})",
-        LeftoverType.AppDataFolder => $"AppData folders ({count})",
-        LeftoverType.AppPath => $"App Paths registry entries ({count})",
-        LeftoverType.MuiCache => $"MUIcache values ({count})",
-        LeftoverType.ClassHandler => $"File-association class handlers ({count})",
-        LeftoverType.Shortcut => $"Start Menu / Desktop shortcuts ({count})",
-        _ => $"Other ({count})"
+        LeftoverType.RegistryKey => App.Loc.S("leftover.section.registryKey", count),
+        LeftoverType.ProgramFilesFolder => App.Loc.S("leftover.section.programFiles", count),
+        LeftoverType.AppDataFolder => App.Loc.S("leftover.section.appData", count),
+        LeftoverType.AppPath => App.Loc.S("leftover.section.appPath", count),
+        LeftoverType.MuiCache => App.Loc.S("leftover.section.muiCache", count),
+        LeftoverType.ClassHandler => App.Loc.S("leftover.section.classHandler", count),
+        LeftoverType.Shortcut => App.Loc.S("leftover.section.shortcut", count),
+        _ => App.Loc.S("leftover.section.other", count)
     };
 
     private FrameworkElement BuildItemCard(LeftoverItem item)
@@ -155,7 +155,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
             Tag = item
         };
         pathButton.Click += PathLink_Click;
-        ToolTipService.SetToolTip(pathButton, "Click to open in Explorer / Regedit");
+        ToolTipService.SetToolTip(pathButton, App.Loc.S("deepclean.openInExplorer"));
         content.Children.Add(pathButton);
 
         var meta = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -327,9 +327,14 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         }
         else
         {
+            // Loc.Plural geeft alleen de telling door, dus bij twee argumenten
+            // zelf op .one/.other kiezen — het meervoud hangt hier aan `elevated`.
             SelectionStatusText.Text = elevated > 0
-                ? $"{selected} selected · {elevated} need administrator rights"
-                : $"{selected} selected";
+                ? App.Loc.S(elevated == 1
+                        ? "leftover.selected.withElevation.one"
+                        : "leftover.selected.withElevation.other",
+                    selected, elevated)
+                : App.Loc.S("leftover.selected.plain", selected);
         }
         ToggleAllButton.Content = App.Loc.S(_items.All(i => i.IsSelected) ? "common.deselectAll" : "common.selectAll");
     }

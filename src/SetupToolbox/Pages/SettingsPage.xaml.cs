@@ -177,13 +177,14 @@ public sealed partial class SettingsPage : Page
         DebloatWarningGlyph.Visibility = Visibility.Collapsed;
         RestorePointGlobalStatus.IsOpen = false;
 
-        if (status.BlockedReason != null && status.BlockedReason.Contains("System Protection"))
+        if (status.ProtectionOff)
         {
             // Blocking case: System Protection helemaal uit
+            var off = App.Loc.S("restorePoint.protectionOff");
             DeepCleanWarningGlyph.Visibility = Visibility.Visible;
             DebloatWarningGlyph.Visibility = Visibility.Visible;
-            ToolTipService.SetToolTip(DeepCleanWarningGlyph, status.BlockedReason);
-            ToolTipService.SetToolTip(DebloatWarningGlyph, status.BlockedReason);
+            ToolTipService.SetToolTip(DeepCleanWarningGlyph, off);
+            ToolTipService.SetToolTip(DebloatWarningGlyph, off);
             RestorePointGlobalStatus.Severity = InfoBarSeverity.Warning;
             RestorePointGlobalStatus.Title = App.Loc.S("settings.restore.protectionOff.title");
             RestorePointGlobalStatus.Message = App.Loc.S("settings.restore.protectionOff.body");
@@ -307,7 +308,10 @@ public sealed partial class SettingsPage : Page
         }
 
         var suggestedName = $"my-apps-{DateTime.Now:yyyy-MM-dd}";
-        var file = await FilePickerHelper.PickSaveFileAsync(suggestedName, "SetupToolbox selection", ".json");
+        // fileTypeName komt in de "Opslaan als type"-dropdown van het Windows-
+        // opslaanvenster terecht en is dus gewoon zichtbare tekst (v1.2.7).
+        var file = await FilePickerHelper.PickSaveFileAsync(
+            suggestedName, App.Loc.S("io.fileType.appSelection"), ".json");
         if (file == null) return;
 
         try

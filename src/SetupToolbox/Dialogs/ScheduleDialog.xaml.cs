@@ -45,7 +45,7 @@ public sealed partial class ScheduleDialog : ContentDialog
                     // duidelijk is.
                     args.Cancel = true;
                     var description = BuildScheduleDescription(scheduleType, timeString);
-                    ShowInfo(InfoBarSeverity.Success, "Scheduled task created", description);
+                    ShowInfo(InfoBarSeverity.Success, App.Loc.S("schedule.created.title"), description);
                     IsPrimaryButtonEnabled = false;
                     CloseButtonText = App.Loc.S("common.done");
                     // Ook buiten de app bevestigen (v1.0.13) — meteen een voorproefje
@@ -56,16 +56,16 @@ public sealed partial class ScheduleDialog : ContentDialog
                 case CreateTaskResult.UserCancelled:
                     args.Cancel = true;
                     ShowInfo(InfoBarSeverity.Warning,
-                        "Admin rights denied",
-                        "De UAC-prompt is geannuleerd. Er is geen scheduled task aangemaakt.");
+                        App.Loc.S("schedule.uacDenied.title"),
+                        App.Loc.S("schedule.uacDenied.body"));
                     break;
 
                 case CreateTaskResult.Failed:
                 default:
                     args.Cancel = true;
                     ShowInfo(InfoBarSeverity.Error,
-                        "Could not create scheduled task",
-                        outcome.ErrorOutput ?? "schtasks.exe gaf een fout terug zonder output.");
+                        App.Loc.S("schedule.failed.title"),
+                        outcome.ErrorOutput ?? App.Loc.S("schedule.failed.body"));
                     break;
             }
         }

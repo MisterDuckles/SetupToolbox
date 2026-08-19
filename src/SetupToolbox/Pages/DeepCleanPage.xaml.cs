@@ -175,7 +175,7 @@ public sealed partial class DeepCleanPage : Page
             if (taskCount > 0) parts.Add(App.Loc.S("deepclean.part.tasks", taskCount));
             if (firewallCount > 0) parts.Add(App.Loc.S("deepclean.part.firewall", firewallCount));
             if (serviceCount > 0) parts.Add(App.Loc.S("deepclean.part.services", serviceCount));
-            if (hkcuCount > 0) parts.Add($"{hkcuCount} HKCU vendor keys");
+            if (hkcuCount > 0) parts.Add(App.Loc.S("deepclean.part.hkcuVendor", hkcuCount));
             CleanupResultBar.Message = App.Loc.S("deepclean.found.breakdown", string.Join(" · ", parts));
         }
         CleanupResultBar.IsOpen = true;
@@ -189,7 +189,7 @@ public sealed partial class DeepCleanPage : Page
         {
             var cfg = new Dialogs.RestorePointConfigDialog
             {
-                OperationName = "Deep Clean",
+                OperationName = App.Loc.S("nav.debloat.deepClean"),
                 XamlRoot = this.XamlRoot
             };
             var result = await cfg.ShowAsync();

@@ -518,7 +518,7 @@ public sealed partial class DebloatPage : Page
         {
             var cfg = new Dialogs.RestorePointConfigDialog
             {
-                OperationName = "Debloat",
+                OperationName = App.Loc.S("nav.debloat"),
                 XamlRoot = this.XamlRoot
             };
             var result = await cfg.ShowAsync();
@@ -689,9 +689,11 @@ public sealed partial class DebloatPage : Page
         if (sources < 2) return string.Empty;
 
         var parts = new List<string>();
+        // MS en OEM zijn afkortingen (Microsoft / vendor-bundleware) en blijven
+        // staan; "apps" is een gewoon woord en heeft al een meervoud-key.
         if (ms > 0) parts.Add($"{ms} MS");
         if (oem > 0) parts.Add($"{oem} OEM");
-        if (app > 0) parts.Add($"{app} apps");
+        if (app > 0) parts.Add(App.Loc.Plural("common.appCount", app));
         return $" ({string.Join(" + ", parts)})";
     }
 

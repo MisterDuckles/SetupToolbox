@@ -68,8 +68,21 @@ Controleer je toevoeging met:
 py scripts/check-catalog-keys.py
 ```
 
-Dat meldt ontbrekende of lege vertalingen, en sleutels die na het verwijderen
-van een app zijn blijven hangen.
+Dat meldt ontbrekende of lege vertalingen, sleutels die na het verwijderen van
+een app zijn blijven hangen, en sleutels die nergens in de code aangeroepen
+worden — dat laatste betekent bijna altijd dat de call-site nog een hardcoded
+tekst heeft staan.
+
+Pas je code aan in plaats van de catalogus, draai dan ook:
+
+```powershell
+py scripts/scan-untranslated.py
+```
+
+Die zoekt gebruiker-zichtbare tekst die nog een letterlijke string is, in vier
+vormen: XAML-attributen, toewijzingen aan `.Text` / `.Content` / `.Title`,
+switch-armen (`=> "Recycle Bin"`) en zin-achtige literals in `Dialogs/`,
+`Pages/` en `Helpers/`. Beide scripts geven exit-code 1 zodra er iets mis is.
 
 ### Stap 4: Test de App
 

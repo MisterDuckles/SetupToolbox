@@ -107,6 +107,10 @@ public sealed class LeftoverItem : INotifyPropertyChanged
 
     // ── UI helpers ─────────────────────────────────────────────────
 
+    // Vertaald sinds v1.2.7, op vijf armen na: Registry, Program Files, AppData,
+    // App Paths en MUIcache zijn letterlijke Windows-namen (map- en registry-key-
+    // namen), geen woorden. Zie de toelichting bij DeepCleanItem.CategoryLabel;
+    // ze staan met die reden in de ALLOW-lijst van scan-untranslated.py.
     public string TypeBadgeText => Type switch
     {
         LeftoverType.RegistryKey => "Registry",
@@ -114,8 +118,8 @@ public sealed class LeftoverItem : INotifyPropertyChanged
         LeftoverType.AppDataFolder => "AppData",
         LeftoverType.AppPath => "App Paths",
         LeftoverType.MuiCache => "MUIcache",
-        LeftoverType.ClassHandler => "Class handler",
-        LeftoverType.Shortcut => "Shortcut",
+        LeftoverType.ClassHandler => SetupToolbox.App.Loc.S("leftover.type.classHandler"),
+        LeftoverType.Shortcut => SetupToolbox.App.Loc.S("leftover.type.shortcut"),
         _ => string.Empty
     };
 
@@ -133,9 +137,9 @@ public sealed class LeftoverItem : INotifyPropertyChanged
 
     public string ConfidenceLabel => Confidence switch
     {
-        LeftoverConfidence.High => "High match",
-        LeftoverConfidence.Medium => "Possible match",
-        LeftoverConfidence.Low => "Loose match",
+        LeftoverConfidence.High => SetupToolbox.App.Loc.S("leftover.confidence.high"),
+        LeftoverConfidence.Medium => SetupToolbox.App.Loc.S("leftover.confidence.medium"),
+        LeftoverConfidence.Low => SetupToolbox.App.Loc.S("leftover.confidence.low"),
         _ => string.Empty
     };
 

@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.6** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.7** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -13,45 +13,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 ---
 
 ## Open
-
-### v1.2.7 — Vertaal-restjes: de vormen die de scanner structureel niet ziet
-
-**De vertaalreeks is nét niet af.** Na het committen van v1.2.6 is de app daadwerkelijk doorgeklikt en zijn er drie nieuwe *soorten* blinde vlekken gevonden — niet losse missers, maar categorieën die de scanner per constructie niet kan zien. `scan-untranslated.py` meldde 0 terwijl er tientallen Engelse strings in beeld staan.
-
-**Blinde vlek 1 — `^\{` werd ook op C# losgelaten.** `SKIP_VALUE` begon met "waarde start met `{`", bedoeld om XAML markup-extensions (`{Binding …}`) over te slaan. In C# betekent `{` het begin van een interpolatie-gat, dus **élke geïnterpoleerde string die met een placeholder begint werd stil overgeslagen**. *Al gefixt in v1.2.6* (de XAML-regel is nu apart), en dat bracht meteen 3 strings boven water.
-
-**Blinde vlek 2 — tekst die eerst in een lokale variabele wordt opgebouwd.** De scanner ankert op `.Text =`. Bouw je de zin in een `var` en wijs je die daarna toe, dan ziet hij niets:
-```csharp
-var label = $"{n} selected · {bytes} to free";
-if (elevated > 0) label += $" · {elevated} need administrator rights";
-SelectionStatusText.Text = label;      // DeepCleanDialog:782
-```
-
-**Blinde vlek 3 — display-tekst in een expression-bodied property op een model.** Nergens een toewijzing, dus geen anker. Dit is de grootste post: **~30 badge-teksten** die op élke card staan.
-
-**Inventarisatie (geverifieerd, deels adversarieel):**
-
-| Plek | Aantal | Wat |
-| --- | --- | --- |
-| `DeepCleanItem.CategoryLabel` | 17 | badge-chips: *Recycle Bin, Update cache, Browser cache, Orphaned folder, …* — visueel bevestigd tijdens een cache-scan |
-| `LeftoverItem.TypeBadgeText` | 7 | *Registry, Program Files, AppData, App Paths, …* |
-| `LeftoverItem.ConfidenceLabel` | 3 | *High match / Possible match / Loose match* |
-| `InstalledAppEntry.SourceBadgeText` | 3 | *Winget / Store / Web* — laagste prioriteit, dicht tegen merknamen aan |
-| `DeepCleanDialog:782-783` | 2 | selectie-statusregel (lokale variabele) |
-| `LeftoverCleanupDialog:331-332` | 2 | idem |
-| `ScheduleDialog:48, 59, 67` | 3 | InfoBar-**titels** hardcoded Engels, met bijbehorende **bodies hardcoded Nederlands** — positionele argumenten aan een `ShowInfo(severity, title, message)`-helper, dus ook onzichtbaar voor de scanner |
-| `SnapshotBrowserDialog:69` | 1 | hardcoded Nederlands, terwijl `snapshot.entryLabel` al in beide tabellen staat en ongebruikt is. Let op: het datumformaat bevat `'om'`, dus dat moet mee vertaald |
-| `RestorePointService:188` | 1 | `"System Protection is uit op deze PC."` — positioneel constructor-argument |
-
-**`RestorePointService:188` is de vervelendste** en is door v1.2.6 zichtbaar geworden: die Nederlandse zin wordt geconcateneerd met de nu-wél-vertaalde hint, dus een Engelse gebruiker met System Protection uit krijgt *"System Protection is uit op deze PC. Turn it on via System Properties…"*. Dezelfde string gaat ook naar twee tooltips op SettingsPage, naast een InfoBar die wél vertaald is. Engels is bovendien de **default** op elke niet-Nederlandse Windows, dus dit vergt geen enkele gebruikersactie.
-
-**Uit te werken vóór implementatie:**
-- Welke van de ~30 badges zijn eigenlijk identifiers die onvertaald horen te blijven? *Prefetch*, *MUIcache*, *Windows.old*, *App Paths*, *HKCU vendor*, *Registry*, *AppData*, *Program Files* zijn Windows-termen; *Recycle Bin* → *Prullenbak* en *Browser cache* → *Browsercache* juist wel. Zelfde afweging als bij de bloatware-chips in v1.2.5, waar merknamen bleven staan.
-- `CategoryLabel` wordt óók gebruikt om op te **zoeken** (`DeepCleanDialog:289`) en om bundel-labels te bouwen. Vertalen is daar prima — je zoekt op wat je ziet — maar het is dezelfde `GroupKey`-vs-`Group`-afweging als bij de tweaks en moet bewust gemaakt worden.
-- De scanner uitbreiden naar deze twee vormen. Voor blinde vlek 3 is een gerichte regel haalbaar (expression-bodied property op een `Models/`-type die een string-switch teruggeeft). Voor blinde vlek 2 is echte dataflow nodig; een pragmatisch alternatief is: in `Dialogs/` en `Pages/` **elke** zin-achtige literal melden die niet in een `Loc.`-aanroep of een log zit, met een `ALLOW`-lijst voor de rest.
-- `scripts/check-catalog-keys.py` uitbreiden met de omgekeerde controle die deze ronde `snapshot.entryLabel` en de duplicaat-keys vond: welke keys staan in de tabel maar worden nergens aangeroepen? Dat is een sterk signaal dat de call-site nog een literal heeft.
-
-> **Wat er in deze ronde al wél gefixt is** (zit in de v1.2.6-fix-commit): blinde vlek 1 in de scanner, en de duplicaat-keys `restorePoint.config.context` / `.enableHint` die ik naast de al bestaande `restorePoint.body` / `.protectionOffSuffix` had gezet.
 
 ### v1.2.8 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
@@ -88,6 +49,29 @@ Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zoda
 - **Hoeveel regels?** Compact houden was de expliciete wens: een handvol bullets, niet de volledige changelog.
 - **Vertaling.** Valt onder de multi-language-reeks: de highlights moeten in beide talen bestaan, dus het formaat moet daar rekening mee houden.
 
+### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.7
+
+Vier dingen die tijdens de vertaal-restjes boven kwamen en bewust níét in die patch zijn meegenomen, want ze raken werkende logica in plaats van tekst.
+
+- **De voortgangsregel op de install-cards is nog niet vertaald — en dat is het meest zichtbare wat er overblijft.** Gevonden ná de scope-afspraak voor v1.2.7, dus bewust níét meegenomen; het zit in `Services/` en het is niet te verifiëren zonder een echte install-batch te draaien. Vijf strings in `WingetService` die stuk voor stuk op de kaart verschijnen zolang de app in de `Installing`-staat staat (`MessageVisibility` is dan zichtbaar):
+
+  | Regel | Wat | Fout in |
+  | --- | --- | --- |
+  | `:621` | `$"Installing {wingetId}..."` | Nederlandse UI |
+  | `:661` | `"Installed"` | Nederlandse UI |
+  | `:812` | `$"Starting {app.Name}"` | Nederlandse UI |
+  | `:674` | `AlreadyInstalledMessage` = *"Al geïnstalleerd"* | **Engelse UI** |
+  | `:696` | `RequiresLocationMessage` = *"Installatielocatie vereist"* | **Engelse UI** |
+
+  De laatste twee zijn de subtielste van het hele project: het zijn `const` **sentinels** die óók vergeleken worden (`message == AlreadyInstalledMessage`), en die vergelijking moet blijven werken. De oplossing is dezelfde als bij `RestorePointStatus` in v1.2.7 — niet de sentinel vertalen, maar de *weergave* ervan losknippen: `progress?.Report(App.Loc.S("install.state.alreadyInstalled"))` en `return (true, AlreadyInstalledMessage)`. De keys bestaan al sinds v1.2.7, alleen de call-sites niet.
+
+  > Twee doden onderweg gevonden: `WingetService.UninstallAppsAsync` (en dus `$"Uninstalling {app.Name}"` op `:459`) wordt alleen door `UninstallDialog` aangeroepen, en die dialog wordt **nergens** geïnstantieerd. Weghalen of weer aansluiten — nu is het een tweede uninstall-pad naast `AllAppsUninstallDialog` dat stilletjes meerot.
+
+- **De foutmeldingen uit de elevated batches zijn nog Engels, en `Services/` valt daarom buiten pass 4 van de scanner.** Zes services geven bij een mislukte of afgebroken batch een hardcoded string terug: *"Could not start elevated process"*, *"Cancelled — UAC prompt declined"*, *"Did not run (interrupted)"* en varianten, in `TweakService`, `DeepCleanService`, `LeftoverScannerService`, `BloatwareService`, `MixedSourceUninstaller` en `WingetService`. Een deel daarvan is aantoonbaar **zichtbaar**: `TweakApplyRunner.ShowOutcome` zet `FailureMessages` letterlijk in de InfoBar-body op de Tweaks-pagina. Een ander deel niet: `DeepCleanDeleteResult.ResultsByPath` wordt nergens gerenderd, alleen geteld — *"Removed registry key"* / *"Deleted folder"* zijn dus dode weergave-strings en kunnen net zo goed weg. Ruwe schatting een stuk of twaalf zichtbare strings. Zolang dit én het punt hierboven open staan kan `Services/` er niet bij in de scanner, want dan is de exit-code structureel rood. Eerst per string bepalen of 'ie gerenderd wordt of alleen geteld — dat onderscheid is de helft van het werk.
+- **De cache-namen op de Deep-clean-cards blijven Engels omdat de bundeling op de `DisplayName` tokeniseert.** Besloten in v1.2.7 en onderbouwd in die sectie: *"Tijdelijke bestanden (gebruiker)"* en *"(systeem)"* zouden significante tokens delen die het Engels niet deelt, waarna de cards per taal anders bundelen. De nette uitweg is de bundeling zélf aanpassen: `BundleByTokenOverlap` bestaat voor verweesde mappen (*"VMware"* op drie locaties), niet voor een vaste lijst van tien caches — sluit cache-categorieën uit en de tien namen kunnen alsnog vertaald worden. Klein, maar het raakt scanlogica en hoort daarom in een eigen patch. De acht `ALLOW`-regels in `scan-untranslated.py` kunnen dan weg.
+- **De filter-header in de Deep-clean-dialog toont het totaal in plaats van het aantal treffers.** Bij een actief filter staat er *"227 items gevonden — filter actief"* terwijl er 30 kaarten onder staan: `deepclean.foundFiltered` krijgt `_items.Count` mee in plaats van `filteredItems.Count`. Gezien tijdens de v1.2.7-verificatie, bestaat al sinds de filter er is en heeft niets met de vertaling te maken. Eénregelige fix.
+- **De ingebouwde WinUI-automation-namen volgen nog steeds de Windows-weergavetaal.** In de Engelse UI heet het InfoBar-icoon in de automation-boom *"Informatiepictogram"*. Niet zichtbaar op het scherm, maar een schermlezer noemt het verkeerd. Dit is dezelfde MRT-beperking als het NavigationView-Settings-item hierboven onder v1.2.4, en dus geen nieuw probleem — wel het tweede geval, dus als je het a11y-item oppakt hoort dit erbij.
+
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.6
 
 - **De 24 subcategorie-`description`-velden in `apps.json` worden nergens getoond.** `CategoryDetailPage` bouwt de `SubcategoryGroup` alleen uit `sub.Name`; de omschrijving wordt wél gedeserialiseerd maar nooit gebonden. Ze zijn daarom in v1.2.6 bewust níét vertaald — onzichtbare tekst kun je niet verifiëren. Twee uitwegen, allebei prima: weghalen uit `apps.json` (dan is het schema weer eerlijk), of alsnog tonen onder de groepsheader (dan horen ze in de vertaaltabel als `appSubcategory.<id>.desc`). Nu staat er een veld dat niets doet naast een `name` die verhuisd is, en dat leest verwarrend voor een contributor.
@@ -123,9 +107,112 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 
 ## Voltooide versies
 
+### v1.2.7 — Multi-language fase 6: de vertaal-restjes (de vormen die de scanner structureel niet zag)
+
+De stringtabellen gaan van 1197 naar **1265 keys**, in beide talen even groot.
+
+> **Geen "hiermee is het af" deze keer.** Dat stond in v1.2.6 ook en het klopte niet. Wat hier af is, is scherp begrensd: **alle schermen die je zonder iets te veranderen kunt bekijken** — Apps, Tweaks, Debloat, Deep clean, Settings, en de dialogs die daarbij horen. Wat er nog staat, is de voortgangsregel op de install-cards en de foutmeldingen uit de elevated batches; beide zitten in `Services/`, beide zijn pas te zíén als je echt iets installeert of verwijdert, en beide staan als apart item onder *Open*. De scanner dekt `Services/` daarom bewust nog niet — dat staat er ook zo in, in plaats van dat de exit-code groen liegt.
+
+**De aanleiding: `scan-untranslated.py` liep schoon en de app stond vol Engels.** Drie blinde vlekken, alle drie een *categorie* en niet een losse misser. Nummer 1 (`^\{` losgelaten op de C#-pass) was al gefixt in de v1.2.6-fix-commit; 2 en 3 zijn hier gedicht.
+
+**De inventarisatie in de roadmap was te klein — het waren geen ~33 strings maar ~88.** Een brede sweep over álle C#-literals bracht drie extra plekken boven water die niemand geïnventariseerd had:
+
+| Plek | Aantal | Wat |
+| --- | --- | --- |
+| `InstallDialog.StageLabel` | 4 | *Downloading / Verifying / Installing / Done* — `x:Bind`, staat op élke install-card |
+| `InstallDialog.StateLabel` | 7 | *Waiting / Installed / **Al geïnstalleerd** / Failed / Browser opened / **Geopend in Store** / Skipped* — twee talen in één switch |
+| `LeftoverCleanupDialog.SectionTitle` | 8 | de sectiekoppen: *Registry uninstall keys (3)*, *AppData folders (2)*, … |
+| `DeepCleanService` browser-omschrijvingen | 3 | hardcoded **Nederlands**, terwijl de Firefox-tak er pal naast al `deepclean.desc.browserCache` gebruikte |
+| `DeepCleanService` scan-locatie-regels | 6 | de "Gescand: …"-regel bovenaan de dialog |
+| `DeepCleanPage:177` | 1 | `$"{n} HKCU vendor keys"` — de tiende van tien, de negen buren gebruikten allemaal `deepclean.part.*` |
+| file-picker bestandstype-labels | 2 | *"SetupToolbox selection"* tegenover *"SetupToolbox tweak-profiel"* — dezelfde feature, twee talen, zichtbaar in de "Opslaan als type"-dropdown |
+| `SnapshotBrowserDialog:163`, `TweakCardFactory:125`, `TweakApplyRunner:184-185`, `DeepCleanItem.SizeLabel`, 3× pad-tooltip | 6 | losse restjes |
+
+Daarmee waren er **vier** plekken waar Engels en Nederlands in dezelfde besturing door elkaar liepen, niet één.
+
+#### De grens tussen identifier en woord
+
+Besloten (user, 2026-08-19): **splitsen op identifier**, dezelfde regel als de merknamen in v1.2.5 en de app-namen in v1.2.6. Letterlijke namen van Windows-artefacten blijven hardcoded, alles wat een woord is gaat naar de tabel.
+
+- **Blijft staan:** `Prefetch`, `Windows.old`, `App Paths`, `MUIcache`, `HKCU vendor`, `Registry`, `Program Files`, `AppData` — map-, registry-key- en hive-namen. Plus `Winget` / `Store` / `Web`: Winget is Microsofts package manager, Store heet in Nederlands Windows ook Store, en Web is in beide talen hetzelfde woord. De tooltip ernaast (`source.*.desc`) is proza en liep al wél via de tabel.
+- **Naar de tabel:** *Recycle Bin → Prullenbak*, *Browser cache → Browsercache*, *Shortcut → Snelkoppeling*, *Scheduled task → Geplande taak*, *Firewall rule → Firewallregel*, *Class handler → Bestandskoppeling*, *High/Possible/Loose match → Sterke/Mogelijke/Zwakke match*, en de elf install-card-labels.
+
+Elke uitzondering staat **met reden** in de `ALLOW`-lijst van de scanner én als comment op de switch zelf.
+
+#### `CategoryLabel` mocht vertaald, `DisplayName` niet — en dat verschil is gemeten
+
+`DeepCleanItem.CategoryLabel` wordt óók gebruikt om op te zoeken (`DeepCleanDialog:289`) en om bundel-labels te bouwen (`:364`). Dat is veilig: groeperen en sorteren gaat op de **enum** (`GroupBy(i => i.Category)`, `OrderBy((int)i.Category)`), niet op de tekst — de `GroupKey`-vs-`Group`-afweging uit v1.2.4 speelt hier dus niet. Zoeken op de vertaling is juist gewenst: je zoekt op wat je ziet.
+
+**`DeepCleanItem.DisplayName` is dat níét, en daarom blijven de tien cache-namen Engels.** `BundleByTokenOverlap` tokeniseert de DisplayName en clustert items die een significant token delen. In het Engels leveren *"User Temp folder"* en *"System Temp folder"* na de stopwoordenfilter (`user`, `temp`, `folder` staan er alle drie in) een **lege** tokenset op, en `HashSet.Overlaps` op lege sets is false — twee losse cards. Een Nederlandse variant als *"Tijdelijke bestanden (gebruiker)"* / *"(systeem)"* deelt wél twee significante tokens en zou in het Nederlands op één bundle-card belanden en in het Engels niet. Dat is een gedragsverschil per taal, en dat is een te hoge prijs voor tien kaarttitels.
+
+> Het alternatief is niet weg: cache-items uitsluiten van token-bundeling (die bundeling bestaat voor verweesde mappen — "VMware" op drie locaties — niet voor een vaste lijst van tien caches) en de namen dan alsnog vertalen. Bewust niet in deze patch gedaan, want dat raakt werkende scanlogica in dezelfde diff als het vertaalwerk. Staat als los onderhoudsitem hieronder.
+
+#### De vervelendste: `RestorePointService` was óók een sentinel
+
+`RestorePointStatus.BlockedReason` werd door **beide** consumers zowel getoond als vergeleken: `status.BlockedReason.Contains("System Protection")`. De zin vertalen zou die vergelijking in het Nederlands stil breken — en de ontsnapping die de `WingetService`-sentinels in v1.2.3 kregen ("schrijven en vergelijken gebeurt in dezelfde taal") helpt hier niet, want de Nederlandse tekst bevat de woorden *System Protection* helemaal niet.
+
+Opgelost door het veld te vervangen door een `bool ProtectionOff`. Daarmee zijn drie dingen tegelijk weg: de sentinel, de string-concatenatie in `RestorePointConfigDialog` (`BlockedReason + protectionOffSuffix`), en de tweede Nederlandse zin.
+
+**Die tweede zin was inderdaad dood** — nagelopen zoals gevraagd. Voor het 24-uur-geval neemt `SettingsPage` de `settings.restore.rateLimited.tooltip`-tak en `RestorePointConfigDialog` de `restorePoint.lastWas`-tak; geen van beide raakte ooit aan `BlockedReason`. Weggehaald in plaats van vertaald.
+
+#### De scanner: van twee naar vier passes
+
+- **Pass 3 — switch-armen.** `=> "..."` heeft geen toewijzing en dus geen anker. Dit is de vorm waarin ~50 badges stonden.
+- **Pass 4 — zin-achtige literals in `Dialogs/`, `Pages/` en `Helpers/`.** Blinde vlek 2 vergt strikt genomen dataflow-analyse; het pragmatische alternatief is élke literal met twee of meer echte woorden melden, met een `ALLOW`-lijst voor de rest.
+
+Twee zwakke plekken die pass 4 zelf blootlegde en meteen gefixt zijn: geneste aanhalingstekens binnen een interpolatie (`$"…{string.Join(", ", parts)}…"`) braken de literal-regex en leverden halve strings op — nu herkend aan een ongebalanceerde `{` — en een `Diagnostics.Log(` die over twee regels loopt zette de log-marker op een ándere regel dan de literal, waardoor logregels als UI-tekst gemeld werden.
+
+**De `ALLOW`-lijst is bestand-gebonden geworden, niet waarde-gebonden.** Dat bleek nodig bij een negatieve test: `"Recycle Bin"` is een terechte hardcoded `DisplayName` in `DeepCleanService`, maar als *badge* hoort 'ie vertaald — met een `ALLOW` op alleen de waarde zou de scanner die regressie nooit meer zien.
+
+> **Bewuste beperking, expliciet benoemd:** pass 4 dekt `Services/` **niet**. Daar staan honderden PowerShell-fragmenten, registry-paden en exit-code-teksten, en de foutmeldingen uit de elevated batches zijn nog niet vertaald. Zie het losse onderhoudsitem hieronder; zet `Services/` er pas bij als dat af is, anders is de exit-code structureel rood.
+
+#### `check-catalog-keys.py`: de omgekeerde controle
+
+Nieuw: **welke keys staan in de tabel maar worden nergens aangeroepen?** Dat is precies de bug die geen enkele scanner kán zien — een ongebruikte key betekent bijna altijd dat de call-site nog een literal heeft. Op de tabel van vóór deze patch leverde dat, met meervoud-resolutie (`Loc.Plural` plakt zelf `.one`/`.other`) en de zes runtime-opgebouwde families uitgesloten, **precies één** treffer op: `snapshot.entryLabel` — de key die drie versies lang netjes vertaald in beide tabellen stond terwijl de dialog een Nederlandse literal toonde.
+
+Het script meldt hoeveel keys het overslaat en waarom, zodat "718 niet gecontroleerd" niet als "alles gedekt" leest.
+
+#### Kleinere bewuste keuzes
+
+- **`snapshot.entryLabel` is een meervoud-paar geworden** en heeft er een `snapshot.entryDateFormat` naast gekregen. Het datumformaat kon niet in dezelfde key: het bevat het woord `'om'`. En "1 registry values" klopte niet.
+- **`OperationName` hergebruikt `nav.debloat` en `nav.debloat.deepClean`** in plaats van twee nieuwe literals — die keys bestonden al en zijn in beide talen gelijk.
+- **De teller op DebloatPage** gebruikt nu `common.appCount` in plaats van een eigen `"{n} apps"`; `MS` en `OEM` blijven afkortingen.
+- **De voorgestelde bestandsnaam** (`my-apps-2026-08-19`) blijft Engels: een bestandsnaam is geen proza, en per taal een andere naam maakt een export minder portabel. Het bestandstype-**label** ernaast loopt wél via de tabel.
+- **Twee bewuste tekstcorrecties**, in de lijn van "resetten"→"reset" (v1.2.4) en "deze"→"dit" (v1.2.6): de drie browser-omschrijvingen zeiden *"Browser cache van …"* terwijl de al vertaalde Firefox-buur *"Browsercache van …"* zegt — geharmoniseerd. En `restorePoint.protectionOff` zegt nu *"Systeembeveiliging staat uit op deze pc"* in plaats van het half-Engelse *"System Protection is uit op deze PC"*, conform de InfoBar ernaast die dat al zo doet.
+
+**Totaal 68 nieuwe keys**, plus `snapshot.entryLabel` vervangen door een meervoud-paar.
+
+> **Geverifieerd (2026-08-19) — draaiende app, beide talen, via UI-Automation en niet alleen een geslaagde build:**
+> - Build: **0 errors, 0 warnings**. `AssemblyVersion` 1.2.7, in de app zichtbaar als *"Huidige versie: 1.2.7"*.
+> - **De cache-scan gerenderd in beide talen.** De badges wisselen mee: *Prullenbak / Update-cache / Browsercache* ↔ *Recycle Bin / Update cache / Browser cache*. De statusregel uit blinde vlek 2 klopt inclusief meervoud én culture: *"2 geselecteerd · 31,2 GB vrij te maken · 2 vereisen beheerdersrechten"* ↔ *"2 selected · 31.2 GB to free · 2 need administrator rights"*.
+> - **De scan-locatieregel** vertaalt de proza-delen en laat de kale paden staan: *"Gescand: %TEMP% (gebruikers-temp) · %WINDIR%\Temp · … · Edge- / Chrome- / Brave- / Firefox-caches · Prullenbak"* ↔ *"Scanned: %TEMP% (user temp) · … · Edge / Chrome / Brave / Firefox caches · Recycle Bin"*.
+> - **De restanten-scan (227 items) gerenderd in beide talen**, met een **identieke telling per badge** — dat is meteen het bewijs dat de identifier-uitzonderingen werken:
+>
+>   | EN | NL | × |
+>   | --- | --- | --- |
+>   | Orphaned folder | Verweesde map | 30 |
+>   | MUIcache | MUIcache | 23 |
+>   | Firewall rule | Firewallregel | 4 |
+>   | Shortcut | Snelkoppeling | 2 |
+>   | Orphaned registry | Verweesd registeritem | 2 |
+>   | App Paths | App Paths | 1 |
+>   | HKCU vendor | HKCU vendor | 1 |
+>   | empty | leeg | 20 |
+>
+> - **Zoeken op een vertaald label werkt** — de afweging achter `CategoryLabel`. Filteren op `firewallregel` levert 30 treffers op, allemaal met de chip *Firewallregel*. In het Engels doet `firewall rule` hetzelfde.
+> - **De bundeling is aantoonbaar taal-onafhankelijk gebleven:** de twee Firefox-profielen komen in beide talen op één card terecht (*Firefox / Browsercache ×2* ↔ *Firefox / Browser cache ×2*), en de cache-`DisplayName`s staan er in beide talen Engels bij. Precies waarvoor die uitzondering gemaakt is.
+> - Live wisselen NL → EN → NL zonder herstart, inclusief de complete SettingsPage.
+> - **Geen enkele `LOC-MISS`** in `install.log` over de hele sessie — alleen de `LAUNCH`-regel staat erin — en geen `crash.log`.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0** over alle vier de passes. Negatief getest in een aparte boom: een teruggezette badge-literal en een teruggezette lokale-variabele-statusregel worden allebei w**él** gemeld, en `Prefetch` / `REG_DWORD` / een `Diagnostics.Log`-regel / een `Loc.S`-key terecht niet.
+> - `check-catalog-keys.py`: 152/152 catalogus-keys in beide tabellen, **1265 = 1265**, geen wezen, geen lege waardes, en **546 keys aantoonbaar aangeroepen** (718 overgeslagen als runtime-opgebouwd, met vermelding).
+>
+> **Niet getest:** een echte delete-batch (de dialogs zijn met *Overslaan* gesloten), een echte install en een echte uninstall. Daardoor zijn drie blokken alleen via de tabel- en aanroepcontrole geverifieerd en niet visueel: de 11 `InstallDialog`-labels, de 8 sectiekoppen van `LeftoverCleanupDialog` (die dialog verschijnt pas ná een uninstall) en de statusregel daar. Ook niet visueel: de **`ProtectionOff`-tak** — op deze machine staat Systeembeveiliging aan en zijn er geen herstelpunten, dus zowel de waarschuwings-tak als de 24-uur-tak blijven onbereikbaar zonder Systeemherstel uit te zetten. De logica erachter is wel teruggebracht tot één bool, wat precies de reden was om 'm te verbouwen.
+
 ### v1.2.6 — Multi-language fase 5: de catalogus (`data/apps.json`)
 
-**Laatste van vijf fasen — de vertaalreeks is hiermee af.** De stringtabellen gaan van 1018 naar **1199 keys**, in beide talen even groot.
+**Vijfde van vijf geplande fasen.** De stringtabellen gaan van 1018 naar **1199 keys**, in beide talen even groot.
+
+> **Correctie achteraf:** hier stond "de vertaalreeks is hiermee af". Dat klopte niet. Doorklikken na het committen leverde nog ~88 hardcoded strings op in drie vormen die de scanner per constructie niet zag — dat is v1.2.7 geworden, een zesde fase. De vijf-fasen-planning dekte het **corpus** (XAML, tweaks, bloatware, catalogus) maar niet de vormen waarin tekst buiten dat corpus in de code zit.
 
 **De scope-telling in de roadmap klopte op drie punten niet.** Nageteld met een script over `apps.json` in plaats van met de hand:
 
@@ -454,6 +541,8 @@ SettingsPage is bewust fase 1: dat scherm *bevat* de toggle, dus de omschakeling
 > **Achteraf (v1.2.6):** de fasering heeft gewerkt, maar de omvang-kolom klopte structureel te hoog en de icon-zorg was ongegrond. Elke fase telde bij aankomst anders uit dan hier geschat (117→124 tweaks, 68 entries→55 producten, 356→152 catalogus-strings). Definitieve uitkomst: **1199 keys** in beide tabellen, niet de ~1250 uit de schatting — en dat inclusief 29 keys voor strings die pas in fase 5 gevonden zijn. De les voor een volgende meerfasen-klus: tel elke fase opnieuw met een script, en behandel de schatting in de roadmap als een orde van grootte, niet als een scope.
 
 **Gevolg voor de rest van de roadmap:** config-backup schuift naar **v1.2.7**, website naar **v1.2.8**.
+
+> **Achteraf:** het zijn zes fasen geworden en die nummers zijn nog een keer opgeschoven — de restjes werden v1.2.7, config-backup v1.2.8 en de website v1.2.9. Precies het "nummering volgt de uitleververvolgorde"-principe uit de kop van dit bestand.
 
 ### v1.2.1 — Kwetsbare transitieve dependency weggepind: `System.Drawing.Common`
 

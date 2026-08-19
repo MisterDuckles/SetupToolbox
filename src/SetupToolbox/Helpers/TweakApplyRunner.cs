@@ -181,8 +181,8 @@ public static class TweakApplyRunner
             var preview = o.FailureMessages.Take(4).ToList();
             var more = o.FailureMessages.Count - preview.Count;
             var body = string.Join("\n", preview);
-            if (more > 0) body += $"\n…en {more} meer.";
-            if (o.SuccessCount > 0) body += $"\n({o.SuccessCount} writes wel succesvol)";
+            if (more > 0) body += "\n" + App.Loc.S("apply.failed.more", more);
+            if (o.SuccessCount > 0) body += "\n" + App.Loc.S("apply.failed.someOk", o.SuccessCount);
             bar.Message = body;
         }
         bar.IsOpen = true;

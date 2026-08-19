@@ -499,10 +499,10 @@ public sealed class InstallItem : INotifyPropertyChanged
 
     public string StageLabel => _stage switch
     {
-        1 => "Downloading",
-        2 => "Verifying",
-        3 => "Installing",
-        4 => "Done",
+        1 => App.Loc.S("install.stage.downloading"),
+        2 => App.Loc.S("install.stage.verifying"),
+        3 => App.Loc.S("install.stage.installing"),
+        4 => App.Loc.S("install.stage.done"),
         _ => string.Empty
     };
 
@@ -545,15 +545,19 @@ public sealed class InstallItem : INotifyPropertyChanged
         _ => (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
     };
 
+    // v1.2.7: stond hier als hardcoded switch en mengde beide talen — vijf armen
+    // Engels, twee Nederlands. Losstaand van WingetService.AlreadyInstalledMessage:
+    // die blijft een const, want dat is een sentinel die vergeleken wordt en niet
+    // getoond (MessageVisibility staat uit voor de AlreadyInstalled-state).
     public string StateLabel => _state switch
     {
-        InstallItemState.Pending => "Waiting",
-        InstallItemState.Success => "Installed",
-        InstallItemState.AlreadyInstalled => "Al geïnstalleerd",
-        InstallItemState.Failed => "Failed",
-        InstallItemState.ManualOpened => "Browser opened",
-        InstallItemState.OpenedInStore => "Geopend in Store",
-        InstallItemState.Skipped => "Skipped",
+        InstallItemState.Pending => App.Loc.S("install.state.waiting"),
+        InstallItemState.Success => App.Loc.S("install.state.installed"),
+        InstallItemState.AlreadyInstalled => App.Loc.S("install.state.alreadyInstalled"),
+        InstallItemState.Failed => App.Loc.S("install.state.failed"),
+        InstallItemState.ManualOpened => App.Loc.S("install.state.browserOpened"),
+        InstallItemState.OpenedInStore => App.Loc.S("install.state.openedInStore"),
+        InstallItemState.Skipped => App.Loc.S("install.state.skipped"),
         _ => string.Empty
     };
 
