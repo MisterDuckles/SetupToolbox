@@ -22,6 +22,11 @@ worden nu wel gezien.
 
 Exit-code 1 zodra er iets gevonden wordt, zodat het in een check kan hangen.
 Valse positieven horen in ALLOW hieronder, mét reden.
+
+LET OP — hij meldt op dit moment BEWUST 3 treffers. Dat zijn echte, nog niet
+omgezette strings die pas zichtbaar werden nadat de `^{`-bug hierboven gefixt was;
+ze staan met de rest van de restjes ingepland als v1.2.7 in NEXT-STEPS.md. Zet ze
+NIET in ALLOW om de exit-code groen te krijgen — dan liegt de scanner weer.
 """
 import os
 import re
@@ -36,8 +41,15 @@ TEXT_ATTRS = ('Text', 'Content', 'Header', 'Title', 'Message', 'PlaceholderText'
               'PrimaryButtonText', 'SecondaryButtonText', 'CloseButtonText',
               'ToolTipService.ToolTip', 'Description')
 
-# leeg, puur numeriek/interpunctie, of een markup-extension: nooit vertaalbaar
-SKIP_VALUE = re.compile(r'^(?:\{|\s*$|[\d\s.,:;/|+*=x×·—-]*$)')
+# Leeg of puur numeriek/interpunctie: nooit vertaalbaar. Geldt voor beide passes.
+SKIP_VALUE = re.compile(r'^(?:\s*$|[\d\s.,:;/|+*=x×·—-]*$)')
+
+# ALLEEN voor XAML: een waarde die met { begint is een markup-extension
+# ({Binding …}, {loc:Localize …}, {StaticResource …}) en dus geen tekst.
+# Deze regel mag NIET op C# losgelaten worden — daar is { het begin van een
+# interpolatie-gat, en dan sla je "$"{n} items geselecteerd"" stil over. Dat
+# gebeurde tot v1.2.6 wél, en verborg meerdere echte strings.
+SKIP_XAML_VALUE = re.compile(r'^\{')
 
 ALLOW = {
     # app-naam: identiek in beide talen en wordt bij het starten sowieso uit code gezet
@@ -58,11 +70,13 @@ def walk(ext):
                 yield os.path.join(dirpath, fn)
 
 
-def skip(v):
+def skip(v, xaml=False):
     # Bij een geïnterpoleerde string telt alleen wat BUITEN de {…} staat: een
     # $"({item.SizeLabel})" draagt geen vertaalbare tekst, alleen haakjes.
     literal = re.sub(r'\{[^{}]*\}', '', v)
     if not re.search(r'[A-Za-zÀ-ſ]', literal):
+        return True
+    if xaml and SKIP_XAML_VALUE.match(v):
         return True
     return (len(v) < 2 or v in ALLOW or SKIP_VALUE.match(v) or is_glyph(v))
 
@@ -73,7 +87,7 @@ for path in walk('.xaml'):
         for attr in TEXT_ATTRS:
             for m in re.finditer(attr + r'="([^"]*)"', line):
                 v = m.group(1)
-                if not skip(v):
+                if not skip(v, xaml=True):
                     xaml_hits.append((os.path.relpath(path, ROOT), i, attr, v))
 
 # De C#-pass werkt op STATEMENTS, niet op regels. Een regel-gebaseerde pass mist

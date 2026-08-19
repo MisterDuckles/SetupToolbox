@@ -33,14 +33,16 @@ public sealed partial class RestorePointConfigDialog : ContentDialog
 
     private async System.Threading.Tasks.Task OnOpenedAsync()
     {
-        ContextText.Text = App.Loc.S("restorePoint.config.context", OperationName);
+        // restorePoint.body bestond al sinds v1.2.3 maar deze call-site was toen
+        // niet omgezet, waardoor de key drie versies lang ongebruikt bleef staan.
+        ContextText.Text = App.Loc.S("restorePoint.body", OperationName);
 
         var status = await App.RestorePoint.GetStatusAsync();
         if (status.BlockedReason != null && status.BlockedReason.Contains("System Protection"))
         {
             StatusGlyph.Glyph = "";  // warning
             StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
-            StatusText.Text = status.BlockedReason + App.Loc.S("restorePoint.config.enableHint");
+            StatusText.Text = status.BlockedReason + App.Loc.S("restorePoint.protectionOffSuffix");
         }
         else if (status.HoursSinceLast.HasValue)
         {

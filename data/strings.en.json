@@ -1260,8 +1260,6 @@
   "deepclean.tier.caution": "Caution — review carefully ({0})",
   "deepclean.done.one": "Done — {0} item cleaned, {1} freed.",
   "deepclean.done.other": "Done — {0} items cleaned, {1} freed.",
-  "deepclean.done.mixed": "Done — {0} cleaned, {1} failed, {2} freed.",
-  "restorePoint.config.context": "Before every {0} operation we can create a Windows System Restore Point. If anything goes wrong, one click in System Properties puts everything back to that moment. One UAC prompt covers the checkpoint and the delete together, so there is no separate dialog every time.",
-  "restorePoint.config.enableHint": " Turn it on via System Properties > System Protection if you want to use this safety net."
+  "deepclean.done.mixed": "Done — {0} cleaned, {1} failed, {2} freed."
 
 }

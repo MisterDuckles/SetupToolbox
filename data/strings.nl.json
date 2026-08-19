@@ -1260,8 +1260,6 @@
   "deepclean.tier.caution": "Let op — bekijk zorgvuldig ({0})",
   "deepclean.done.one": "Klaar — {0} item opgeruimd, {1} vrijgemaakt.",
   "deepclean.done.other": "Klaar — {0} items opgeruimd, {1} vrijgemaakt.",
-  "deepclean.done.mixed": "Klaar — {0} opgeruimd, {1} mislukt, {2} vrijgemaakt.",
-  "restorePoint.config.context": "Vóór elke {0}-operatie kunnen we een Windows System Restore Point maken. Bij problemen zet één klik in System Properties alles terug naar dat moment. Eén UAC-prompt voor checkpoint + delete samen, geen aparte dialog elke keer.",
-  "restorePoint.config.enableHint": " Schakel 't aan via System Properties > System Protection als je dit veiligheidsnet wil gebruiken."
+  "deepclean.done.mixed": "Klaar — {0} opgeruimd, {1} mislukt, {2} vrijgemaakt."
 
 }

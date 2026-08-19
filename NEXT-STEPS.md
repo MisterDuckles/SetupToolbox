@@ -14,7 +14,46 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Open
 
-### v1.2.7 — Eén-klik volledige config-backup (apps + tweaks + settings)
+### v1.2.7 — Vertaal-restjes: de vormen die de scanner structureel niet ziet
+
+**De vertaalreeks is nét niet af.** Na het committen van v1.2.6 is de app daadwerkelijk doorgeklikt en zijn er drie nieuwe *soorten* blinde vlekken gevonden — niet losse missers, maar categorieën die de scanner per constructie niet kan zien. `scan-untranslated.py` meldde 0 terwijl er tientallen Engelse strings in beeld staan.
+
+**Blinde vlek 1 — `^\{` werd ook op C# losgelaten.** `SKIP_VALUE` begon met "waarde start met `{`", bedoeld om XAML markup-extensions (`{Binding …}`) over te slaan. In C# betekent `{` het begin van een interpolatie-gat, dus **élke geïnterpoleerde string die met een placeholder begint werd stil overgeslagen**. *Al gefixt in v1.2.6* (de XAML-regel is nu apart), en dat bracht meteen 3 strings boven water.
+
+**Blinde vlek 2 — tekst die eerst in een lokale variabele wordt opgebouwd.** De scanner ankert op `.Text =`. Bouw je de zin in een `var` en wijs je die daarna toe, dan ziet hij niets:
+```csharp
+var label = $"{n} selected · {bytes} to free";
+if (elevated > 0) label += $" · {elevated} need administrator rights";
+SelectionStatusText.Text = label;      // DeepCleanDialog:782
+```
+
+**Blinde vlek 3 — display-tekst in een expression-bodied property op een model.** Nergens een toewijzing, dus geen anker. Dit is de grootste post: **~30 badge-teksten** die op élke card staan.
+
+**Inventarisatie (geverifieerd, deels adversarieel):**
+
+| Plek | Aantal | Wat |
+| --- | --- | --- |
+| `DeepCleanItem.CategoryLabel` | 17 | badge-chips: *Recycle Bin, Update cache, Browser cache, Orphaned folder, …* — visueel bevestigd tijdens een cache-scan |
+| `LeftoverItem.TypeBadgeText` | 7 | *Registry, Program Files, AppData, App Paths, …* |
+| `LeftoverItem.ConfidenceLabel` | 3 | *High match / Possible match / Loose match* |
+| `InstalledAppEntry.SourceBadgeText` | 3 | *Winget / Store / Web* — laagste prioriteit, dicht tegen merknamen aan |
+| `DeepCleanDialog:782-783` | 2 | selectie-statusregel (lokale variabele) |
+| `LeftoverCleanupDialog:331-332` | 2 | idem |
+| `ScheduleDialog:48, 59, 67` | 3 | InfoBar-**titels** hardcoded Engels, met bijbehorende **bodies hardcoded Nederlands** — positionele argumenten aan een `ShowInfo(severity, title, message)`-helper, dus ook onzichtbaar voor de scanner |
+| `SnapshotBrowserDialog:69` | 1 | hardcoded Nederlands, terwijl `snapshot.entryLabel` al in beide tabellen staat en ongebruikt is. Let op: het datumformaat bevat `'om'`, dus dat moet mee vertaald |
+| `RestorePointService:188` | 1 | `"System Protection is uit op deze PC."` — positioneel constructor-argument |
+
+**`RestorePointService:188` is de vervelendste** en is door v1.2.6 zichtbaar geworden: die Nederlandse zin wordt geconcateneerd met de nu-wél-vertaalde hint, dus een Engelse gebruiker met System Protection uit krijgt *"System Protection is uit op deze PC. Turn it on via System Properties…"*. Dezelfde string gaat ook naar twee tooltips op SettingsPage, naast een InfoBar die wél vertaald is. Engels is bovendien de **default** op elke niet-Nederlandse Windows, dus dit vergt geen enkele gebruikersactie.
+
+**Uit te werken vóór implementatie:**
+- Welke van de ~30 badges zijn eigenlijk identifiers die onvertaald horen te blijven? *Prefetch*, *MUIcache*, *Windows.old*, *App Paths*, *HKCU vendor*, *Registry*, *AppData*, *Program Files* zijn Windows-termen; *Recycle Bin* → *Prullenbak* en *Browser cache* → *Browsercache* juist wel. Zelfde afweging als bij de bloatware-chips in v1.2.5, waar merknamen bleven staan.
+- `CategoryLabel` wordt óók gebruikt om op te **zoeken** (`DeepCleanDialog:289`) en om bundel-labels te bouwen. Vertalen is daar prima — je zoekt op wat je ziet — maar het is dezelfde `GroupKey`-vs-`Group`-afweging als bij de tweaks en moet bewust gemaakt worden.
+- De scanner uitbreiden naar deze twee vormen. Voor blinde vlek 3 is een gerichte regel haalbaar (expression-bodied property op een `Models/`-type die een string-switch teruggeeft). Voor blinde vlek 2 is echte dataflow nodig; een pragmatisch alternatief is: in `Dialogs/` en `Pages/` **elke** zin-achtige literal melden die niet in een `Loc.`-aanroep of een log zit, met een `ALLOW`-lijst voor de rest.
+- `scripts/check-catalog-keys.py` uitbreiden met de omgekeerde controle die deze ronde `snapshot.entryLabel` en de duplicaat-keys vond: welke keys staan in de tabel maar worden nergens aangeroepen? Dat is een sterk signaal dat de call-site nog een literal heeft.
+
+> **Wat er in deze ronde al wél gefixt is** (zit in de v1.2.6-fix-commit): blinde vlek 1 in de scanner, en de duplicaat-keys `restorePoint.config.context` / `.enableHint` die ik naast de al bestaande `restorePoint.body` / `.protectionOffSuffix` had gezet.
+
+### v1.2.8 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
 Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een nieuwe of andere pc.
 
@@ -26,7 +65,7 @@ Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een
 
 **Scope:** één "Configuratie exporteren"-knop → één JSON met de drie onderdelen (app-selectie + tweak-profiel + settings), en één "Importeren" die ze samen terugzet. Uit te werken vóór implementatie: versie-veld voor forward-compat, wat te doen bij een deels-onbekende catalogus op de doelmachine (bestaande import-flows melden dat al per app/tweak), en of settings selectief overslaan mogelijk moet zijn (bv. wél je tweak-profiel, níét je logging-voorkeur).
 
-### v1.2.8 — Website professionaliseren + bijwerken
+### v1.2.9 — Website professionaliseren + bijwerken
 
 De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
 
@@ -36,7 +75,7 @@ De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
 
 Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zodat je in één keer een actueel verhaal kunt neerzetten.
 
-### v1.2.9 — "Wat is er nieuw"-melding na een update
+### v1.2.10 — "Wat is er nieuw"-melding na een update
 
 **Gevraagd door user op 2026-08-17.** Na een self-update en de automatische herstart krijgt de gebruiker nu niets te zien: de app komt terug en niets wijst erop dát er iets veranderd is, laat staan wát. Voorstel: bij de eerste start op een nieuw versienummer één compacte melding met de highlights — bv. "Toast-notificaties toegevoegd", "Taalkeuze NL/EN", "Auto-update draait nu ook op accu".
 
