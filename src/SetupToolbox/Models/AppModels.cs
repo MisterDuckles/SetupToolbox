@@ -45,14 +45,17 @@ public class Category
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
-
     [JsonPropertyName("icon")]
     public string Icon { get; set; } = string.Empty;
 
-    [JsonPropertyName("description")]
-    public string Description { get; set; } = string.Empty;
+    // Naam en omschrijving staan sinds v1.2.6 in de vertaaltabel en niet meer in
+    // apps.json. De key hangt aan de stabiele Id, dus hernoemen in de UI raakt
+    // de catalogus niet en omgekeerd. Icon blijft een emoji: taalonafhankelijk.
+    [JsonIgnore]
+    public string Name => SetupToolbox.App.Loc.S($"appCategory.{Id}.name");
+
+    [JsonIgnore]
+    public string Description => SetupToolbox.App.Loc.S($"appCategory.{Id}.desc");
 
     [JsonPropertyName("apps")]
     public List<App>? Apps { get; set; }
@@ -66,9 +69,15 @@ public class SubCategory
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
+    // Zie Category.Name. Deze rendert als de SubcategoryGroup-header op
+    // CategoryDetailPage.
+    [JsonIgnore]
+    public string Name => SetupToolbox.App.Loc.S($"appSubcategory.{Id}.name");
 
+    // LET OP: dit veld staat wél in apps.json maar wordt NERGENS gebonden —
+    // CategoryDetailPage gebruikt alleen Name voor de groepsheader. Bewust niet
+    // vertaald in v1.2.6 (je kunt onzichtbare tekst niet verifiëren); staat als
+    // los punt in NEXT-STEPS: weghalen of alsnog tonen.
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
@@ -88,8 +97,24 @@ public class App : INotifyPropertyChanged
     [JsonPropertyName("wingetId")]
     public string WingetId { get; set; } = string.Empty;
 
-    [JsonPropertyName("description")]
-    public string Description { get; set; } = string.Empty;
+    // De omschrijving staat sinds v1.2.6 in de vertaaltabel, met de WingetId als
+    // stabiele key. Name blijft wél een gewoon JSON-veld: dat zijn stuk voor stuk
+    // eigennamen ("Google Chrome", "VLC Media Player") die in het Nederlands
+    // hetzelfde heten — 108 keys die 1-op-1 kopieën zouden zijn.
+    //
+    // De setter blijft bestaan omdat NIET elke App uit de catalogus komt: winget-
+    // repo-zoekresultaten (WingetService.ParseSearchOutput) en de reconstructie in
+    // de ge-eleveerde install-runner bouwen App-objecten die geen key hebben. Die
+    // zetten hun eigen tekst; alleen als niemand iets zet valt hij terug op de
+    // tabel. Zo blijft een écht ontbrekende catalogus-key wél een LOC-MISS.
+    private string? _description;
+
+    [JsonIgnore]
+    public string Description
+    {
+        get => _description ?? SetupToolbox.App.Loc.S($"catalogApp.{WingetId}.desc");
+        set => _description = value;
+    }
 
     [JsonPropertyName("popular")]
     public bool Popular { get; set; }

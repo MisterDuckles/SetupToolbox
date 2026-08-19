@@ -94,7 +94,7 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
             Content = App.Loc.S("snapshot.delete"),
             Flyout = BuildConfirmFlyout(
                 title: App.Loc.S("snapshot.delete.title"),
-                body: $"\"{snap.Description}\" wordt permanent van schijf verwijderd.",
+                body: App.Loc.S("snapshot.delete.body", snap.Description),
                 confirmText: App.Loc.S("snapshot.delete.confirm"),
                 onConfirm: () => { OnDeleteConfirmed(snap); return Task.CompletedTask; })
         };
@@ -181,7 +181,7 @@ public sealed partial class SnapshotBrowserDialog : ContentDialog
     {
         App.Snapshots.Delete(snap.Id);
         ShowResult(InfoBarSeverity.Success, App.Loc.S("snapshot.deleted.title"),
-            $"\"{snap.Description}\" is van schijf verwijderd.");
+            App.Loc.S("snapshot.deleted.body", snap.Description));
         RefreshList();
     }
 

@@ -22,9 +22,9 @@
          AssemblyVersion + FileVersion gelijk zodat assembly metadata, exe
          properties en eventuele toekomstige in-app version-display match. -->
     <AssemblyName>SetupToolbox</AssemblyName>
-    <Version>1.2.5</Version>
-    <AssemblyVersion>1.2.5</AssemblyVersion>
-    <FileVersion>1.2.5</FileVersion>
+    <Version>1.2.6</Version>
+    <AssemblyVersion>1.2.6</AssemblyVersion>
+    <FileVersion>1.2.6</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

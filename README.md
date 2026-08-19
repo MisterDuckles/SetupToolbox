@@ -68,7 +68,6 @@ dotnet publish src/SetupToolbox/SetupToolbox.csproj `
 {
   "name": "Nieuwe App",
   "wingetId": "Publisher.AppName",
-  "description": "Korte beschrijving",
   "popular": false
 }
 ```
@@ -79,10 +78,26 @@ dotnet publish src/SetupToolbox/SetupToolbox.csproj `
 {
   "name": "WhatsApp Desktop",
   "wingetId": "9NKSQGP7F2NH",
-  "source": "msstore",
-  "description": "..."
+  "source": "msstore"
 }
 ```
+
+De **omschrijving** staat sinds v1.2.6 in de vertaaltabellen en niet meer in
+`apps.json`, met de `wingetId` als sleutel — zo loopt alle vertaalbare tekst in
+de app via één mechanisme. Voeg 'm toe aan `data/strings.en.json` (brontaal,
+verplicht) én `data/strings.nl.json`:
+
+```json
+"catalogApp.Publisher.AppName.desc": "Korte beschrijving"
+```
+
+Hetzelfde geldt voor categorie- en subcategorie-namen (`appCategory.<id>.name`,
+`appCategory.<id>.desc`, `appSubcategory.<id>.name`). App-**namen** blijven wél
+gewoon in `apps.json`: dat zijn eigennamen die in beide talen hetzelfde zijn.
+
+Controleer met `py scripts/check-catalog-keys.py` dat elke catalogus-tekst in
+beide talen bestaat — dat script kijkt naar de hele catalogus, niet alleen naar
+wat je toevallig op het scherm krijgt.
 
 **Winget ID vinden:**
 

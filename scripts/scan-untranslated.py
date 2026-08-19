@@ -7,11 +7,18 @@ je met de hand niet ziet. Draai dit voor en na een vertaalfase.
 
     py scripts/scan-untranslated.py
 
-Twee passes:
+Drie passes:
   XAML  tekst-dragende attributen met een letterlijke waarde in plaats van een
         markup-extension ({loc:Localize ...}) of een binding.
   C#    string-literals die aan .Text / .Content / .Title / .Message /
         *ButtonText / .Header worden toegekend.
+  C#    named arguments die naar de UI stromen (body:, title:, confirmText: ...)
+        en model-properties die in XAML gebonden worden (Description, DisplayName).
+
+Uitgebreid in v1.2.6 na drie missers: de C#-pass eiste een aanhalingsteken direct
+na het "=", waardoor GEÏNTERPOLEERDE strings ($"Show {n} locations") er compleet
+doorheen glipten — en named arguments werden helemaal niet bekeken. Beide vormen
+worden nu wel gezien.
 
 Exit-code 1 zodra er iets gevonden wordt, zodat het in een check kan hangen.
 Valse positieven horen in ALLOW hieronder, mét reden.
@@ -52,6 +59,11 @@ def walk(ext):
 
 
 def skip(v):
+    # Bij een geïnterpoleerde string telt alleen wat BUITEN de {…} staat: een
+    # $"({item.SizeLabel})" draagt geen vertaalbare tekst, alleen haakjes.
+    literal = re.sub(r'\{[^{}]*\}', '', v)
+    if not re.search(r'[A-Za-zÀ-ſ]', literal):
+        return True
     return (len(v) < 2 or v in ALLOW or SKIP_VALUE.match(v) or is_glyph(v))
 
 
@@ -64,20 +76,77 @@ for path in walk('.xaml'):
                 if not skip(v):
                     xaml_hits.append((os.path.relpath(path, ROOT), i, attr, v))
 
-CS_PROP = re.compile(
+# De C#-pass werkt op STATEMENTS, niet op regels. Een regel-gebaseerde pass mist
+# twee vormen die allebei echt in de app stonden (v1.2.6-les):
+#   Text = $"Deleting {n} item(s)..."          <- $ vóór het aanhalingsteken
+#   Text = cond                                <- ternary over drie regels; op de
+#       ? $"Safe to clean"                        anker-regel staat geen literal
+#       : $"Caution — review carefully",
+# Vandaar: zoek het anker, pak alles tot het einde van het statement, en kijk
+# naar élke literal daarbinnen.
+CS_ANCHOR = re.compile(
     r'\b(?:\w+\.)?(Text|Content|Title|Message|PlaceholderText|PrimaryButtonText|'
-    r'SecondaryButtonText|CloseButtonText|Header)\s*=\s*"((?:[^"\\]|\\.){2,})"')
+    r'SecondaryButtonText|CloseButtonText|Header|Description|DisplayName)\s*=(?!=)'
+    r'|\b(body|title|header|caption|confirmText|cancelText|message|placeholder|label)\s*:')
+
+LITERAL = re.compile(r'\$?@?"((?:[^"\\]|\\.)*)"')
+
+# Einde van het statement: een ';', of het begin van de volgende property in een
+# object-initializer, of een sluitende accolade. Zonder die grens zou de scan
+# doorlopen tot de volgende ';' en resource-keys als "BodyTextBlockStyle"
+# meepikken.
+STATEMENT_END = re.compile(r';|\n\s*(?:\w+\s*=(?!=)|\}|\)\s*;)')
+
+# Regels die naar een logfile of een proces gaan zijn geen UI.
+NOT_UI = re.compile(r'Diagnostics\.Log|LogInstall|FileName\s*=|Arguments\s*=')
+
+# Een literal die hier direct achteraan komt is géén weergavetekst maar een
+# sleutel: de key van een vertaling, of een XAML-resourcenaam.
+KEY_ARG = re.compile(
+    r'(?:Loc\.(?:S|Plural|Raw|Has)|Resources|nameof|GetValue|StartsWith|EndsWith|'
+    r'Contains|Equals|Split|Replace|Combine|Log|ToString)\s*[\(\[]\s*$')
+
+# Een dotted identifier zonder spaties is een sleutel, geen zin. Vangt de keys op
+# die binnen een ternary in Loc.S(...) staan, waar KEY_ARG niet bij kan, plus de
+# losse suffixen die aan een key geplakt worden (Key + ".desc").
+KEY_LIKE = re.compile(r'^\.\w+$|^[A-Za-z][\w]*(?:\.[\w]+)+$')
+
+
+def line_of(text, pos):
+    return text.count('\n', 0, pos) + 1
+
+
+def strip_comments(text):
+    """Vervangt //-commentaar door spaties zodat posities kloppen blijven."""
+    out = list(text)
+    for m in re.finditer(r'//[^\n]*', text):
+        # niet binnen een string-literal? grove maar afdoende check: een even
+        # aantal aanhalingstekens vóór de // op dezelfde regel
+        start = text.rfind('\n', 0, m.start()) + 1
+        if text.count('"', start, m.start()) % 2 == 0:
+            for i in range(m.start(), m.end()):
+                out[i] = ' '
+    return ''.join(out)
+
 
 cs_hits = []
 for path in walk('.cs'):
-    for i, line in enumerate(open(path, encoding='utf-8'), 1):
-        s = line.strip()
-        if s.startswith('//'):
+    text = strip_comments(open(path, encoding='utf-8').read())
+    for anchor in CS_ANCHOR.finditer(text):
+        name = anchor.group(1) or anchor.group(2)
+        tail = text[anchor.end():anchor.end() + 600]
+        end = STATEMENT_END.search(tail)
+        span = tail[:end.start()] if end else tail
+        if NOT_UI.search(text[max(0, anchor.start() - 40):anchor.end()]):
             continue
-        for m in CS_PROP.finditer(line):
-            v = m.group(2)
-            if not skip(v):
-                cs_hits.append((os.path.relpath(path, ROOT), i, m.group(1), v))
+        for m in LITERAL.finditer(span):
+            v = m.group(1)
+            if skip(v) or KEY_LIKE.match(v):
+                continue
+            pos = anchor.end() + m.start()
+            if KEY_ARG.search(text[max(0, pos - 40):pos]):
+                continue
+            cs_hits.append((os.path.relpath(path, ROOT), line_of(text, pos), name, v))
 
 print('=== XAML literals in tekst-attributen: %d ===' % len(xaml_hits))
 for f, i, a, v in xaml_hits:

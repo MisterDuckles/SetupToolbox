@@ -50,8 +50,11 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         var distinctSources = _items.Select(i => i.SourceAppName).Distinct().ToList();
         var appsLabel = distinctSources.Count == 1
             ? distinctSources[0]
-            : $"{distinctSources.Count} apps";
-        HeaderText.Text = $"Found {_items.Count} possible leftover items from {appsLabel}";
+            : App.Loc.Plural("common.appCount", distinctSources.Count);
+        // Twee argumenten, dus geen Loc.Plural (die geeft alleen de telling door).
+        HeaderText.Text = App.Loc.S(
+            _items.Count == 1 ? "leftover.header.one" : "leftover.header.other",
+            _items.Count, appsLabel);
 
         foreach (var group in _items.GroupBy(i => i.Type))
         {
@@ -185,7 +188,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
         });
         meta.Children.Add(new TextBlock
         {
-            Text = $"from {item.SourceAppName}",
+            Text = App.Loc.S("leftover.fromApp", item.SourceAppName),
             Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
         });
@@ -358,7 +361,7 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
             // Switch UI naar progress-mode.
             _deleteRunning = true;
             ProgressPanel.Visibility = Visibility.Visible;
-            ProgressStatusText.Text = $"Deleting {selected.Count} item(s)...";
+            ProgressStatusText.Text = App.Loc.Plural("common.deletingItems", selected.Count);
             IsPrimaryButtonEnabled = false;
             IsSecondaryButtonEnabled = false;
             ToggleAllButton.IsEnabled = false;
@@ -377,11 +380,11 @@ public sealed partial class LeftoverCleanupDialog : ContentDialog
             }
             else if (DeleteResult.FailedCount == 0)
             {
-                ProgressStatusText.Text = $"Done — {DeleteResult.SuccessCount} item(s) deleted.";
+                ProgressStatusText.Text = App.Loc.Plural("leftover.done", DeleteResult.SuccessCount);
             }
             else
             {
-                ProgressStatusText.Text = $"Done — {DeleteResult.SuccessCount} deleted, {DeleteResult.FailedCount} failed.";
+                ProgressStatusText.Text = App.Loc.S("leftover.done.mixed", DeleteResult.SuccessCount, DeleteResult.FailedCount);
             }
 
             // Primary wordt nu een Close-knop (geen extra delete meer mogelijk).

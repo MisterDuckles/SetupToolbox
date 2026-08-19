@@ -293,9 +293,11 @@ public sealed class WingetService
             {
                 Name = name,
                 WingetId = id,
+                // Expliciet zetten: deze App komt niet uit de catalogus en heeft
+                // dus geen catalogApp.<id>.desc-key om op terug te vallen.
                 Description = string.IsNullOrEmpty(version)
-                    ? "Available via winget"
-                    : $"Available via winget (v{version})"
+                    ? App.Loc.S("winget.availableViaRepo")
+                    : App.Loc.S("winget.availableViaRepo.version", version)
             });
         }
 

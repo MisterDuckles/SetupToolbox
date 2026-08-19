@@ -673,7 +673,7 @@ public sealed partial class DebloatPage : Page
 
         InstalledSelectionCountText.Text = total == 0
             ? App.Loc.S("common.nothingSelected")
-            : $"{total} app{(total == 1 ? "" : "s")} selected" +
+            : App.Loc.Plural("common.appsSelected", total) +
               BuildSelectionBreakdown(msCount, oemCount, appCount);
         InstalledUninstallButton.IsEnabled = total > 0;
     }

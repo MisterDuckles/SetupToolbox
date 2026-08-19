@@ -33,18 +33,14 @@ public sealed partial class RestorePointConfigDialog : ContentDialog
 
     private async System.Threading.Tasks.Task OnOpenedAsync()
     {
-        ContextText.Text =
-            $"Vóór elke {OperationName}-operatie kunnen we een Windows System Restore Point maken. " +
-            $"Bij problemen zet één klik in System Properties alles terug naar dat moment. " +
-            $"Eén UAC-prompt voor checkpoint + delete samen, geen aparte dialog elke keer.";
+        ContextText.Text = App.Loc.S("restorePoint.config.context", OperationName);
 
         var status = await App.RestorePoint.GetStatusAsync();
         if (status.BlockedReason != null && status.BlockedReason.Contains("System Protection"))
         {
             StatusGlyph.Glyph = "";  // warning
             StatusGlyph.Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
-            StatusText.Text = status.BlockedReason +
-                " Schakel 't aan via System Properties > System Protection als je deze veiligheidsnet wil gebruiken.";
+            StatusText.Text = status.BlockedReason + App.Loc.S("restorePoint.config.enableHint");
         }
         else if (status.HoursSinceLast.HasValue)
         {

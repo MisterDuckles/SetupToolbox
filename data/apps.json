@@ -4,209 +4,171 @@
   "categories": [
     {
       "id": "browsers",
-      "name": "Browsers",
       "icon": "🌐",
-      "description": "Web browsers for internet browsing",
       "apps": [
         {
           "name": "Google Chrome",
           "wingetId": "Google.Chrome",
-          "description": "Fast, secure browser by Google",
           "popular": true
         },
         {
           "name": "Mozilla Firefox",
           "wingetId": "Mozilla.Firefox",
-          "description": "Privacy-focused open source browser",
           "popular": true
         },
         {
           "name": "Brave Browser",
-          "wingetId": "Brave.Brave",
-          "description": "Privacy browser with built-in ad blocker"
+          "wingetId": "Brave.Brave"
         },
         {
           "name": "Microsoft Edge",
-          "wingetId": "Microsoft.Edge",
-          "description": "Chromium-based browser by Microsoft"
+          "wingetId": "Microsoft.Edge"
         },
         {
           "name": "Opera",
-          "wingetId": "Opera.Opera",
-          "description": "Feature-rich browser with built-in VPN"
+          "wingetId": "Opera.Opera"
         },
         {
           "name": "Opera GX",
-          "wingetId": "Opera.OperaGX",
-          "description": "Gaming browser with resource limiter"
+          "wingetId": "Opera.OperaGX"
         },
         {
           "name": "Vivaldi",
-          "wingetId": "Vivaldi.Vivaldi",
-          "description": "Highly customizable browser for power users"
+          "wingetId": "Vivaldi.Vivaldi"
         },
         {
           "name": "Arc",
-          "wingetId": "TheBrowserCompany.Arc",
-          "description": "Reimagined browser by The Browser Company"
+          "wingetId": "TheBrowserCompany.Arc"
         },
         {
           "name": "Tor Browser",
-          "wingetId": "TorProject.TorBrowser",
-          "description": "Anonymous browsing via the Tor network"
+          "wingetId": "TorProject.TorBrowser"
         },
         {
           "name": "LibreWolf",
-          "wingetId": "LibreWolf.LibreWolf",
-          "description": "Privacy-hardened Firefox fork"
+          "wingetId": "LibreWolf.LibreWolf"
         }
       ]
     },
     {
       "id": "development",
-      "name": "Development",
       "icon": "💼",
-      "description": "Tools for software development",
       "subcategories": [
         {
           "id": "ide-editors",
-          "name": "IDE & Editors",
           "description": "Code editors and integrated development environments",
           "apps": [
             {
               "name": "Visual Studio Code",
               "wingetId": "Microsoft.VisualStudioCode",
-              "description": "Lightweight, extensible code editor by Microsoft",
               "popular": true
             },
             {
               "name": "Visual Studio 2026 Community",
-              "wingetId": "Microsoft.VisualStudio.Community",
-              "description": "Free full-featured IDE for .NET, C++, and more"
+              "wingetId": "Microsoft.VisualStudio.Community"
             },
             {
               "name": "JetBrains IntelliJ IDEA Community",
-              "wingetId": "JetBrains.IntelliJIDEA.Community",
-              "description": "Free Java/Kotlin IDE by JetBrains"
+              "wingetId": "JetBrains.IntelliJIDEA.Community"
             },
             {
               "name": "JetBrains PyCharm Community",
-              "wingetId": "JetBrains.PyCharm.Community",
-              "description": "Free Python IDE by JetBrains"
+              "wingetId": "JetBrains.PyCharm.Community"
             },
             {
               "name": "Antigravity",
-              "wingetId": "Google.Antigravity",
-              "description": "AI-native code editor by Google"
+              "wingetId": "Google.Antigravity"
             }
           ]
         },
         {
           "id": "version-control",
-          "name": "Version Control",
           "description": "Git clients and tooling",
           "apps": [
             {
               "name": "Git",
               "wingetId": "Git.Git",
-              "description": "Distributed version control system",
               "popular": true
             },
             {
               "name": "GitHub Desktop",
-              "wingetId": "GitHub.GitHubDesktop",
-              "description": "Git GUI by GitHub"
+              "wingetId": "GitHub.GitHubDesktop"
             }
           ]
         },
         {
           "id": "runtimes",
-          "name": "Runtimes",
           "description": "Language runtimes and SDKs",
           "apps": [
             {
               "name": "Node.js LTS",
               "wingetId": "OpenJS.NodeJS.LTS",
-              "description": "JavaScript runtime built on V8",
               "popular": true
             },
             {
               "name": "Python 3.13",
               "wingetId": "Python.Python.3.13",
-              "description": "Python programming language",
               "popular": true
             },
             {
               "name": ".NET SDK",
-              "wingetId": "Microsoft.DotNet.SDK.9",
-              "description": "Microsoft .NET 9 SDK"
+              "wingetId": "Microsoft.DotNet.SDK.9"
             },
             {
               "name": "Java JDK 21",
-              "wingetId": "Microsoft.OpenJDK.21",
-              "description": "Microsoft Build of OpenJDK 21 LTS"
+              "wingetId": "Microsoft.OpenJDK.21"
             }
           ]
         },
         {
           "id": "vms",
-          "name": "Virtual Machines & Containers",
           "description": "Containerization and virtualization tools",
           "apps": [
             {
               "name": "Docker Desktop",
               "wingetId": "Docker.DockerDesktop",
-              "description": "Container platform for developers",
               "popular": true
             },
             {
               "name": "VirtualBox",
               "wingetId": "Oracle.VirtualBox",
-              "description": "Free open-source virtualization",
               "serializeInstall": true
             },
             {
               "name": "VMware Workstation Pro",
               "wingetId": "VMware.WorkstationPro",
-              "description": "Full-feature desktop hypervisor (free for personal use)",
               "downloadUrl": "https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion"
             }
           ]
         },
         {
           "id": "databases",
-          "name": "Database Tools",
           "description": "Database GUIs and servers",
           "apps": [
             {
               "name": "MySQL Workbench",
               "wingetId": "Oracle.MySQLWorkbench",
-              "description": "Visual MySQL database design tool",
               "serializeInstall": true
             },
             {
               "name": "PostgreSQL",
               "wingetId": "PostgreSQL.PostgreSQL.17",
-              "description": "Open source relational database",
               "serializeInstall": true
             }
           ]
         },
         {
           "id": "api-tools",
-          "name": "API & Testing Tools",
           "description": "Tools for testing and exploring APIs",
           "apps": [
             {
               "name": "Postman",
               "wingetId": "Postman.Postman",
-              "description": "Collaboration platform for API development",
               "popular": true
             },
             {
               "name": "Insomnia",
-              "wingetId": "Insomnia.Insomnia",
-              "description": "REST and GraphQL client"
+              "wingetId": "Insomnia.Insomnia"
             }
           ]
         }
@@ -214,96 +176,78 @@
     },
     {
       "id": "security",
-      "name": "Security & Privacy",
       "icon": "🔐",
-      "description": "Password managers, VPNs, and anti-malware",
       "subcategories": [
         {
           "id": "password-managers",
-          "name": "Password Managers",
           "description": "Store and sync your credentials securely",
           "apps": [
             {
               "name": "Bitwarden",
               "wingetId": "Bitwarden.Bitwarden",
-              "description": "Free open-source password manager",
               "popular": true
             },
             {
               "name": "1Password",
-              "wingetId": "AgileBits.1Password",
-              "description": "Secure password and identity manager"
+              "wingetId": "AgileBits.1Password"
             },
             {
               "name": "KeePassXC",
-              "wingetId": "KeePassXCTeam.KeePassXC",
-              "description": "Offline password vault, KeePass compatible"
+              "wingetId": "KeePassXCTeam.KeePassXC"
             },
             {
               "name": "NordPass",
-              "wingetId": "NordSecurity.NordPass",
-              "description": "Password manager by Nord Security"
+              "wingetId": "NordSecurity.NordPass"
             },
             {
               "name": "RoboForm",
-              "wingetId": "SiberSystems.RoboForm",
-              "description": "Password manager and form filler"
+              "wingetId": "SiberSystems.RoboForm"
             },
             {
               "name": "Keeper",
-              "wingetId": "KeeperSecurity.KeeperDesktop",
-              "description": "Enterprise-grade password manager and digital vault"
+              "wingetId": "KeeperSecurity.KeeperDesktop"
             }
           ]
         },
         {
           "id": "vpn",
-          "name": "VPN",
           "description": "Encrypt your connection",
           "apps": [
             {
               "name": "NordVPN",
-              "wingetId": "NordSecurity.NordVPN",
-              "description": "Commercial VPN service"
+              "wingetId": "NordSecurity.NordVPN"
             },
             {
               "name": "Proton VPN",
-              "wingetId": "Proton.ProtonVPN",
-              "description": "Privacy-focused Swiss VPN by Proton"
+              "wingetId": "Proton.ProtonVPN"
             },
             {
               "name": "Surfshark",
-              "wingetId": "Surfshark.Surfshark",
-              "description": "Unlimited devices VPN service"
+              "wingetId": "Surfshark.Surfshark"
             },
             {
               "name": "IPVanish",
-              "wingetId": "IPVanish.IPVanish",
-              "description": "VPN service with strict no-logs policy"
+              "wingetId": "IPVanish.IPVanish"
             }
           ]
         },
         {
           "id": "antivirus",
-          "name": "Antivirus & Anti-malware",
           "description": "On-demand malware scanners",
           "apps": [
             {
               "name": "Malwarebytes",
-              "wingetId": "Malwarebytes.Malwarebytes",
-              "description": "Anti-malware and ransomware protection"
+              "wingetId": "Malwarebytes.Malwarebytes"
             },
             {
               "name": "Norton 360",
               "wingetId": "XPFNZKWN35KD6Z",
-              "source": "msstore",
-              "description": "All-in-one antivirus + VPN + password manager (Microsoft Store)"
+              "source": "msstore"
             },
             {
               "name": "Bitdefender",
               "wingetId": "XP9K931FWBP5V5",
-              "source": "msstore",
-              "description": "Antivirus and threat protection (Microsoft Store)"
+              "source": "msstore"
             }
           ]
         }
@@ -311,142 +255,117 @@
     },
     {
       "id": "productivity",
-      "name": "Productivity",
       "icon": "📝",
-      "description": "Office, notes, PDFs, cloud, and AI assistants",
       "subcategories": [
         {
           "id": "office",
-          "name": "Office Suites",
           "description": "Word processing, spreadsheets, presentations",
           "apps": [
             {
               "name": "Microsoft Office 365",
               "wingetId": "Microsoft.Office",
-              "description": "Word, Excel, PowerPoint, Outlook (subscription)",
               "popular": true
             },
             {
               "name": "LibreOffice",
-              "wingetId": "TheDocumentFoundation.LibreOffice",
-              "description": "Free open-source office suite"
+              "wingetId": "TheDocumentFoundation.LibreOffice"
             },
             {
               "name": "OnlyOffice Desktop",
-              "wingetId": "ONLYOFFICE.DesktopEditors",
-              "description": "MS Office-compatible alternative"
+              "wingetId": "ONLYOFFICE.DesktopEditors"
             }
           ]
         },
         {
           "id": "cloud-storage",
-          "name": "Cloud Storage",
           "description": "Sync and back up your files",
           "apps": [
             {
               "name": "OneDrive",
               "wingetId": "Microsoft.OneDrive",
-              "description": "Microsoft cloud storage and sync",
               "popular": true
             },
             {
               "name": "Google Drive",
               "wingetId": "Google.GoogleDrive",
-              "description": "Google cloud storage and sync",
               "popular": true
             },
             {
               "name": "Dropbox",
-              "wingetId": "Dropbox.Dropbox",
-              "description": "File sync and cloud storage"
+              "wingetId": "Dropbox.Dropbox"
             },
             {
               "name": "iCloud",
               "wingetId": "9PKTQ5699M62",
-              "source": "msstore",
-              "description": "Apple iCloud for Windows (Microsoft Store)"
+              "source": "msstore"
             },
             {
               "name": "Proton Drive",
-              "wingetId": "Proton.ProtonDrive",
-              "description": "Encrypted cloud storage by Proton"
+              "wingetId": "Proton.ProtonDrive"
             },
             {
               "name": "Internxt Drive",
-              "wingetId": "Internxt.Drive",
-              "description": "Privacy-focused, zero-knowledge cloud storage"
+              "wingetId": "Internxt.Drive"
             }
           ]
         },
         {
           "id": "notes",
-          "name": "Note-Taking & Knowledge",
           "description": "Notes, knowledge bases, second brain",
           "apps": [
             {
               "name": "Notion",
               "wingetId": "Notion.Notion",
-              "description": "All-in-one workspace for notes and projects",
               "popular": true
             },
             {
               "name": "Obsidian",
               "wingetId": "Obsidian.Obsidian",
-              "description": "Markdown knowledge base with linking",
               "popular": true
             }
           ]
         },
         {
           "id": "pdf",
-          "name": "PDF Tools",
           "description": "Read and annotate PDF files",
           "apps": [
             {
               "name": "Adobe Acrobat Reader",
-              "wingetId": "Adobe.Acrobat.Reader.64-bit",
-              "description": "Standard free PDF reader"
+              "wingetId": "Adobe.Acrobat.Reader.64-bit"
             },
             {
               "name": "Sumatra PDF",
-              "wingetId": "SumatraPDF.SumatraPDF",
-              "description": "Lightweight, fast PDF/EPUB/MOBI reader"
+              "wingetId": "SumatraPDF.SumatraPDF"
             },
             {
               "name": "Foxit PDF Reader",
-              "wingetId": "Foxit.FoxitReader",
-              "description": "Lightweight alternative PDF reader"
+              "wingetId": "Foxit.FoxitReader"
             }
           ]
         },
         {
           "id": "ai-assistants",
-          "name": "AI Assistants",
           "description": "Desktop apps for chatting with AI models",
           "apps": [
             {
               "name": "ChatGPT",
               "wingetId": "9NT1R1C2HH7J",
               "source": "msstore",
-              "description": "Official OpenAI ChatGPT desktop app",
               "popular": true
             },
             {
               "name": "Claude",
               "wingetId": "Anthropic.Claude",
-              "description": "Official Anthropic Claude desktop app",
               "popular": true
             },
             {
               "name": "Perplexity",
               "wingetId": "XP8JNQFBQH6PVF",
-              "source": "msstore",
-              "description": "AI-powered search and answer engine (Microsoft Store)"
+              "source": "msstore"
             },
             {
               "name": "Ollama",
-              "wingetId": "Ollama.Ollama",
-              "description": "Run open-weight LLMs locally (Llama, Mistral, etc.)"
+              "wingetId": "Ollama.Ollama"
             }
           ]
         }
@@ -454,99 +373,81 @@
     },
     {
       "id": "communication",
-      "name": "Communication",
       "icon": "💬",
-      "description": "Chat, video calls, and collaboration",
       "apps": [
         {
           "name": "Discord",
           "wingetId": "Discord.Discord",
-          "description": "Voice, video, and text chat platform",
           "popular": true
         },
         {
           "name": "Slack",
-          "wingetId": "SlackTechnologies.Slack",
-          "description": "Business communication platform"
+          "wingetId": "SlackTechnologies.Slack"
         },
         {
           "name": "Microsoft Teams",
-          "wingetId": "Microsoft.Teams",
-          "description": "Collaboration and video conferencing"
+          "wingetId": "Microsoft.Teams"
         },
         {
           "name": "Signal",
-          "wingetId": "OpenWhisperSystems.Signal",
-          "description": "Private messenger with encryption"
+          "wingetId": "OpenWhisperSystems.Signal"
         },
         {
           "name": "WhatsApp Desktop",
           "wingetId": "9NKSQGP7F2NH",
           "source": "msstore",
-          "description": "Official WhatsApp client (Microsoft Store)",
           "popular": true
         }
       ]
     },
     {
       "id": "media",
-      "name": "Media & Entertainment",
       "icon": "🎵",
-      "description": "Music, audio, video, and streaming",
       "subcategories": [
         {
           "id": "music",
-          "name": "Music",
           "description": "Music streaming and players",
           "apps": [
             {
               "name": "Spotify",
               "wingetId": "Spotify.Spotify",
-              "description": "Music streaming service",
               "popular": true,
               "requiresUnelevated": true
             },
             {
               "name": "Apple Music",
               "wingetId": "9PFHDD62MXS1",
-              "source": "msstore",
-              "description": "Apple Music for Windows (Microsoft Store)"
+              "source": "msstore"
             }
           ]
         },
         {
           "id": "audio-video",
-          "name": "Audio & Video Players",
           "description": "Media players and audio editors",
           "apps": [
             {
               "name": "VLC Media Player",
               "wingetId": "VideoLAN.VLC",
-              "description": "Free open-source media player",
               "popular": true
             },
             {
               "name": "Audacity",
-              "wingetId": "Audacity.Audacity",
-              "description": "Free audio editor and recorder"
+              "wingetId": "Audacity.Audacity"
             }
           ]
         },
         {
           "id": "streaming-recording",
-          "name": "Streaming & Recording",
           "description": "Stream and record screen/webcam",
           "apps": [
             {
               "name": "OBS Studio",
               "wingetId": "OBSProject.OBSStudio",
-              "description": "Free open-source streaming and recording",
               "popular": true
             },
             {
               "name": "Streamlabs Desktop",
-              "wingetId": "Streamlabs.Streamlabs",
-              "description": "Streamer-focused OBS fork with extras"
+              "wingetId": "Streamlabs.Streamlabs"
             }
           ]
         }
@@ -554,127 +455,103 @@
     },
     {
       "id": "gaming",
-      "name": "Gaming",
       "icon": "🎮",
-      "description": "Game launchers and platforms",
       "apps": [
         {
           "name": "Steam",
           "wingetId": "Valve.Steam",
-          "description": "Largest PC gaming platform by Valve",
           "popular": true
         },
         {
           "name": "Epic Games Launcher",
           "wingetId": "EpicGames.EpicGamesLauncher",
-          "description": "Epic Games store and launcher",
           "popular": true
         },
         {
           "name": "EA App",
-          "wingetId": "ElectronicArts.EADesktop",
-          "description": "EA's official launcher (replaces Origin)"
+          "wingetId": "ElectronicArts.EADesktop"
         },
         {
           "name": "Battle.net",
           "wingetId": "Blizzard.BattleNet",
-          "description": "Blizzard launcher (WoW, Diablo, Overwatch)",
           "requiresLocation": true
         },
         {
           "name": "Ubisoft Connect",
-          "wingetId": "Ubisoft.Connect",
-          "description": "Ubisoft launcher and store"
+          "wingetId": "Ubisoft.Connect"
         }
       ]
     },
     {
       "id": "utilities",
-      "name": "Utilities",
       "icon": "🛠️",
-      "description": "System tools, remote access, and utilities",
       "subcategories": [
         {
           "id": "system-tools",
-          "name": "System Tools",
           "description": "Compression, search, cleanup, and system tweaks",
           "apps": [
             {
               "name": "PowerToys",
               "wingetId": "Microsoft.PowerToys",
-              "description": "Microsoft power-user utilities for Windows",
               "popular": true
             },
             {
               "name": "Nvidia App",
               "wingetId": "Nvidia.NvidiaApp",
-              "description": "GPU drivers, GeForce Experience replacement, game optimization",
               "downloadUrl": "https://www.nvidia.com/en-us/software/nvidia-app/",
               "popular": true
             },
             {
               "name": "Everything",
               "wingetId": "voidtools.Everything",
-              "description": "Lightning-fast file search by name",
               "popular": true
             },
             {
               "name": "7-Zip",
               "wingetId": "7zip.7zip",
-              "description": "Free open-source file archiver",
               "popular": true
             },
             {
               "name": "WinRAR",
-              "wingetId": "RARLab.WinRAR",
-              "description": "Archive utility with RAR support"
+              "wingetId": "RARLab.WinRAR"
             },
             {
               "name": "TreeSize Free",
-              "wingetId": "JAMSoftware.TreeSize.Free",
-              "description": "Disk space usage visualizer"
+              "wingetId": "JAMSoftware.TreeSize.Free"
             },
             {
               "name": "CCleaner",
-              "wingetId": "Piriform.CCleaner",
-              "description": "System cleaning and optimization"
+              "wingetId": "Piriform.CCleaner"
             },
             {
               "name": "Revo Uninstaller",
-              "wingetId": "RevoUninstaller.RevoUninstaller",
-              "description": "Uninstaller with leftover cleanup"
+              "wingetId": "RevoUninstaller.RevoUninstaller"
             },
             {
               "name": "PuTTY",
-              "wingetId": "PuTTY.PuTTY",
-              "description": "Classic SSH and serial terminal client"
+              "wingetId": "PuTTY.PuTTY"
             },
             {
               "name": "TranslucentTB",
-              "wingetId": "CharlesMilette.TranslucentTB",
-              "description": "Make the Windows taskbar translucent"
+              "wingetId": "CharlesMilette.TranslucentTB"
             },
             {
               "name": "Twinkle Tray",
-              "wingetId": "xanderfrangos.twinkletray",
-              "description": "Quick brightness control for monitors"
+              "wingetId": "xanderfrangos.twinkletray"
             }
           ]
         },
         {
           "id": "remote-access",
-          "name": "Remote Access",
           "description": "Connect to remote computers",
           "apps": [
             {
               "name": "TeamViewer",
-              "wingetId": "TeamViewer.TeamViewer",
-              "description": "Remote support and access tool"
+              "wingetId": "TeamViewer.TeamViewer"
             },
             {
               "name": "Parsec",
-              "wingetId": "Parsec.Parsec",
-              "description": "Low-latency remote desktop for gaming"
+              "wingetId": "Parsec.Parsec"
             }
           ]
         }
@@ -682,78 +559,64 @@
     },
     {
       "id": "creative",
-      "name": "Creative & Design",
       "icon": "🎨",
-      "description": "Graphics, video editing, and 3D modeling",
       "subcategories": [
         {
           "id": "graphics-photo",
-          "name": "Graphics & Photo Editing",
           "description": "Image editors and raw processors",
           "apps": [
             {
               "name": "GIMP",
               "wingetId": "GIMP.GIMP",
-              "description": "Free open-source image editor",
               "popular": true
             },
             {
               "name": "Paint.NET",
-              "wingetId": "dotPDN.PaintDotNet",
-              "description": "Friendly Windows-native image editor"
+              "wingetId": "dotPDN.PaintDotNet"
             },
             {
               "name": "Darktable",
-              "wingetId": "darktable.darktable",
-              "description": "Open-source RAW photo workflow"
+              "wingetId": "darktable.darktable"
             },
             {
               "name": "ON1 Photo RAW",
               "wingetId": "ON1.PhotoRAW",
-              "description": "Professional RAW photo editor + AI tools (commercial)",
               "downloadUrl": "https://www.on1.com/products/photo-raw/"
             }
           ]
         },
         {
           "id": "video-editing",
-          "name": "Video Editing",
           "description": "Edit and encode video",
           "apps": [
             {
               "name": "DaVinci Resolve",
               "wingetId": "BlackmagicDesign.DaVinciResolve",
-              "description": "Free professional video editor and color grading",
               "downloadUrl": "https://www.blackmagicdesign.com/products/davinciresolve",
               "popular": true
             },
             {
               "name": "CapCut",
-              "wingetId": "ByteDance.CapCut",
-              "description": "Easy video editor for social content"
+              "wingetId": "ByteDance.CapCut"
             },
             {
               "name": "HandBrake",
-              "wingetId": "HandBrake.HandBrake",
-              "description": "Open-source video transcoder"
+              "wingetId": "HandBrake.HandBrake"
             }
           ]
         },
         {
           "id": "3d",
-          "name": "3D & Modeling",
           "description": "3D modeling and printing",
           "apps": [
             {
               "name": "Blender",
               "wingetId": "BlenderFoundation.Blender",
-              "description": "Free open-source 3D suite",
               "popular": true
             },
             {
               "name": "Bambu Studio",
-              "wingetId": "Bambulab.Bambustudio",
-              "description": "Slicer for Bambu Lab 3D printers"
+              "wingetId": "Bambulab.Bambustudio"
             }
           ]
         }
@@ -761,90 +624,73 @@
     },
     {
       "id": "app-suites",
-      "name": "App Suites",
       "icon": "📦",
-      "description": "Full ecosystems — install the whole suite or pick parts",
       "subcategories": [
         {
           "id": "proton-suite",
-          "name": "Proton Suite",
           "description": "Privacy-focused Swiss apps — VPN, mail, drive, and password manager",
           "apps": [
             {
               "name": "Proton VPN",
-              "wingetId": "Proton.ProtonVPN",
-              "description": "Encrypted VPN by Proton"
+              "wingetId": "Proton.ProtonVPN"
             },
             {
               "name": "Proton Mail",
-              "wingetId": "Proton.ProtonMail",
-              "description": "End-to-end encrypted email desktop client"
+              "wingetId": "Proton.ProtonMail"
             },
             {
               "name": "Proton Mail Bridge",
-              "wingetId": "Proton.ProtonMailBridge",
-              "description": "Connects Proton Mail to Outlook/Thunderbird"
+              "wingetId": "Proton.ProtonMailBridge"
             },
             {
               "name": "Proton Drive",
-              "wingetId": "Proton.ProtonDrive",
-              "description": "Encrypted cloud storage by Proton"
+              "wingetId": "Proton.ProtonDrive"
             },
             {
               "name": "Proton Pass",
-              "wingetId": "Proton.ProtonPass",
-              "description": "Encrypted password manager by Proton"
+              "wingetId": "Proton.ProtonPass"
             },
             {
               "name": "Proton Calendar",
               "wingetId": "Proton.ProtonCalendar",
-              "description": "End-to-end encrypted calendar by Proton",
               "downloadUrl": "https://proton.me/calendar"
             },
             {
               "name": "Proton Wallet",
               "wingetId": "Proton.ProtonWallet",
-              "description": "Self-custodial Bitcoin wallet by Proton",
               "downloadUrl": "https://proton.me/wallet"
             },
             {
               "name": "Proton Authenticator",
-              "wingetId": "Proton.ProtonAuthenticator",
-              "description": "Encrypted 2FA / TOTP authenticator by Proton"
+              "wingetId": "Proton.ProtonAuthenticator"
             },
             {
               "name": "Proton Sheets",
               "wingetId": "Proton.ProtonSheets",
-              "description": "Encrypted spreadsheets by Proton",
               "downloadUrl": "https://proton.me/drive/sheets"
             },
             {
               "name": "Proton Docs",
               "wingetId": "Proton.ProtonDocs",
-              "description": "Encrypted document editor by Proton",
               "downloadUrl": "https://proton.me/drive/docs"
             },
             {
               "name": "Proton Meet",
-              "wingetId": "Proton.ProtonMeet",
-              "description": "Encrypted video conferencing by Proton"
+              "wingetId": "Proton.ProtonMeet"
             }
           ]
         },
         {
           "id": "adobe-suite",
-          "name": "Adobe Suite",
           "description": "Adobe entrypoints — installeer Creative Cloud zelf om Photoshop/Premiere/etc. te krijgen",
           "apps": [
             {
               "name": "Adobe Creative Cloud",
-              "wingetId": "Adobe.CreativeCloud",
-              "description": "Hub voor Photoshop, Premiere, Illustrator, etc. (licentie vereist)"
+              "wingetId": "Adobe.CreativeCloud"
             },
             {
               "name": "Adobe Acrobat Pro",
-              "wingetId": "Adobe.Acrobat.Pro",
-              "description": "Volledige PDF editor van Adobe (licentie vereist)"
+              "wingetId": "Adobe.Acrobat.Pro"
             }
           ]
         }

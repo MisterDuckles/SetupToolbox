@@ -55,7 +55,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         var locations = isOrphanScan
             ? DeepCleanService.GetOrphanedScanLocations()
             : DeepCleanService.GetCacheScanLocations();
-        ScanLocationsText.Text = $"Scanned: {string.Join(" · ", locations)}";
+        ScanLocationsText.Text = App.Loc.S("deepclean.scannedLocations", string.Join(" · ", locations));
     }
 
     private void ScrollView_ScrollAnimationStarting(ScrollView sender, ScrollingScrollAnimationStartingEventArgs args) =>
@@ -80,8 +80,9 @@ public sealed partial class DeepCleanDialog : ContentDialog
 
         var totalSize = _items.Sum(i => i.SizeBytes);
         HeaderText.Text = string.IsNullOrEmpty(_filterQuery)
-            ? $"Found {_items.Count} cleanup item(s) — {App.Loc.FormatBytes(totalSize)} total"
-            : $"Found {_items.Count} item(s) — filter active";
+            ? App.Loc.S(_items.Count == 1 ? "deepclean.foundHeader.one" : "deepclean.foundHeader.other",
+                        _items.Count, App.Loc.FormatBytes(totalSize))
+            : App.Loc.Plural("deepclean.foundFiltered", _items.Count);
 
         // Apply filter eerst: query matcht case-insensitive op DisplayName,
         // Path én category-label. Daarna pas bundle-by-token zodat een filter
@@ -94,7 +95,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         {
             var noMatch = new TextBlock
             {
-                Text = $"Geen items matchen \"{_filterQuery}\".",
+                Text = App.Loc.S("deepclean.noFilterMatch", _filterQuery),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 TextAlignment = TextAlignment.Center,
@@ -113,9 +114,8 @@ public sealed partial class DeepCleanDialog : ContentDialog
             var sectionPanel = new StackPanel { Spacing = 6 };
             sectionPanel.Children.Add(new TextBlock
             {
-                Text = safetyGroup.Key
-                    ? $"Safe to clean ({safetyGroup.Count()})"
-                    : $"Caution — review carefully ({safetyGroup.Count()})",
+                Text = App.Loc.S(safetyGroup.Key ? "deepclean.tier.safe" : "deepclean.tier.caution",
+                                 safetyGroup.Count()),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["BodyStrongTextBlockStyle"]
             });
 
@@ -385,7 +385,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         {
             content.Children.Add(new TextBlock
             {
-                Text = $"Folders: {memberNames}",
+                Text = App.Loc.S("deepclean.bundleFolders", memberNames),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
                 TextWrapping = TextWrapping.Wrap
@@ -399,7 +399,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         // de card-rand heen te steken.
         var pathExpander = new Expander
         {
-            Header = $"Show {items.Count} location{(items.Count == 1 ? "" : "s")}",
+            Header = App.Loc.Plural("deepclean.showLocations", items.Count),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             IsExpanded = false,
@@ -701,7 +701,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
         {
             content.Children.Add(new TextBlock
             {
-                Text = $"Last modified: {item.LastModifiedLabel}",
+                Text = App.Loc.S("deepclean.lastModified", item.LastModifiedLabel),
                 Style = (Microsoft.UI.Xaml.Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"]
             });
@@ -807,7 +807,7 @@ public sealed partial class DeepCleanDialog : ContentDialog
 
             _deleteRunning = true;
             ProgressPanel.Visibility = Visibility.Visible;
-            ProgressStatusText.Text = $"Deleting {selected.Count} item(s)...";
+            ProgressStatusText.Text = App.Loc.Plural("common.deletingItems", selected.Count);
             IsPrimaryButtonEnabled = false;
             IsSecondaryButtonEnabled = false;
             ToggleAllButton.IsEnabled = false;
@@ -834,13 +834,15 @@ public sealed partial class DeepCleanDialog : ContentDialog
             }
             else if (DeleteResult.FailedCount == 0)
             {
-                ProgressStatusText.Text =
-                    $"Done — {DeleteResult.SuccessCount} item(s) cleaned, {App.Loc.FormatBytes(DeleteResult.BytesFreed)} freed.";
+                ProgressStatusText.Text = App.Loc.S(
+                    DeleteResult.SuccessCount == 1 ? "deepclean.done.one" : "deepclean.done.other",
+                    DeleteResult.SuccessCount, App.Loc.FormatBytes(DeleteResult.BytesFreed));
             }
             else
             {
-                ProgressStatusText.Text =
-                    $"Done — {DeleteResult.SuccessCount} cleaned, {DeleteResult.FailedCount} failed, {App.Loc.FormatBytes(DeleteResult.BytesFreed)} freed.";
+                ProgressStatusText.Text = App.Loc.S("deepclean.done.mixed",
+                    DeleteResult.SuccessCount, DeleteResult.FailedCount,
+                    App.Loc.FormatBytes(DeleteResult.BytesFreed));
             }
 
             _deleteCompleted = true;

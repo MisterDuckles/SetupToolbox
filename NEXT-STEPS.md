@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.5** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.6** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -13,15 +13,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 ---
 
 ## Open
-
-### v1.2.6 — Multi-language fase 5: de catalogus (`data/apps.json`)
-
-Bewust als laatste en apart van de bloatware-fase: dit is de enige fase met een **schemawijziging**, en die raakt `AppDatabaseService` en de icon-koppeling. Los houden maakt terugdraaien makkelijker.
-
-**Scope (~356 strings):** 34 categorie-namen + 34 categorie-descriptions + 144 app-namen + 144 app-descriptions. Alles is nu Engels, dus dit is puur NL-vertaling toevoegen.
-
-**Uit te werken vóór implementatie:** waar de vertaling landt. Twee opties die je moet wegen: velden naast elkaar in hetzelfde record (`"description"` + `"descriptionNl"`) houdt één bestand maar vervuilt het schema; een parallel `apps.nl.json` houdt het schema schoon maar introduceert een tweede bestand dat uit de pas kan lopen met de catalogus. App-**namen** zijn bijna allemaal eigennamen ("Google Chrome") en hoeven waarschijnlijk niet vertaald — beslis dat expliciet, anders vertaal je 144 dingen voor niets.
-
 
 ### v1.2.7 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
@@ -58,6 +49,12 @@ Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zoda
 - **Hoeveel regels?** Compact houden was de expliciete wens: een handvol bullets, niet de volledige changelog.
 - **Vertaling.** Valt onder de multi-language-reeks: de highlights moeten in beide talen bestaan, dus het formaat moet daar rekening mee houden.
 
+### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.6
+
+- **De 24 subcategorie-`description`-velden in `apps.json` worden nergens getoond.** `CategoryDetailPage` bouwt de `SubcategoryGroup` alleen uit `sub.Name`; de omschrijving wordt wél gedeserialiseerd maar nooit gebonden. Ze zijn daarom in v1.2.6 bewust níét vertaald — onzichtbare tekst kun je niet verifiëren. Twee uitwegen, allebei prima: weghalen uit `apps.json` (dan is het schema weer eerlijk), of alsnog tonen onder de groepsheader (dan horen ze in de vertaaltabel als `appSubcategory.<id>.desc`). Nu staat er een veld dat niets doet naast een `name` die verhuisd is, en dat leest verwarrend voor een contributor.
+- **`CONTRIBUTING.md` is op meer punten verouderd dan alleen de apps.json-instructie.** Tijdens v1.2.6 bijgewerkt voor het nieuwe vertaalmechanisme, maar de rest van het bestand klopt nog niet: het noemt **.NET 8** (is 10), **"Main WPF application"** met een `Views/` + `ViewModels/` + `Themes/`-structuur en een `Launcher/`-project (allemaal weg sinds v0.5.9, de app is WinUI-only), **"MIT License"** onderaan (sinds v1.0.0 proprietary — dit is de vervelendste, want het staat er als juridische mededeling aan bijdragers), `YOUR_USERNAME` als placeholder in twee issue-links, en een "Features die we zoeken"-lijst waarvan 8 van de 9 items allang gebouwd zijn (dark mode, installed-indicator, parallel installs, icons, export/import, fuzzy search, multi-language). Eén doorloop volstaat.
+- **`WingetService.ParseSearchOutput` neemt de Tag-kolom mee in het versienummer.** In de winget-repo-zoekresultaten staat "Beschikbaar via winget (v4.9.9   Tag: notepad)" — de versie-substring loopt door tot `sourcePos`, en als winget een `Tag`-kolom tussenvoegt komt die mee. Cosmetisch en bestond al vóór v1.2.6 (de oude hardcoded string had hetzelfde), maar het is zichtbaar. Fix is een `.Split()` op whitespace of de kolompositie strakker bepalen.
+
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.4
 
 Losse punten die in de weg lagen of opvielen, geen van alle blokkerend. Los oppakken of meenemen met een volgende patch.
@@ -86,6 +83,80 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.6 — Multi-language fase 5: de catalogus (`data/apps.json`)
+
+**Laatste van vijf fasen — de vertaalreeks is hiermee af.** De stringtabellen gaan van 1018 naar **1199 keys**, in beide talen even groot.
+
+**De scope-telling in de roadmap klopte op drie punten niet.** Nageteld met een script over `apps.json` in plaats van met de hand:
+
+| | Roadmap zei | Werkelijk |
+| --- | --- | --- |
+| Categorie-namen | 34 | **34** — maar dat is 10 top-level + 24 sub, niet 34 categorieën |
+| Categorie-descriptions | 34 | 34 aanwezig, **maar 24 daarvan worden nergens gerenderd** |
+| App-namen | 144 | **110 records → 108 unieke** wingetIds |
+| App-descriptions | 144 | idem |
+
+De 144 was een restant van vóór v1.0.2 (catalogus ging toen van 112 naar 110). Zelfde soort stale telling als bij v1.2.4 (117 → 124 tweaks) en v1.2.5 (15 → 17 categorie-chips). Reëel: **284** unieke strings als je alles zou doen; **152** voor wat er daadwerkelijk op het scherm staat en vertaald hoort te worden.
+
+**110 app-records zijn 108 producten.** Proton VPN en Proton Drive staan elk twee keer — bewust gekruist sinds v1.0.2 (functie-categorie + Proton Suite). Zelfde patroon als de 68→55 bij bloatware: de key hangt aan de `wingetId`, dus die twee delen één vertaling in plaats van dat je dezelfde zin twee keer onderhoudt. **Eén bewuste tekstwijziging:** Proton VPN had twee *verschillende* omschrijvingen ("Privacy-focused Swiss VPN by Proton" in Security → VPN, "Encrypted VPN by Proton" in de Proton Suite). Eén moest winnen; de informatievere is gekozen, dus in de Proton Suite staat nu de eerste.
+
+#### De gekozen aanpak: proza naar de tabel, identifiers blijven in de catalogus
+
+Van de drie opties die op tafel lagen is het de derde geworden — dezelfde als fase 3 en 4 — maar in een verzachte variant.
+
+- **`description` verhuist** naar `strings.*.json`, met de stabiele id als sleutel: `appCategory.<id>.name` / `.desc`, `appSubcategory.<id>.name`, `catalogApp.<wingetId>.desc`.
+- **`name` van een app blijft gewoon in `apps.json`.** App-namen worden niet vertaald (zie hieronder), en dan is een key die in beide talen dezelfde waarde heeft alleen maar onderhoud. De regel is daarmee: *identifiers en eigennamen horen bij de catalogus, proza hoort in de vertaaltabel.*
+- **Categorie- en subcategorie-`name` verhuizen wél**, want dat zijn generieke woorden ("Utilities", "Password Managers"), geen eigennamen.
+
+**Waarom niet de twee opties die de roadmap noemde.** `"description"` + `"descriptionNl"` naast elkaar houdt de catalogus self-contained en laat een vergeten vertaling visueel opvallen, maar draagt een tweede vertaalmechanisme naast `strings.*.json`, valt buiten `LOC-MISS`, en een derde taal betekent een derde veld per record. Een parallel `apps.nl.json` was de zwakste: als enige vereist het echte merge-code in `AppDatabaseService`, en een app die je aan de catalogus toevoegt krijgt stilzwijgend geen NL-tekst zonder dat iets dat meldt. Met de gekozen aanpak is er **één mechanisme in de hele app**, dekt `LOC-MISS` het automatisch, en is een derde taal één extra bestand.
+
+**De prijs, eerlijk benoemd:** `apps.json` is niet meer te lezen als catalogus — je ziet wat een app ís pas als je de stringtabel erbij pakt. Een app toevoegen raakt nu 3 bestanden in plaats van 1. `README.md` en `CONTRIBUTING.md` zijn daarop bijgewerkt, met een nieuwe stap in de contributor-flow en een verwijzing naar de checker.
+
+**De icon-waarschuwing in de roadmap klopte niet.** Die zei dat de schemawijziging "`AppDatabaseService` en de icon-koppeling raakt". Het tweede is onjuist: `App.IconImage` bouwt `ms-appx:///Icons/{WingetId.Replace('.','-')}.png` en leest `Name` noch `Description`. Een vertaling-alleen wijziging raakt iconen dus nergens. Het eerste klopt maar half — `AppDatabaseService` is een kale `JsonSerializer.Deserialize` van 40 regels en is **ongewijzigd gebleven**; de wijziging zit volledig in het model.
+
+**App-namen zijn bewust níét vertaald** (108 keys bespaard). Het zijn stuk voor stuk officiële productnamen, ook de 19 met een beschrijvend woord erin — "Brave Browser", "VLC Media Player", "Adobe Acrobat Reader", "TreeSize Free" heten in het Nederlands niet anders. Het precedent uit v1.2.4 (Foto's, Kladblok, Kaarten) wijst hier niet dezelfde kant op: dát ging over Microsoft-apps die Nederlands Windows zélf hernoemt, zodat je de regel in je eigen Startmenu terugkent. Bij third-party apps bestaat dat argument niet.
+
+**Het mechanisme.** `Category.Name`/`.Description` en `SubCategory.Name` zijn lookups geworden op de `Id`; `App.Description` is een lookup op de `WingetId`. Eén verschil met fase 3/4, en het is belangrijk: **niet elke `App` komt uit de catalogus.** `WingetService.ParseSearchOutput` (winget-repo-zoekresultaten) en `ElevatedInstallRunner` (reconstructie in het ge-eleveerde kind) bouwen `App`-objecten die geen key hebben — bij een `Tweak` speelde dat niet, want die komen altijd uit `BuildAll()`. `App.Description` heeft daarom een settable backing field: wie zelf tekst zet wint, en alleen als niemand iets zet volgt de tabel-lookup. Bewust géén `Has()`-fallback, want dan zou een écht ontbrekende catalogus-key stil de Engelse tekst tonen in plaats van een `LOC-MISS` te geven.
+
+**Twee omschrijvingen waren Nederlands, niet Engels.** De aanname "alles in apps.json is Engels" klopte op twee na: Adobe Creative Cloud en Adobe Acrobat Pro. Zelfde als de "het ging twee kanten op"-bevinding bij v1.2.5. Voor die twee is de Nederlandse tekst letterlijk overgenomen en het Engels nieuw geschreven; voor alle overige 106 is scriptmatig gecontroleerd dat de Engelse waarde **byte-voor-byte** gelijk is aan wat er in `apps.json` stond.
+
+#### Bijvangst: 13 strings die de scanner niet kón zien
+
+`scripts/scan-untranslated.py` liep aan het begin van deze fase schoon (0/0) en tóch stonden er nog 13 hardcoded gebruiker-zichtbare strings in de app. De scanner had drie blinde vlekken, alle drie nu gedicht:
+
+1. **Geïnterpoleerde strings.** De C#-regex eiste een aanhalingsteken direct na het `=`, dus `Text = $"Deleting {n} item(s)..."` glipte er compleet doorheen. Dit was de grootste: het is precies de `item(s)`-constructie die v1.2.3 zou hebben opgeruimd.
+2. **Meerregelige ternaries.** `Text = cond ? $"Safe to clean" : $"Caution — review carefully"` heeft op de anker-regel geen literal staan. De pass is daarom van regel-gebaseerd naar **statement-gebaseerd** gegaan: zoek het anker, pak alles tot het einde van het statement, kijk naar élke literal daarbinnen.
+3. **Named arguments.** `body: "…"` staat niet op een property en werd dus niet bekeken.
+
+Om de bredere vangst bruikbaar te houden filtert de scanner nu ook actief: literals die argument zijn van `Loc.S`/`Resources[`/`ToString(` zijn sleutels en geen tekst, een dotted identifier zonder spaties idem, en bij een geïnterpoleerde string telt alleen wat búiten de `{…}` staat (`$"({item.SizeLabel})"` draagt geen vertaalbare tekst).
+
+Wat er gevonden is: **10 in `DeepCleanDialog` en `LeftoverCleanupDialog`** (de twee cleanup-dialogs die fase 2 duidelijk maar half heeft gehad — headers, tier-koppen, "Deleting N item(s)...", de klaar-meldingen, "from {app}"), **4 Nederlandse zinnen in `RestorePointConfigDialog`**, de `item(s)`-teller op `DebloatPage`, twee literals in `SnapshotBrowserDialog` (één Nederlands) en de `"Available via winget"` van de repo-zoekresultaten. Nieuwe keys daarvoor: 29.
+
+> Eén bewuste tekstcorrectie meegenomen: "als je **deze** veiligheidsnet wil gebruiken" → "**dit** veiligheidsnet". Bestaande grammaticafout, geen vertaalfout, maar hij staat in de UI — zelfde afweging als "resetten" → "reset" in v1.2.4.
+
+**Totaal 181 nieuwe keys:** 152 catalogus + 29 bijvangst.
+
+#### Nieuw gereedschap: `scripts/check-catalog-keys.py`
+
+Leidt uit `apps.json` af welke keys er moeten bestaan en bewijst dat ze in **beide** tabellen staan, zonder de app te starten. Controleert ook op wees-keys (een app verwijderen laat anders stille keys achter) en op lege waardes — die zouden als lege regel renderen in plaats van als zichtbare fout, dus die merk je nooit op. Draait in de contributor-flow.
+
+> **Geverifieerd (2026-08-18) — draaiende app, beide talen:**
+> - Build: **0 errors, 0 warnings**.
+> - **Alle 10 categorie-tegels in beide talen**, naam én omschrijving: *Beveiliging & privacy / "Wachtwoordmanagers, VPN's en anti-malware"* ↔ *Security & Privacy / "Password managers, VPNs, and anti-malware"*, *Hulpprogramma's*, *Creatief & ontwerp*, *App-suites* — compleet in beeld gebracht door het venster te verkleinen tot 3 kolommen.
+> - **Subcategorie-headers renderen**, o.a. alle zes van Ontwikkeling: *IDE's & editors / Versiebeheer / Runtimes / Virtuele machines & containers / Databasetools / API- & testtools*, plus *Wachtwoordmanagers* en *VPN* op Beveiliging.
+> - **De zoekbalk is hier ook de volledige sweep**, net als bij de tweaks — maar via een andere route: `FuzzyMatcher` scoort op naam **+ wingetId** (bewust niet op description sinds v0.5.10), en élke wingetId bevat een punt. Eén punt typen levert dus de hele catalogus op in één platte lijst mét omschrijvingen. De 7 msstore-apps hebben een puntloze id (`9NKSQGP7F2NH`) en vallen buiten die ene query; die zijn met een tweede letter-query opgehaald (*Bitdefender / "Antivirus and threat protection (Microsoft Store)"*, *ChatGPT*).
+> - **De gekruiste Proton-entries delen aantoonbaar één vertaling**: Proton Drive staat twee keer in de resultaten, beide keren met exact dezelfde omschrijving.
+> - **De twee nieuw geschreven Engelse bronteksten renderen**: *"Full PDF editor by Adobe (license required)"* en *"Hub for Photoshop, Premiere, Illustrator, etc. (license required)"*.
+> - **Het synthetische-App-pad is apart nagelopen** — dat was het enige echte risico van deze aanpak. Winget-repo-zoekopdracht op "notepad" geeft 10 resultaten die géén catalogus-key hebben; die tonen *"Beschikbaar via winget (v4.9.9…)"* ↔ *"Available via winget (v4.9.9…)"* en vallen dus terecht **niet** terug op de tabel-lookup.
+> - Live wisselen NL → EN → NL zonder herstart, inclusief de complete SettingsPage.
+> - **Geen enkele `LOC-MISS`** in `install.log` over de hele sessie (alleen de `LAUNCH`-regel staat erin), en geen `crash.log`.
+> - `scan-untranslated.py`: **0 XAML-literals, 0 C#-literals** — nu met het uitgebreide net.
+> - `check-catalog-keys.py`: **152/152 keys in beide tabellen**, geen wezen, geen lege waardes. Daarmee is een `LOC-MISS` op de Apps-pagina onmogelijk, ongeacht wat je aanklikt.
+>
+> **Niet getest:** een echte install-batch, en de Deep-clean- en Leftover-dialogs zijn niet end-to-end gedraaid — de 10 omgezette strings daarin zijn geverifieerd op tabel-aanwezigheid, niet visueel. Dat vereist een echte scan + delete.
+
+**Werkwijze-notitie.** `apps.json` gebruikt **LF**, de stringtabellen **CRLF**. Beide zijn met expliciete `newline=''` gelezen én geschreven, en er is vooraf getest dat `json.dumps(indent=2, ensure_ascii=False)` de bestaande opmaak van `apps.json` exact reproduceert — zonder die check had een round-trip het hele bestand als gewijzigd getoond. De diff is nu 294 van de 854 regels, precies de weggehaalde velden.
 
 ### v1.2.5 — Multi-language fase 4: bloatware-metadata (+ de fase-2-restjes)
 
@@ -340,6 +411,8 @@ Eén diff van ~1250 strings is niet te reviewen en niet te bisecten, en het mech
 | **v1.2.6** | `data/apps.json` (~356) incl. schemawijziging | ~356 |
 
 SettingsPage is bewust fase 1: dat scherm *bevat* de toggle, dus de omschakeling is zichtbaar op de plek waar je 'm indrukt. De catalogus staat apart van bloatware omdat de `apps.json`-schemawijziging `AppDatabaseService` en de icon-koppeling raakt — los houden maakt terugdraaien makkelijker.
+
+> **Achteraf (v1.2.6):** de fasering heeft gewerkt, maar de omvang-kolom klopte structureel te hoog en de icon-zorg was ongegrond. Elke fase telde bij aankomst anders uit dan hier geschat (117→124 tweaks, 68 entries→55 producten, 356→152 catalogus-strings). Definitieve uitkomst: **1199 keys** in beide tabellen, niet de ~1250 uit de schatting — en dat inclusief 29 keys voor strings die pas in fase 5 gevonden zijn. De les voor een volgende meerfasen-klus: tel elke fase opnieuw met een script, en behandel de schatting in de roadmap als een orde van grootte, niet als een scope.
 
 **Gevolg voor de rest van de roadmap:** config-backup schuift naar **v1.2.7**, website naar **v1.2.8**.
 

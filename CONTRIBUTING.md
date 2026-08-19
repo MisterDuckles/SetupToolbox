@@ -31,18 +31,47 @@ Zoek de juiste categorie in `data/apps.json` en voeg je app toe:
 {
   "name": "Visual Studio Code",
   "wingetId": "Microsoft.VisualStudioCode",
-  "description": "Lightweight but powerful code editor",
   "popular": false
 }
 ```
 
 **Velden:**
-- `name`: Display naam van de app
+- `name`: Display naam van de app. Blijft onvertaald — het zijn eigennamen
 - `wingetId`: De winget package ID
-- `description`: Korte beschrijving (max ~60 karakters)
 - `popular`: `true` voor veel gebruikte apps (max 3 per categorie)
 
-### Stap 3: Test de App
+### Stap 3: Voeg de omschrijving toe aan de vertaaltabellen
+
+De omschrijving staat sinds v1.2.6 **niet meer in `apps.json`** maar in de twee
+stringtabellen, zodat de app één vertaalmechanisme heeft in plaats van twee. De
+sleutel is `catalogApp.<wingetId>.desc`.
+
+In `data/strings.en.json` (de brontaal — deze regel is verplicht):
+
+```json
+"catalogApp.Microsoft.VisualStudioCode.desc": "Lightweight but powerful code editor"
+```
+
+En in `data/strings.nl.json`:
+
+```json
+"catalogApp.Microsoft.VisualStudioCode.desc": "Lichte maar krachtige code-editor"
+```
+
+Houd de omschrijving kort (max ~60 karakters). Spreek je geen Nederlands? Zet
+dan dezelfde Engelse zin in beide bestanden en vermeld het in je PR — dan
+vertalen wij 'm.
+
+Controleer je toevoeging met:
+
+```powershell
+py scripts/check-catalog-keys.py
+```
+
+Dat meldt ontbrekende of lege vertalingen, en sleutels die na het verwijderen
+van een app zijn blijven hangen.
+
+### Stap 4: Test de App
 
 Voordat je een PR maakt, test of de app correct installeert:
 
@@ -52,7 +81,7 @@ winget install --id <wingetId> --exact --silent
 
 Als dit werkt, is de app geschikt!
 
-### Stap 4: Submit Pull Request
+### Stap 5: Submit Pull Request
 
 1. Fork de repository
 2. Maak een nieuwe branch: `git checkout -b add-app-name`
@@ -67,14 +96,11 @@ Als je een hele nieuwe categorie wil toevoegen:
 ```json
 {
   "id": "category-id",
-  "name": "Category Name",
   "icon": "🎯",
-  "description": "Short description",
   "apps": [
     {
       "name": "App Name",
       "wingetId": "Publisher.AppName",
-      "description": "App description",
       "popular": false
     }
   ]
@@ -86,14 +112,10 @@ Of met subcategorieën:
 ```json
 {
   "id": "category-id",
-  "name": "Category Name",
   "icon": "🎯",
-  "description": "Short description",
   "subcategories": [
     {
       "id": "subcat-id",
-      "name": "Subcategory Name",
-      "description": "Subcat description",
       "apps": [
         // apps here
       ]
@@ -101,6 +123,19 @@ Of met subcategorieën:
   ]
 }
 ```
+
+De naam en omschrijving van de categorie horen — net als bij een app — in de
+twee stringtabellen, met de `id` als sleutel:
+
+```json
+"appCategory.category-id.name": "Category Name",
+"appCategory.category-id.desc": "Short description",
+"appSubcategory.subcat-id.name": "Subcategory Name"
+```
+
+Een subcategorie heeft geen eigen omschrijving nodig: alleen de naam wordt
+getoond, als sectie-header op de categoriepagina. Draai daarna
+`py scripts/check-catalog-keys.py` om te controleren dat je niets vergeten bent.
 
 ## Code Contributions
 
