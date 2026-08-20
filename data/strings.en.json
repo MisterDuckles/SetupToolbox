@@ -1355,6 +1355,10 @@
   "schedule.err.writeTaskXml": "Could not write the task definition: {0}",
   "schedule.err.processStart": "Process could not start: {0}",
   "schedule.err.noOutput": "(no output)",
-  "update.err.httpStatus": "GitHub returned {0} {1}."
+  "update.err.httpStatus": "GitHub returned {0} {1}.",
+  "install.winget.downloading": "Downloading {0}",
+  "install.winget.hashVerified": "Installer hash verified",
+  "install.winget.startingInstall": "Starting package install...",
+  "install.winget.expectUacPrompt": "The installer asks for administrator rights — expect a prompt."
 
 }

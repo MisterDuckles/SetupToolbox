@@ -249,6 +249,13 @@ ALLOW = {
     # één woord meldt.
     '{ms} MS': ('DebloatPage',),
     '{oem} OEM': ('DebloatPage',),
+
+    # (j) v1.2.8.1 — het voorvoegsel van een winget-stdout-regel waarop
+    # FriendlyOutputLine matcht. Dit is winget's tekst, niet die van ons: we
+    # vergelijken erop om 'm te kunnen vertálen. Het voorkomen achter
+    # StartsWith( wordt al door NOT_UI_CALL gefilterd; dit is het tweede, in de
+    # index-expressie die de URL erachter afknipt.
+    'Downloading ': ('WingetService',),
 }
 
 

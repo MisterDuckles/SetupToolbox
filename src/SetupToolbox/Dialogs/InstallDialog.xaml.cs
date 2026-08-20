@@ -356,7 +356,12 @@ public sealed partial class InstallDialog : ContentDialog
         if (item == null) return;
 
         var msg = string.IsNullOrWhiteSpace(p.Message) ? string.Empty : p.Message.Trim();
-        item.Message = msg;
+
+        // v1.2.8.1: WAT JE ZIET is de vertaalde regel, WAAROP GEMATCHT WORDT is de
+        // ruwe. Die regels komen tijdens de install rechtstreeks uit winget's stdout
+        // en zijn dus Engels ongeacht onze taalkeuze. De stage-detectie hieronder
+        // matcht bewust nog op `msg` — vertalen vóór die switch laat de ring staan.
+        item.Message = WingetService.FriendlyOutputLine(msg);
 
         switch (p.Phase)
         {

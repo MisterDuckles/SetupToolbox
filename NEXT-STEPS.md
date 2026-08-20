@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.8** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.8.1** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -16,7 +16,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 > **Route naar de volgende release, vastgelegd op 2026-08-20 (user).** Drie items achter elkaar — **v1.2.8 → v1.2.9 → v1.2.10** — en zodra die binnen zijn wordt er een **milestone-release** gecut. De website schuift daarachteraan, want die trekt versie en downloadlink live uit de GitHub-API en heeft die Release dus nodig. Elk van de drie in een **eigen chat**: de context van de vertaalreeks is niet meer nodig en NEXT-STEPS.md is de overdracht.
 >
-> **Stand 2026-08-20: v1.2.8 is af** (zie *Voltooide versies*) — **wacht nog op de visuele verificatie door user**: een echte install-batch plus een echte delete-batch, met screenshots. Volgende aan de beurt is **v1.2.9**.
+> **Stand 2026-08-20: v1.2.8 is af en door user getest**, en de test leverde meteen **v1.2.8.1** op — winget's eigen stdout stond nog Engels op de install-kaart. Zie beide secties onder *Voltooide versies*. Wat nog open staat aan verificatie: de vertaalde winget-regels zijn zelf nog niet op het scherm gezien (v1.2.8.1 is ná de testrun gebouwd). Volgende aan de beurt is **v1.2.9**.
 
 ### v1.2.9 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
@@ -51,7 +51,7 @@ Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een
 
 **Wat er dan uitgeleverd wordt** — geïnstalleerde gebruikers zitten sinds v1.2.0 op de oude build en krijgen dit in één keer:
 - **v1.2.1** de kwetsbare `System.Drawing.Common` 4.7.0 uit de publish (GHSA-rxg9-xrhp-64gj). Dit is meteen het antwoord op het openstaande besluit onderaan bij *release-cadans*: die security-fix ligt er dan een halve reeks op te wachten.
-- **v1.2.2 t/m v1.2.8** de complete multi-language-reeks: NL/EN met live wisselen, 1284 strings.
+- **v1.2.2 t/m v1.2.8.1** de complete multi-language-reeks: NL/EN met live wisselen, 1288 strings.
 - **v1.2.9** de gebundelde config-backup.
 - **v1.2.10** de wat-is-er-nieuw-melding — die is bij déze release meteen zijn eigen eerste testgeval.
 
@@ -77,6 +77,8 @@ Dingen die tijdens de vertaal-restjes boven kwamen en bewust níét in die patch
 - ~~**De foutmeldingen uit de elevated batches zijn nog Engels, en `Services/` valt daarom buiten pass 4 van de scanner.**~~ — **afgerond in v1.2.8.** `Services/` zit nu in pass 4. De verwachting hier klopte grotendeels: het waren 27 gerenderde strings (geschat "een stuk of twaalf"), en het onderscheid gerenderd-vs-alleen-geteld was inderdaad de helft van het werk.
 - **De dode weergave-strings in `DeepCleanService` en `LeftoverScannerService` kunnen weg.** Bevestigd tijdens v1.2.8: `DeepCleanDeleteResult.ResultsByPath` en `LeftoverDeleteResult.ResultsByPath` worden door geen enkele Dialog of Page gebonden — de UI leest alleen `SuccessCount` / `FailedCount` / `BytesFreed`. *"Removed registry key"*, *"Deleted folder"*, *"Deleted shortcut"*, *"Removed MUIcache value"*, *"Cleared"* en *"Unknown type"* worden dus opgebouwd en nooit getoond. Ze staan nu met die reden in de `ALLOW`-lijst (blok a) in plaats van vertaald te zijn — onzichtbare tekst kun je niet verifiëren, zelfde regel als de 24 subcategorie-descriptions in v1.2.6. Twee nette uitwegen: het `message`-veld uit die dictionaries slopen (dan is het model weer eerlijk), of de dictionary alsnog ergens tonen. Zolang geen van beide gebeurt draagt de code een weergavelaag die niets weergeeft.
 - **`RestorePointService.CreateAsync` geeft een `RestorePointResult` terug waarvan `.Message` nooit gelezen wordt.** Gevonden tijdens v1.2.8. De enige aanroeper is `DebloatPage:574` en die doet `_ = await App.RestorePoint.CreateAsync(rpDescription);` — het resultaat wordt letterlijk weggegooid. Vier Nederlandse zinnen (*"Kon elevated process niet starten."*, *"Restore point aangemaakt."*, *"Geen output van Checkpoint-Computer."*, *"UAC geweigerd."*) worden dus opgebouwd en verdwijnen. Erger dan cosmetisch: **een mislukt herstelpunt vóór een Debloat-batch wordt nergens gemeld**, en dat is precies het veiligheidsnet waar het om gaat. Te beslissen: de uitkomst tonen (dan horen die vier zinnen in de tabel), of `CreateAsync` een `void`/`bool` maken en de zinnen weghalen. Het eerste is waarschijnlijk wat je wilt.
+- **Winget's `Found <naam> [<id>] Version <x>`-regel blijft Engels op de install-kaart.** Overgebleven na v1.2.8.1: `FriendlyOutputLine` mapt die regel bewust niet, want *Version* staat midden in de data en half vertalen is slechter dan niet vertalen. Nette uitweg: de regel parsen op naam / id / versie (het formaat is stabiel) en herbouwen als `installCard.found` met drie argumenten. Klein, maar het vraagt eerst een screenshot van de exacte regel om het formaat te bevestigen in plaats van te gokken. Zelfde geldt voor eventuele andere winget-regels die nog niet in de mapping staan — die vallen nu terug op de ruwe Engelse tekst, wat bedoeld is, maar elke keer dat er één opduikt hoort 'ie erbij.
+- **De download-regel op de install-kaart toont de volledige URL en breekt over meerdere regels.** Zichtbaar op de v1.2.8-screenshots: *"Downloading https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake-1.11.2-x86_64-Win_GUI.exe"* loopt over twee regels en laat de kaart verspringen. De Nederlandse variant is nog iets langer. Bestond al vóór de vertaling en is bewust níét meegenomen in v1.2.8.1 (dat was een taalfix, geen layoutfix). Uitweg: alleen de bestandsnaam tonen in plaats van de hele URL — `install.winget.downloading` heeft al een `{0}`, dus het is één `Path.GetFileName`-aanroep.
 - **`Take Ownership` en `Open Terminal as Admin` staan in het Windows-contextmenu maar zijn niet vertaald.** Deze twee literals in `TweakService` zijn de naam van het verb *zoals die naar het register geschreven wordt* — de gebruiker ziet ze dus wél, alleen in Explorer en niet in onze app. Vertalen is hier géén vertaling maar een **gedragswijziging**: de revert van die tweak matcht op de geschreven key, dus een taalwissel zou een eerder aangemaakt verb onverwijderbaar maken. Wie dit oppakt moet dus eerst de revert-logica aanpassen. Staat met die reden in de `ALLOW`-lijst (blok e).
 - **De cache-namen op de Deep-clean-cards blijven Engels omdat de bundeling op de `DisplayName` tokeniseert.** Besloten in v1.2.7 en onderbouwd in die sectie: *"Tijdelijke bestanden (gebruiker)"* en *"(systeem)"* zouden significante tokens delen die het Engels niet deelt, waarna de cards per taal anders bundelen. De nette uitweg is de bundeling zélf aanpassen: `BundleByTokenOverlap` bestaat voor verweesde mappen (*"VMware"* op drie locaties), niet voor een vaste lijst van tien caches — sluit cache-categorieën uit en de tien namen kunnen alsnog vertaald worden. Klein, maar het raakt scanlogica en hoort daarom in een eigen patch. De acht `ALLOW`-regels in `scan-untranslated.py` kunnen dan weg.
 - **De filter-header in de Deep-clean-dialog toont het totaal in plaats van het aantal treffers.** Bij een actief filter staat er *"227 items gevonden — filter actief"* terwijl er 30 kaarten onder staan: `deepclean.foundFiltered` krijgt `_items.Count` mee in plaats van `filteredItems.Count`. Gezien tijdens de v1.2.7-verificatie, bestaat al sinds de filter er is en heeft niets met de vertaling te maken. Eénregelige fix.
@@ -119,11 +121,42 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 
 ## Voltooide versies
 
+### v1.2.8.1 — Winget's eigen stdout stond nog Engels op de install-kaart
+
+**Gevonden door user, direct na de v1.2.8-testrun.** De vier vertaalfasen hadden alle *onze* strings gedekt, maar op de install-kaart stond nog steeds Engels:
+
+> *"Starting package install..."* · *"Successfully verified installer hash"* · *"Downloading https://github.com/HandBrake/…"* · *"The installer will request to run as administrator. Expect a prompt."*
+
+**Dat zijn geen ontbrekende keys — het is winget's console-output.** `RunWingetCommandAsync` leest `winget.exe` stdout karakter-voor-karakter en geeft élke regel door aan `progress?.Report(line)`; die komt via `InstallPhase.Running` ongefilterd op de kaart. Twee gevolgen die dit een aparte categorie maken:
+
+- **Geen enkele scanner kón dit zien.** Er staat geen literal in onze code — de tekst ontstaat pas op runtime, in een ander proces. `scan-untranslated.py` stond terecht op 0 en `install.log` had **0 LOC-MISS**: de tabellen waren compleet, de tekst kwam simpelweg niet uit de tabel.
+- **Winget volgt de Windows-weergavetaal, niet onze taalkeuze.** Dezelfde MRT-vs-eigen-tabel-scheiding als bij de WinUI-automation-namen. Onze toggle heeft er per definitie geen invloed op.
+
+**De oplossing is een mapping, geen filter.** Nieuwe `WingetService.FriendlyOutputLine(line)` herkent de regels die daadwerkelijk op het scherm gezien zijn en geeft er onze eigen tekst voor terug; **een onbekende regel gaat ongewijzigd door**. Winget's diagnostiek stilzwijgend inslikken zou erger zijn dan een enkele Engelse regel die we nog niet kennen.
+
+**De valkuil die dit bijna een regressie maakte:** `InstallDialog.ApplyProgressCore` gebruikt exact díé Engelse tekst om de stage-ring te laten opschuiven — `Contains("Starting package install")` → 3/4, `Contains("installer hash")` → 2/4. Vertaal je vóór die detectie, dan blijft de ring op 1/4 staan en merkt niemand dat, want de kaart blijft er verder normaal uitzien. Opgelost met dezelfde scheiding als bij de sentinels in v1.2.8: `item.Message` krijgt de **vertaalde** regel, de switch eronder matcht op de **ruwe**.
+
+**Vier nieuwe keys** (`install.winget.downloading` / `.hashVerified` / `.startingInstall` / `.expectUacPrompt`), plus `install.state.installed` hergebruikt voor winget's *"Successfully installed"*. Tabellen 1284 → **1288**.
+
+> **Bewust niet gemapt: de `Found <naam> [<id>] Version <x>`-regel.** Die bevat het woord *Version* midden in de data, dus een nette vertaling vereist dat je de regel parset in naam/id/versie in plaats van 'm te herkennen. Half vertalen (*"Gevonden: Notion [Notion.Notion] Version 4.19.1"*) is slechter dan niet vertalen. Staat als los punt hieronder.
+
+> **Aangetoond (2026-08-20):** build **0 errors / 0 warnings** op `1.2.8.1`; beide checkers exit 0; de vier keys staan in beide tabellen en worden aangeroepen; en elk van de vijf herkende regels landt aantoonbaar op de bedoelde tak terwijl de byte-teller (*"1.23 MB / 45.6 MB"*) en de `Found`-regel ongewijzigd doorgaan — precedentie dus getest, niet aangenomen.
+>
+> **Niet getest:** de vertaalde regels zijn nog niet op het scherm gezien. v1.2.8.1 is ná de testrun van user gebouwd, dus dit vraagt nog één install-batch.
+
+> **Afwijking van de nummering-conventie, bewust.** De roadmap gebruikt drie delen (`1.2.7`, `1.2.8`). Dit is op verzoek van user een vierde component geworden omdat het een directe hotfix op v1.2.8 is en geen eigen roadmap-item. `AssemblyVersion` is sowieso een viervelds-nummer, dus `GitHubService.TryParseTag` en de self-update-vergelijking hebben er geen last van.
+
 ### v1.2.8 — De install-voortgangsregel + de foutmeldingen uit de elevated batches
 
 De stringtabellen gaan van 1265 naar **1284 keys**, in beide talen even groot. Hiermee is `Services/` de laatste map die aan pass 4 van de scanner is toegevoegd; er staat nu geen enkele map meer bewust buiten.
 
-> **Verificatie ligt bij user** en is op het moment van committen **nog niet gedaan**. Deze flow is niet te controleren zonder daadwerkelijk software te installeren en te verwijderen — precies waarom deze strings vijf vertaalfasen lang zijn blijven staan. Wat wél is aangetoond staat onderaan deze sectie. Wat nog moet: een echte install-batch en een echte delete-batch, in beide talen, met screenshots.
+> **Verificatie door user, 2026-08-20 — gedaan.** Een echte install-batch (Notion + PuTTY + HandBrake, parallel=3), een echte uninstall, een geweigerde UAC-prompt en een reeds-geïnstalleerde app. Uitkomst hieronder; het leverde één vervolgpunt op dat **v1.2.8.1** is geworden.
+>
+> - **De install-flow werkt en de kaart is Nederlands** — behalve winget's eigen stdout, zie v1.2.8.1.
+> - **De `Al geïnstalleerd`-tak is echt geraakt:** `SKIP Mozilla.Firefox (already installed, exit=0x8A15002B)` in `install.log`. Dat is precies de sentinel die onvertaald moest blijven, en de weergave ernaast klopte.
+> - **De UAC-weigering is echt geraakt:** `RUNNER FAIL UAC declined / elevation impossible (Win32 1223)`, gevolgd door de terugval op de per-app in-process flow — de drie apps installeerden daarna alsnog. Let op: dít pad toont géén `elevated.uacDeclined`; de install-runner valt stil terug (v1.0.5-ontwerp). Die key is dus nog steeds niet visueel bevestigd — daarvoor moet je UAC weigeren bij een **Tweaks-apply, Debloat- of Deep-clean-batch**.
+> - **Uninstall werkt** (user bevestigd).
+> - **Geen enkele `LOC-MISS`** in `install.log` over de hele sessie, en **geen `crash.log`**. Dat is meteen het bewijs dat de resterende Engelse tekst niet uit onze tabel kwam maar van buiten het proces.
 
 #### Vier beslissingen vooraf (user, 2026-08-20)
 
@@ -209,7 +242,7 @@ Drempel naar **één** woord, en dat kost níéts — met `is_identifier` en `SC
 > - **Negatief getest:** één vertaalde string teruggezet in `MixedSourceUninstaller` → de scanner meldt 'm op de juiste regel. Dat bewijst meteen dat de `ALLOW`-lijst bestand-gebonden werkt: dezelfde zin is toegestaan in `DeepCleanService` en `LeftoverScannerService` en wordt daar terecht niet gemeld.
 > - **Aangetoond dat de verwijderde code echt weg is** (niet alleen dat het compileert): de vier namen komen alleen nog voor in de comments die uitleggen waaróm ze weg zijn.
 >
-> **Niet getest, en dat is de hele reden dat dit item bestond:** een echte install-batch, een echte uninstall-batch, een echte delete-batch en een mislukte UAC-prompt. Alle 27 elevated-strings en de 5 install-strings zijn dus geverifieerd op tabel-aanwezigheid en aanroep, **niet visueel**. Dat is aan user.
+> **Nog niet visueel bevestigd na de testrun van user:** de `elevated.*`-keys. De install-runner weigert-UAC-tak valt stil terug en toont ze niet, en een echte **delete-batch** (Deep clean / Leftovers) is niet gedraaid. Die 27 strings staan dus nog steeds op tabel-aanwezigheid en aanroep, niet op scherm. Goedkoopste manier om dat alsnog te dekken: UAC weigeren bij een Tweaks-apply — dan komt `elevated.uacDeclined` via `FailureMessages` in de InfoBar op de Tweaks-pagina.
 
 **Werkwijze-notitie.** Gemeten in plaats van aangenomen: de `.cs`-bestanden in dit project zijn **CRLF**, net als de stringtabellen — alleen `apps.json` is LF. De eerdere werkwijze-notitie suggereerde LF voor de code. Lees en schrijf sowieso met expliciete `newline=''`, dan maakt het niet uit; de diff op de twee tabellen bleef zo 25 regels in plaats van het hele bestand.
 

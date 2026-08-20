@@ -1355,6 +1355,10 @@
   "schedule.err.writeTaskXml": "Kon de task-definitie niet wegschrijven: {0}",
   "schedule.err.processStart": "Process kon niet starten: {0}",
   "schedule.err.noOutput": "(geen output)",
-  "update.err.httpStatus": "GitHub gaf {0} {1}."
+  "update.err.httpStatus": "GitHub gaf {0} {1}.",
+  "install.winget.downloading": "Bezig met downloaden: {0}",
+  "install.winget.hashVerified": "Installer-hash geverifieerd",
+  "install.winget.startingInstall": "Pakket-installatie starten...",
+  "install.winget.expectUacPrompt": "De installer vraagt om beheerdersrechten — er verschijnt een UAC-prompt."
 
 }

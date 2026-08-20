@@ -911,6 +911,52 @@ public sealed class WingetService
         }
     }
 
+    /// <summary>
+    /// Vertaalt één regel winget-stdout naar onze eigen tekst.
+    ///
+    /// v1.2.8.1: tijdens de install-batch streamt <see cref="RunWingetCommandAsync"/>
+    /// elke stdout-regel van winget.exe rechtstreeks door naar de voortgangsregel
+    /// op de install-kaart. Die regels zijn NIET van ons — ze komen uit winget —
+    /// en winget volgt de Windows-weergavetaal, niet onze taalkeuze. Op een
+    /// Engelse Windows stond er dus Engels op een Nederlandse kaart, en geen
+    /// enkele scanner kon dat zien: er staat geen literal in onze code.
+    ///
+    /// Bewust een MAPPING en geen filter: een onbekende regel gaat ongewijzigd
+    /// door. Beter een enkele Engelse regel die we nog niet kennen dan winget's
+    /// diagnostiek stilzwijgend inslikken. Wat hier staat is wat er daadwerkelijk
+    /// op het scherm is gezien (screenshots 2026-08-20); een volgende run kan de
+    /// lijst uitbreiden.
+    ///
+    /// LET OP: dit is uitsluitend WEERGAVE. De fase-detectie in
+    /// InstallDialog.ApplyProgressCore matcht op de RUWE Engelse regel en moet
+    /// dat blijven doen — vertaal je vóór die detectie, dan blijft de stage-ring
+    /// staan. Zelfde scheiding tussen tonen en vergelijken als bij de sentinels.
+    /// </summary>
+    public static string FriendlyOutputLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return line;
+
+        // Prefix-vorm: de rest van de regel is data (de download-URL) en blijft staan.
+        if (line.StartsWith("Downloading ", StringComparison.OrdinalIgnoreCase))
+            return App.Loc.S("install.winget.downloading", line[("Downloading ".Length)..].Trim());
+
+        if (line.Contains("installer hash", StringComparison.OrdinalIgnoreCase))
+            return App.Loc.S("install.winget.hashVerified");
+
+        if (line.Contains("Starting package install", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Installing package", StringComparison.OrdinalIgnoreCase))
+            return App.Loc.S("install.winget.startingInstall");
+
+        if (line.Contains("will request to run as administrator", StringComparison.OrdinalIgnoreCase))
+            return App.Loc.S("install.winget.expectUacPrompt");
+
+        // Winget's eigen succesregel; wij hebben daar al een label voor.
+        if (line.Contains("Successfully installed", StringComparison.OrdinalIgnoreCase))
+            return App.Loc.S("install.state.installed");
+
+        return line;
+    }
+
     private static string FriendlyError(string error, string output, int exitCode, string wingetId)
     {
         var combined = error + output;
