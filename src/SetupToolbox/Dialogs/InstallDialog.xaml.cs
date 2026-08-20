@@ -252,7 +252,7 @@ public sealed partial class InstallDialog : ContentDialog
             OnProgress(new InstallProgress(0, _wingetTotal, a, InstallPhase.Running, msg)));
 
         var (locSuccess, locMessage) = await App.Winget.InstallAppAsync(
-            a.WingetId, locationProgress, a.Source, _cancelCts!.Token, chosenPath);
+            a.WingetId, locationProgress, a.Source, _cancelCts!.Token, chosenPath, a.Name);
 
         var locPhase = !locSuccess ? InstallPhase.Failed
             : locMessage == WingetService.AlreadyInstalledMessage ? InstallPhase.AlreadyInstalled

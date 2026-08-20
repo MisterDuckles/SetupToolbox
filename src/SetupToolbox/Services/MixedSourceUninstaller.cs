@@ -42,7 +42,8 @@ public sealed class MixedSourceUninstaller
         // 1) Winget: sequential winget uninstall. Snel + geen UAC.
         foreach (var entry in byWinget)
         {
-            progress?.Report(new MixedUninstallProgress(entry, MixedUninstallPhase.Running, $"Uninstalling {entry.DisplayName}..."));
+            progress?.Report(new MixedUninstallProgress(entry, MixedUninstallPhase.Running,
+                App.Loc.S("progress.uninstalling", entry.DisplayName)));
             var (ok, msg) = await App.Winget.UninstallAppAsync(entry.Identifier);
             results[entry.Identifier] = (ok, msg);
             progress?.Report(new MixedUninstallProgress(
@@ -144,7 +145,7 @@ public sealed class MixedSourceUninstaller
             using var proc = Process.Start(psi);
             if (proc == null)
             {
-                MarkAllFailed(items, results, "Could not start elevated process");
+                MarkAllFailed(items, results, App.Loc.S("elevated.couldNotStart"));
                 ReportAllFailed(items, results, progress);
                 return false;
             }
@@ -161,7 +162,7 @@ public sealed class MixedSourceUninstaller
             // Items zonder RESULT-line in de log → markeer als failed (PS gecrashd
             // halverwege, kan in theorie gebeuren). Cancelled=false hier; UAC
             // denial wordt door de catch hieronder afgehandeld.
-            FinalizePending(items, results, "Did not run (interrupted)");
+            FinalizePending(items, results, App.Loc.S("elevated.didNotRun"));
             return false;
         }
         catch (System.ComponentModel.Win32Exception)
@@ -172,7 +173,7 @@ public sealed class MixedSourceUninstaller
             foreach (var entry in items)
             {
                 if (!results.ContainsKey(entry.Identifier))
-                    results[entry.Identifier] = (false, "Cancelled — UAC prompt declined");
+                    results[entry.Identifier] = (false, App.Loc.S("elevated.uacDeclined"));
             }
             ReportAllFailed(items, results, progress);
             return true;
@@ -231,7 +232,8 @@ public sealed class MixedSourceUninstaller
                 if (parts.Length < 3) continue;
                 var entry = items.FirstOrDefault(it => it.Identifier == parts[1]);
                 if (entry != null)
-                    progress?.Report(new MixedUninstallProgress(entry, MixedUninstallPhase.Running, $"Removing {entry.DisplayName}..."));
+                    progress?.Report(new MixedUninstallProgress(entry, MixedUninstallPhase.Running,
+                        App.Loc.S("progress.removing", entry.DisplayName)));
             }
             else if (line.StartsWith("RESULT|"))
             {

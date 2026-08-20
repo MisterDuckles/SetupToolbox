@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.7** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.8** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -14,7 +14,11 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 ## Open
 
-### v1.2.8 — Eén-klik volledige config-backup (apps + tweaks + settings)
+> **Route naar de volgende release, vastgelegd op 2026-08-20 (user).** Drie items achter elkaar — **v1.2.8 → v1.2.9 → v1.2.10** — en zodra die binnen zijn wordt er een **milestone-release** gecut. De website schuift daarachteraan, want die trekt versie en downloadlink live uit de GitHub-API en heeft die Release dus nodig. Elk van de drie in een **eigen chat**: de context van de vertaalreeks is niet meer nodig en NEXT-STEPS.md is de overdracht.
+>
+> **Stand 2026-08-20: v1.2.8 is af** (zie *Voltooide versies*) — **wacht nog op de visuele verificatie door user**: een echte install-batch plus een echte delete-batch, met screenshots. Volgende aan de beurt is **v1.2.9**.
+
+### v1.2.9 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
 Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een nieuwe of andere pc.
 
@@ -25,16 +29,6 @@ Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een
 - Er is geen gebundelde export: je moet nu twee losse bestanden apart maken en apart weer importeren.
 
 **Scope:** één "Configuratie exporteren"-knop → één JSON met de drie onderdelen (app-selectie + tweak-profiel + settings), en één "Importeren" die ze samen terugzet. Uit te werken vóór implementatie: versie-veld voor forward-compat, wat te doen bij een deels-onbekende catalogus op de doelmachine (bestaande import-flows melden dat al per app/tweak), en of settings selectief overslaan mogelijk moet zijn (bv. wél je tweak-profiel, níét je logging-voorkeur).
-
-### v1.2.9 — Website professionaliseren + bijwerken
-
-De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
-
-> Correctie op mijn eigen audit van 2026-08-16: een geautomatiseerde fetch kreeg **403 Forbidden** op zowel de pagina als de bare domain, waaruit ik concludeerde dat de site niet gedeployed was. Dat was fout — user bevestigt dat 'ie gewoon online is. De 403 is vrijwel zeker bot-/WAF-blokkering op de hosting. **Niet opnieuw als "offline" diagnosticeren op basis van een fetch.**
-
-**Wat er moet gebeuren:** de site is gebouwd in mei 2026 bij v1.0.0 en is sindsdien niet meer bijgewerkt, terwijl het project 14 patches verder is (toast-notificaties, install-lanes, deep clean-uitbreidingen, accu-fix). Twee doelen: (1) **professioneler uiterlijk**, (2) **inhoud synchroon met wat de app nu daadwerkelijk kan**. Versie + downloadlink komen al live uit de GitHub-API, dus die lopen automatisch mee — maar alleen als er ook echt een nieuwe Release gepubliceerd wordt (zie de release-cadans-notitie hieronder).
-
-Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zodat je in één keer een actueel verhaal kunt neerzetten.
 
 ### v1.2.10 — "Wat is er nieuw"-melding na een update
 
@@ -49,25 +43,41 @@ Bewust achteraan gezet: heeft pas zin als de rest van deze reeks binnen is, zoda
 - **Hoeveel regels?** Compact houden was de expliciete wens: een handvol bullets, niet de volledige changelog.
 - **Vertaling.** Valt onder de multi-language-reeks: de highlights moeten in beide talen bestaan, dus het formaat moet daar rekening mee houden.
 
+### v1.3.0 — Milestone-release: v1.2.1 t/m v1.2.10 uitleveren
+
+**Besloten door user op 2026-08-20:** zodra v1.2.8 (install-voortgangsregel), v1.2.9 (config-backup) en v1.2.10 (wat-is-er-nieuw-melding) af zijn, wordt er **een Release gecut**. Niet eerder — deze drie horen als één verhaal naar buiten.
+
+**Nummer:** `v1.3.0`. Volgt de bestaande conventie (milestone = minor bump; v1.2.0 was de vorige) en de CLAUDE.md-regel dat alleen milestones een GitHub Release met exe's krijgen. `v1.1.0` blijft overgeslagen — dat nummer is in het WPF-tijdperk al eens vergeven.
+
+**Wat er dan uitgeleverd wordt** — geïnstalleerde gebruikers zitten sinds v1.2.0 op de oude build en krijgen dit in één keer:
+- **v1.2.1** de kwetsbare `System.Drawing.Common` 4.7.0 uit de publish (GHSA-rxg9-xrhp-64gj). Dit is meteen het antwoord op het openstaande besluit onderaan bij *release-cadans*: die security-fix ligt er dan een halve reeks op te wachten.
+- **v1.2.2 t/m v1.2.8** de complete multi-language-reeks: NL/EN met live wisselen, 1284 strings.
+- **v1.2.9** de gebundelde config-backup.
+- **v1.2.10** de wat-is-er-nieuw-melding — die is bij déze release meteen zijn eigen eerste testgeval.
+
+**Volgorde-afhankelijkheid, niet vergeten:** v1.2.10 heeft de release-tekst nódig. Als de highlights meegebakken worden in een `data/whatsnew.json` (de voorkeursoptie daar), dan moet het `1.3.0`-blok in dat bestand geschreven zijn vóórdat de Release gepubliceerd wordt — anders levert de eerste update na v1.3.0 een lege melding op. Schrijf dat blok als onderdeel van v1.2.10, niet als losse stap bij het cutten.
+
+**Checklist bij het cutten:** versienummer in de csproj, installer bouwen (`scripts/build-installer.ps1`), Release aanmaken met de exe als asset, en pas dáárna de website (die trekt versie + downloadlink live uit de GitHub-API).
+
+### v1.3.1 — Website professionaliseren + bijwerken
+
+De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
+
+> Correctie op mijn eigen audit van 2026-08-16: een geautomatiseerde fetch kreeg **403 Forbidden** op zowel de pagina als de bare domain, waaruit ik concludeerde dat de site niet gedeployed was. Dat was fout — user bevestigt dat 'ie gewoon online is. De 403 is vrijwel zeker bot-/WAF-blokkering op de hosting. **Niet opnieuw als "offline" diagnosticeren op basis van een fetch.**
+
+**Wat er moet gebeuren:** de site is gebouwd in mei 2026 bij v1.0.0 en is sindsdien niet meer bijgewerkt, terwijl het project 14 patches verder is (toast-notificaties, install-lanes, deep clean-uitbreidingen, accu-fix). Twee doelen: (1) **professioneler uiterlijk**, (2) **inhoud synchroon met wat de app nu daadwerkelijk kan**. Versie + downloadlink komen al live uit de GitHub-API, dus die lopen automatisch mee — maar alleen als er ook echt een nieuwe Release gepubliceerd wordt (zie de release-cadans-notitie hieronder).
+
+Bewust achteraan gezet, en sinds 2026-08-20 expliciet **ná v1.3.0**: de site trekt versie en downloadlink live uit de GitHub-API, dus zonder gepubliceerde Release valt er niets te synchroniseren. Bovendien kun je dan in één keer een actueel verhaal neerzetten in plaats van twee keer half.
+
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.7
 
-Vier dingen die tijdens de vertaal-restjes boven kwamen en bewust níét in die patch zijn meegenomen, want ze raken werkende logica in plaats van tekst.
+Dingen die tijdens de vertaal-restjes boven kwamen en bewust níét in die patch zijn meegenomen, want ze raken werkende logica in plaats van tekst.
 
-- **De voortgangsregel op de install-cards is nog niet vertaald — en dat is het meest zichtbare wat er overblijft.** Gevonden ná de scope-afspraak voor v1.2.7, dus bewust níét meegenomen; het zit in `Services/` en het is niet te verifiëren zonder een echte install-batch te draaien. Vijf strings in `WingetService` die stuk voor stuk op de kaart verschijnen zolang de app in de `Installing`-staat staat (`MessageVisibility` is dan zichtbaar):
-
-  | Regel | Wat | Fout in |
-  | --- | --- | --- |
-  | `:621` | `$"Installing {wingetId}..."` | Nederlandse UI |
-  | `:661` | `"Installed"` | Nederlandse UI |
-  | `:812` | `$"Starting {app.Name}"` | Nederlandse UI |
-  | `:674` | `AlreadyInstalledMessage` = *"Al geïnstalleerd"* | **Engelse UI** |
-  | `:696` | `RequiresLocationMessage` = *"Installatielocatie vereist"* | **Engelse UI** |
-
-  De laatste twee zijn de subtielste van het hele project: het zijn `const` **sentinels** die óók vergeleken worden (`message == AlreadyInstalledMessage`), en die vergelijking moet blijven werken. De oplossing is dezelfde als bij `RestorePointStatus` in v1.2.7 — niet de sentinel vertalen, maar de *weergave* ervan losknippen: `progress?.Report(App.Loc.S("install.state.alreadyInstalled"))` en `return (true, AlreadyInstalledMessage)`. De keys bestaan al sinds v1.2.7, alleen de call-sites niet.
-
-  > Twee doden onderweg gevonden: `WingetService.UninstallAppsAsync` (en dus `$"Uninstalling {app.Name}"` op `:459`) wordt alleen door `UninstallDialog` aangeroepen, en die dialog wordt **nergens** geïnstantieerd. Weghalen of weer aansluiten — nu is het een tweede uninstall-pad naast `AllAppsUninstallDialog` dat stilletjes meerot.
-
-- **De foutmeldingen uit de elevated batches zijn nog Engels, en `Services/` valt daarom buiten pass 4 van de scanner.** Zes services geven bij een mislukte of afgebroken batch een hardcoded string terug: *"Could not start elevated process"*, *"Cancelled — UAC prompt declined"*, *"Did not run (interrupted)"* en varianten, in `TweakService`, `DeepCleanService`, `LeftoverScannerService`, `BloatwareService`, `MixedSourceUninstaller` en `WingetService`. Een deel daarvan is aantoonbaar **zichtbaar**: `TweakApplyRunner.ShowOutcome` zet `FailureMessages` letterlijk in de InfoBar-body op de Tweaks-pagina. Een ander deel niet: `DeepCleanDeleteResult.ResultsByPath` wordt nergens gerenderd, alleen geteld — *"Removed registry key"* / *"Deleted folder"* zijn dus dode weergave-strings en kunnen net zo goed weg. Ruwe schatting een stuk of twaalf zichtbare strings. Zolang dit én het punt hierboven open staan kan `Services/` er niet bij in de scanner, want dan is de exit-code structureel rood. Eerst per string bepalen of 'ie gerenderd wordt of alleen geteld — dat onderscheid is de helft van het werk.
+- ~~**De voortgangsregel op de install-cards**~~ — **afgerond in v1.2.8.**
+- ~~**De foutmeldingen uit de elevated batches zijn nog Engels, en `Services/` valt daarom buiten pass 4 van de scanner.**~~ — **afgerond in v1.2.8.** `Services/` zit nu in pass 4. De verwachting hier klopte grotendeels: het waren 27 gerenderde strings (geschat "een stuk of twaalf"), en het onderscheid gerenderd-vs-alleen-geteld was inderdaad de helft van het werk.
+- **De dode weergave-strings in `DeepCleanService` en `LeftoverScannerService` kunnen weg.** Bevestigd tijdens v1.2.8: `DeepCleanDeleteResult.ResultsByPath` en `LeftoverDeleteResult.ResultsByPath` worden door geen enkele Dialog of Page gebonden — de UI leest alleen `SuccessCount` / `FailedCount` / `BytesFreed`. *"Removed registry key"*, *"Deleted folder"*, *"Deleted shortcut"*, *"Removed MUIcache value"*, *"Cleared"* en *"Unknown type"* worden dus opgebouwd en nooit getoond. Ze staan nu met die reden in de `ALLOW`-lijst (blok a) in plaats van vertaald te zijn — onzichtbare tekst kun je niet verifiëren, zelfde regel als de 24 subcategorie-descriptions in v1.2.6. Twee nette uitwegen: het `message`-veld uit die dictionaries slopen (dan is het model weer eerlijk), of de dictionary alsnog ergens tonen. Zolang geen van beide gebeurt draagt de code een weergavelaag die niets weergeeft.
+- **`RestorePointService.CreateAsync` geeft een `RestorePointResult` terug waarvan `.Message` nooit gelezen wordt.** Gevonden tijdens v1.2.8. De enige aanroeper is `DebloatPage:574` en die doet `_ = await App.RestorePoint.CreateAsync(rpDescription);` — het resultaat wordt letterlijk weggegooid. Vier Nederlandse zinnen (*"Kon elevated process niet starten."*, *"Restore point aangemaakt."*, *"Geen output van Checkpoint-Computer."*, *"UAC geweigerd."*) worden dus opgebouwd en verdwijnen. Erger dan cosmetisch: **een mislukt herstelpunt vóór een Debloat-batch wordt nergens gemeld**, en dat is precies het veiligheidsnet waar het om gaat. Te beslissen: de uitkomst tonen (dan horen die vier zinnen in de tabel), of `CreateAsync` een `void`/`bool` maken en de zinnen weghalen. Het eerste is waarschijnlijk wat je wilt.
+- **`Take Ownership` en `Open Terminal as Admin` staan in het Windows-contextmenu maar zijn niet vertaald.** Deze twee literals in `TweakService` zijn de naam van het verb *zoals die naar het register geschreven wordt* — de gebruiker ziet ze dus wél, alleen in Explorer en niet in onze app. Vertalen is hier géén vertaling maar een **gedragswijziging**: de revert van die tweak matcht op de geschreven key, dus een taalwissel zou een eerder aangemaakt verb onverwijderbaar maken. Wie dit oppakt moet dus eerst de revert-logica aanpassen. Staat met die reden in de `ALLOW`-lijst (blok e).
 - **De cache-namen op de Deep-clean-cards blijven Engels omdat de bundeling op de `DisplayName` tokeniseert.** Besloten in v1.2.7 en onderbouwd in die sectie: *"Tijdelijke bestanden (gebruiker)"* en *"(systeem)"* zouden significante tokens delen die het Engels niet deelt, waarna de cards per taal anders bundelen. De nette uitweg is de bundeling zélf aanpassen: `BundleByTokenOverlap` bestaat voor verweesde mappen (*"VMware"* op drie locaties), niet voor een vaste lijst van tien caches — sluit cache-categorieën uit en de tien namen kunnen alsnog vertaald worden. Klein, maar het raakt scanlogica en hoort daarom in een eigen patch. De acht `ALLOW`-regels in `scan-untranslated.py` kunnen dan weg.
 - **De filter-header in de Deep-clean-dialog toont het totaal in plaats van het aantal treffers.** Bij een actief filter staat er *"227 items gevonden — filter actief"* terwijl er 30 kaarten onder staan: `deepclean.foundFiltered` krijgt `_items.Count` mee in plaats van `filteredItems.Count`. Gezien tijdens de v1.2.7-verificatie, bestaat al sinds de filter er is en heeft niets met de vertaling te maken. Eénregelige fix.
 - **De ingebouwde WinUI-automation-namen volgen nog steeds de Windows-weergavetaal.** In de Engelse UI heet het InfoBar-icoon in de automation-boom *"Informatiepictogram"*. Niet zichtbaar op het scherm, maar een schermlezer noemt het verkeerd. Dit is dezelfde MRT-beperking als het NavigationView-Settings-item hierboven onder v1.2.4, en dus geen nieuw probleem — wel het tweede geval, dus als je het a11y-item oppakt hoort dit erbij.
@@ -95,6 +105,8 @@ Losse punten die in de weg lagen of opvielen, geen van alle blokkerend. Los oppa
 
 **Open besluit — telt een security-fix mee als reden om te cutten?** v1.2.1 haalt een kwetsbare DLL uit de publish, maar is volgens de regel "gewoon" een patch en krijgt dus geen Release. Gevolg: iedereen die op v1.2.0 zit houdt `System.Drawing.Common` 4.7.0 op schijf tot de volgende milestone. Het is geen crash en geen dataverlies, dus de vuistregel hierboven dekt het niet — maar het is wel precies het soort ding waar je niet drie features op wilt wachten. Te beslissen: de vuistregel uitbreiden met "of een security-fix", of per geval wegen.
 
+> **Feitelijk beantwoord door de v1.3.0-planning (2026-08-20), maar niet als regel.** Die security-fix gaat mee zodra v1.2.8 t/m v1.2.10 binnen zijn — dus per geval gewogen, niet via een uitgebreide vuistregel. Let wel op hoe lang het geworden is: v1.2.1 is van 2026-08-16 en wacht dan op drie features. Als deze reeks uitloopt is dat op zichzelf een reden om er alsnog eerder een cut tussen te zetten. De keuze "vuistregel uitbreiden of per geval wegen" staat dus nog steeds open — er is nu alleen één geval concreet beslist.
+
 ### Ideeën — nog niet gescoped
 
 Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
@@ -106,6 +118,100 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.8 — De install-voortgangsregel + de foutmeldingen uit de elevated batches
+
+De stringtabellen gaan van 1265 naar **1284 keys**, in beide talen even groot. Hiermee is `Services/` de laatste map die aan pass 4 van de scanner is toegevoegd; er staat nu geen enkele map meer bewust buiten.
+
+> **Verificatie ligt bij user** en is op het moment van committen **nog niet gedaan**. Deze flow is niet te controleren zonder daadwerkelijk software te installeren en te verwijderen — precies waarom deze strings vijf vertaalfasen lang zijn blijven staan. Wat wél is aangetoond staat onderaan deze sectie. Wat nog moet: een echte install-batch en een echte delete-batch, in beide talen, met screenshots.
+
+#### Vier beslissingen vooraf (user, 2026-08-20)
+
+1. **Hergebruiken waar het kan.** `:661` en `:674` roepen `install.state.installed` / `install.state.alreadyInstalled` aan in plaats van een eigen `install.progress.*`-familie te krijgen. Scheelt twee keys die vandaag dezelfde waarde zouden dragen. Prijs, expliciet aanvaard: gaan de badge en de voortgangsregel ooit uit elkaar lopen, dan moet dat alsnog gesplitst worden.
+2. **Gelijktrekken op de vriendelijke naam.** `:621` toonde de wingetId (*"Installing Mozilla.Firefox..."*) terwijl `:812` de naam toonde (*"Starting Firefox"*) — en de kaart erboven toont sowieso al "Firefox". `InstallAppAsync` heeft er een optionele `displayName`-parameter bij gekregen, **achter** `location` omdat de bestaande aanroepers positioneel binden. Geen diagnostisch verlies: `install.log` logt de exacte wingetId in de `START`-regel.
+3. **De elevated-batch-foutmeldingen gaan mee in deze patch.** Daarmee kon `Services/` erbij in pass 4.
+4. **`UninstallAppsAsync` weg.** Zie hieronder.
+
+#### De vijf install-strings
+
+| Regel | Was | Werd |
+| --- | --- | --- |
+| `:621` | `$"Installing {wingetId}..."` | `install.installingApp` met de app-naam |
+| `:661` | `"Installed"` (2×: scherm én returnwaarde) | `install.state.installed` |
+| `:674` | `progress.Report(AlreadyInstalledMessage)` | `install.state.alreadyInstalled`, sentinel ongemoeid |
+| `:695` | `const RequiresLocationMessage` | `static` property → `winget.requiresLocation` |
+| `:812` | `$"Starting {app.Name}"` | `install.startingApp` |
+
+**`AlreadyInstalledMessage` blijft een niet-vertaalde `const`** en dat is de kern van deze patch. Het waren geen twee vergelijkingen maar **drie**: `WingetService.InstallOneInBatchAsync`, `InstallDialog.MapPhase` (`:258`) én `InstallDialog.InstallWithLocationAsync` (`:264`) — die laatste stond niet in de inventarisatie. De weergave is ervan losgeknipt, zelfde oplossing als `RestorePointStatus` in v1.2.7.
+
+> **De comment bij die const is scherper gezet dan de roadmap voorstelde.** Daar stond dat vertalen wél kan "zolang schrijven en vergelijken in dezelfde taal gebeuren", zoals bij de drie sentinels van v1.2.3. Dat argument houdt hier niet: de ge-eleveerde install-runner is een **apart proces** dat z'n eigen stringtabel laadt. De modale-dialog-garantie uit v1.2.3 dekt dat niet, dus deze blijft principieel onvertaald.
+
+**`RequiresLocationMessage` is nagetrokken en is géén sentinel:** de enige voorkomens zijn de declaratie plus de twee regels waar 'ie gerapporteerd en geretourneerd wordt. Nergens een vergelijking. Van `const` naar property, met de reden als comment — precies wat v1.2.3 met de andere drie deed.
+
+**`:661` als returnwaarde is opnieuw gecontroleerd** in plaats van aangenomen, zoals de roadmap vroeg: er matcht niets op. Alleen `AlreadyInstalledMessage` en `MsStoreOpenedMessage` worden vergeleken. De vertaalde waarde mag dus ook naar de caller.
+
+#### De elevated batches: 27 gerenderde strings over 7 services
+
+Per string is uitgezocht of 'ie **gerenderd** wordt of **alleen geteld** — dat onderscheid was, zoals voorspeld, de helft van het werk. Uitkomst:
+
+| Service | Wat | Rendert via |
+| --- | --- | --- |
+| `WingetService` | 8 uninstall-meldingen | `MixedSourceUninstaller` → `AllAppsUninstallDialog.Message` |
+| `BloatwareService` | 4 (+ *"No log produced"* / *"Could not read log"*) | `BloatwareUninstallDialog:75` |
+| `MixedSourceUninstaller` | 3 + 2 voortgangsregels | `AllAppsUninstallDialog` |
+| `TweakService` | 3 | `FailureMessages` → `TweakApplyRunner.ShowOutcome` → InfoBar |
+| `SnapshotService` | 4 | `RestoreResult.FailureMessages` → `SnapshotBrowserDialog:181` |
+| `TaskSchedulerService` | 4 | `CreateTaskOutcome.ErrorOutput` → `ScheduleDialog:68` |
+| `GitHubService` | 1 | `UpdateCheckResult.Error` → `SettingsPage:488` |
+| `DeepCleanService` / `LeftoverScannerService` | 0 | **rendert niet** — zie het onderhoudsitem onder *Open* |
+
+**De aangehouden regel, één keer vastgelegd:** wat een gebruiker écht kan uitlokken (UAC geweigerd, proces start niet, log ontbreekt, netwerkfout) wordt vertaald. Wat alleen verschijnt als een **interne invariant** breekt — een hardcoded registry-pad in onze eigen code dat niet parset, een choice-index buiten bereik — blijft Engels, want dat is bugdiagnostiek voor wie het moet fixen en geen UI-tekst. Beide categorieën staan met die reden in de `ALLOW`-lijst.
+
+**Nederlandse bron waar die er was.** `TaskSchedulerService`, `GitHubService` en `SnapshotService` hadden Nederlandse teksten; die zijn letterlijk overgenomen als NL-waarde (inclusief *"Process kon niet starten"* en *"task-definitie"*, die niet mooier gemaakt zijn), en het Engels is nieuw geschreven. Twee bewuste harmonisaties: `SnapshotService` zei *"kon elevated process niet starten"* en *"UAC geweigerd"*, en deelt nu de `elevated.*`-keys met de vier andere services — anders staan er vijf formuleringen voor dezelfde gebeurtenis.
+
+#### Dode code eruit
+
+`Dialogs/UninstallDialog.xaml` + `.xaml.cs`, `WingetService.UninstallAppsAsync`, en de records `UninstallProgress` / `UninstallPhase` zijn verwijderd. Die vier waren elkaars enige gebruikers: de dialog werd sinds v0.8.4 nergens meer geïnstantieerd en was een tweede uninstall-pad naast `AllAppsUninstallDialog` + `MixedSourceUninstaller`. `UninstallAppAsync` (enkelvoud) blijft — dáár draait de levende flow op.
+
+Twee keys werden daardoor wees. `check-catalog-keys.py` ving ze allebei: **`progress.noApps`** (*"No apps to uninstall"*) is verwijderd, en **`common.uninstalled`** is juist behouden en aangesloten — die bleek de ontbrekende vertaling voor `UninstallAppAsync`'s succesmelding, die één woord lang (*"Uninstalled"*) hardcoded in de Nederlandse UI stond.
+
+#### De scanner moest eerst gerepareerd worden
+
+`Services/` toevoegen leverde eerst **0 treffers** op. Dat was geen schone map maar een kapotte pass — en precies het scenario waar de v1.2.7-notitie voor waarschuwde. Drie fouten, alle drie gefixt:
+
+1. **De log-herkenning zocht over 160 tekens rúwe tekst.** In `Dialogs/` ging dat net goed; in `Services/` staat er vrijwel altijd een `Diagnostics.Log` binnen dat venster, dus élke literal viel weg. Vervangen door `enclosing_call()`: welke aanroep omsluit deze literal daadwerkelijk, met de string-literals eerst gemaskeerd zodat haakjes in PowerShell-fragmenten de telling niet slopen.
+2. **Verbatim strings werden als gewone behandeld.** `@"HKLM\SOFTWARE\"` eindigt op een backslash; die werd als escape gelezen en de match liep door tot ver in de volgende regels. Eén zo'n registry-pad zette elke match daarna één aanhalingsteken uit de pas — goed voor tientallen halve treffers.
+3. **Char-literals werden niet overgeslagen.** `.Trim('"')` in `DeepCleanService` liet de scan middenin een niet-bestaande string beginnen, met hetzelfde gevolg.
+
+De ruis daarna (PowerShell-fragmenten, winget-argumenten, registry-value-namen) is met **twee categorische regels** weggenomen in plaats van met honderd losse `ALLOW`-regels: `SCRIPT_OR_ARG` (verb-noun, `$_`, `--vlag`) en `is_identifier` (geen spatie = geen zin). Een `ALLOW`-lijst van die omvang leest niemand meer na en is dan geen verantwoording meer maar een dempknop. De lijst staat nu op 72 regels, gegroepeerd met per blok een reden.
+
+> **Bekende prijs van `SCRIPT_OR_ARG`, expliciet benoemd:** een échte UI-zin die een PowerShell-cmdlet noemt wordt niet gemeld. Concreet geval in deze codebase: *"Geen output van Checkpoint-Computer."* in `RestorePointService`. Die is hier onschuldig omdat die hele returnwaarde dood is (zie het onderhoudsitem), maar het is een gat en het staat als zodanig in de docstring.
+
+**`is_identifier` geldt bewust alleen voor pass 4.** Pass 3 (de switch-armen) moet juist wél op losse woorden blijven melden — daar stond *"Installed"* als badge, en die heeft geen spatie.
+
+#### De negatieve test vond twee bugs die de scan zelf niet zag
+
+Bij het terugzetten van één vertaalde string (om te bewijzen dat pass 4 in `Services/` écht aanslaat) viel op dat er op regel 45 van datzelfde bestand `$"Uninstalling {entry.DisplayName}..."` stond — hardcoded Engels in de Nederlandse UI, en de scanner meldde het niet. Oorzaak: de drempel stond op "minstens twee echte woorden", en na het weghalen van het interpolatie-gat blijft er één woord over.
+
+Drempel naar **één** woord, en dat kost níéts — met `is_identifier` en `SCRIPT_OR_ARG` erbij blijft de uitkomst 0. Het leverde meteen nog twee echte missers op: `BloatwareService:337` en `MixedSourceUninstaller:235` toonden allebei `$"Removing {naam}..."` terwijl `progress.removing` al in beide tabellen stond. Alle drie sluiten nu aan op bestaande keys, dus zonder nieuwe keys.
+
+> Dit is de derde keer in deze reeks dat de scanner een categorie miste in plaats van een losse string (v1.2.6: geïnterpoleerde strings; v1.2.7: switch-armen en lokale variabelen). Het patroon is telkens hetzelfde: de scan loopt schoon, en dan blijkt de *vorm* niet gedekt. De les die hier bij hoort: een groene scan is bewijs over de gedekte vormen, niet over het scherm.
+
+#### Nieuwe keys: 21, plus 3 hergebruikt
+
+`elevated.*` (6, gedeeld door 5 services), `install.installingApp` / `install.startingApp`, `winget.requiresLocation`, `winget.uninstall.*` (5), `snapshot.notFoundOrCorrupt`, `schedule.err.*` (4), `update.err.httpStatus`. Hergebruikt zonder nieuwe key: `install.state.installed`, `install.state.alreadyInstalled`, `common.uninstalled`, `common.failed`, `progress.removing`, `progress.uninstalling`. Eén key verwijderd (`progress.noApps`). Netto 1265 → **1284**.
+
+> **Aangetoond (2026-08-20) — zónder de app te draaien, want dat kan hier niet:**
+> - Build: **0 errors, 0 warnings**. `Version` / `AssemblyVersion` / `FileVersion` op 1.2.8.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0**, nu inclusief `Services/`.
+> - `check-catalog-keys.py`: 152/152 catalogus-keys, **1284 = 1284**, geen wezen, geen lege waardes, elke niet-dynamische key aantoonbaar aangeroepen.
+> - **Per key aangetoond** dat 'ie in beide tabellen staat én vanuit welk bestand 'ie aangeroepen wordt — alle 24 (21 nieuw + 3 hergebruikt) groen, en de symmetrische verschilverzameling tussen de twee tabellen is leeg.
+> - **Negatief getest:** één vertaalde string teruggezet in `MixedSourceUninstaller` → de scanner meldt 'm op de juiste regel. Dat bewijst meteen dat de `ALLOW`-lijst bestand-gebonden werkt: dezelfde zin is toegestaan in `DeepCleanService` en `LeftoverScannerService` en wordt daar terecht niet gemeld.
+> - **Aangetoond dat de verwijderde code echt weg is** (niet alleen dat het compileert): de vier namen komen alleen nog voor in de comments die uitleggen waaróm ze weg zijn.
+>
+> **Niet getest, en dat is de hele reden dat dit item bestond:** een echte install-batch, een echte uninstall-batch, een echte delete-batch en een mislukte UAC-prompt. Alle 27 elevated-strings en de 5 install-strings zijn dus geverifieerd op tabel-aanwezigheid en aanroep, **niet visueel**. Dat is aan user.
+
+**Werkwijze-notitie.** Gemeten in plaats van aangenomen: de `.cs`-bestanden in dit project zijn **CRLF**, net als de stringtabellen — alleen `apps.json` is LF. De eerdere werkwijze-notitie suggereerde LF voor de code. Lees en schrijf sowieso met expliciete `newline=''`, dan maakt het niet uit; de diff op de twee tabellen bleef zo 25 regels in plaats van het hele bestand.
 
 ### v1.2.7 — Multi-language fase 6: de vertaal-restjes (de vormen die de scanner structureel niet zag)
 
@@ -165,6 +271,8 @@ Twee zwakke plekken die pass 4 zelf blootlegde en meteen gefixt zijn: geneste aa
 **De `ALLOW`-lijst is bestand-gebonden geworden, niet waarde-gebonden.** Dat bleek nodig bij een negatieve test: `"Recycle Bin"` is een terechte hardcoded `DisplayName` in `DeepCleanService`, maar als *badge* hoort 'ie vertaald — met een `ALLOW` op alleen de waarde zou de scanner die regressie nooit meer zien.
 
 > **Bewuste beperking, expliciet benoemd:** pass 4 dekt `Services/` **niet**. Daar staan honderden PowerShell-fragmenten, registry-paden en exit-code-teksten, en de foutmeldingen uit de elevated batches zijn nog niet vertaald. Zie het losse onderhoudsitem hieronder; zet `Services/` er pas bij als dat af is, anders is de exit-code structureel rood.
+>
+> **Ingehaald door v1.2.8:** `Services/` zit er sindsdien wél bij. En de waarschuwing bleek terecht om een reden die hier niet voorzien was — de pass meldde daar aanvankelijk 0, niet omdat de map schoon was maar omdat drie fouten in de pass zelf alles wegfilterden. Zie de v1.2.8-sectie.
 
 #### `check-catalog-keys.py`: de omgekeerde controle
 

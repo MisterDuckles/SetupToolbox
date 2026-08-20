@@ -15,8 +15,9 @@ Vier passes:
         UI stromen (body:, title:, confirmText: ...).
   C#    SWITCH-ARMEN die een string-literal teruggeven (`=> "..."`) — badges en
         statuslabels op een model of in een dialog.  [blinde vlek 3, v1.2.7]
-  C#    ELKE zin-achtige literal in Dialogs/ en Pages/ die niet in een Loc-call,
-        een log of een proces-argument zit.          [blinde vlek 2, v1.2.7]
+  C#    ELKE zin-achtige literal in Dialogs/, Pages/, Helpers/ en Services/ die
+        niet in een Loc-call, een log of een proces-argument zit.
+                                                     [blinde vlek 2, v1.2.7]
 
 Uitgebreid in v1.2.6 na drie missers: de C#-pass eiste een aanhalingsteken direct
 na het "=", waardoor GEÏNTERPOLEERDE strings ($"Show {n} locations") er compleet
@@ -38,8 +39,30 @@ een toewijzing en waren dus per constructie onzichtbaar:
   SelectionStatusText.Text = label;               //   pas twee regels later
 
 Pass 4 vergt strikt genomen dataflow-analyse. Het pragmatische alternatief dat
-hier staat — élke zin-achtige literal in Dialogs/ en Pages/ melden — vangt
-hetzelfde en is te overzien, mits de ALLOW-lijst hieronder bijgehouden wordt.
+hier staat — élke zin-achtige literal in de UI-lagen melden — vangt hetzelfde en
+is te overzien, mits de ALLOW-lijst hieronder bijgehouden wordt.
+
+In v1.2.8 is Services/ aan pass 4 toegevoegd; tot dan stond die map er bewust
+buiten omdat de foutmeldingen uit de elevated batches nog Engels waren. Bij het
+toevoegen bleek de pass daar op drie punten om te vallen, alle drie hier gefixt:
+
+  1. De terugkijk om log-regels te herkennen zocht over 160 tekens rúwe tekst.
+     In Dialogs/ ging dat net goed; in Services/ staat er vrijwel altijd wel een
+     Diagnostics.Log binnen dat venster, dus de pass meldde daar 0 — hij zou
+     structureel groen liegen. Vervangen door enclosing_call(): welke aanroep
+     omsluit deze literal daadwerkelijk.
+  2. De LITERAL-regex behandelde een verbatim string (@"…") als een gewone, en
+     liep daardoor stuk op registry-paden die op een backslash eindigen. Eén
+     zo'n pad zette elke match daarna één aanhalingsteken uit de pas.
+  3. Char-literals werden niet overgeslagen, dus .Trim('"') liet de scan
+     middenin een niet-bestaande string beginnen — met hetzelfde gevolg.
+
+De ruis die daarna overbleef (PowerShell-fragmenten, winget-argumenten,
+registry-value-namen) is met categorische regels weggenomen in plaats van met
+losse ALLOW-regels — zie SCRIPT_OR_ARG en is_identifier. Bekende prijs van
+SCRIPT_OR_ARG: een échte UI-zin die een PowerShell-cmdlet noemt ("Geen output
+van Checkpoint-Computer.") wordt niet gemeld. Dat is geaccepteerd; de winst is
+dat de ALLOW-lijst leesbaar blijft en dus daadwerkelijk nagelezen wordt.
 
 Exit-code 1 zodra er iets gevonden wordt, zodat het in een check kan hangen.
 Valse positieven horen in ALLOW hieronder, mét reden.
@@ -129,6 +152,103 @@ ALLOW = {
     # Het bestandstype-LABEL ernaast loopt wél via de tabel (io.fileType.*).
     'my-apps-{DateTime.Now:yyyy-MM-dd}': ('SettingsPage',),
     'my-tweaks-{DateTime.Now:yyyy-MM-dd}': ('TweaksPage',),
+
+    # ── v1.2.8: Services/ kwam in pass 4. Wat hieronder staat is per geval
+    # nagetrokken op de vraag "wordt dit gerenderd of alleen geteld", want dat
+    # onderscheid is de helft van het werk. ────────────────────────────────
+
+    # (a) Resultaat-dictionaries die NERGENS gerenderd worden. Gecontroleerd:
+    # DeepCleanDeleteResult.ResultsByPath en LeftoverDeleteResult.ResultsByPath
+    # worden door geen enkele Dialog of Page gebonden — de UI leest alleen
+    # SuccessCount / FailedCount / BytesFreed. Dit zijn dus dode weergave-
+    # strings. Bewust NIET vertaald: onzichtbare tekst kun je niet verifiëren
+    # (zelfde regel als de 24 subcategorie-descriptions in v1.2.6). Als ze ooit
+    # wél gerenderd gaan worden, hoort deze uitzondering te vervallen.
+    'Removed registry key': ('DeepCleanService', 'LeftoverScannerService'),
+    'Removed MUIcache value': ('DeepCleanService', 'LeftoverScannerService'),
+    'Deleted shortcut': ('DeepCleanService', 'LeftoverScannerService'),
+    'Deleted folder': ('DeepCleanService', 'LeftoverScannerService'),
+    'Unknown type': ('LeftoverScannerService',),
+    # Let op: exact dezelfde drie zinnen wórden wél vertaald in
+    # BloatwareService, MixedSourceUninstaller, TweakService en WingetService.
+    # Daarom is deze uitzondering bestand-gebonden — een waarde-gebonden ALLOW
+    # zou een regressie daar nooit meer melden.
+    'Could not start elevated process': ('DeepCleanService', 'LeftoverScannerService'),
+    'Cancelled — UAC prompt declined': ('DeepCleanService', 'LeftoverScannerService'),
+    'Did not run (interrupted)': ('DeepCleanService', 'LeftoverScannerService'),
+
+    # (b) Interne invarianten. Deze verschijnen alleen als een HARDCODED pad of
+    # index in onze eigen code niet klopt — een bug, geen gebruikersfout. Ze
+    # blijven Engels zodat een bugmelding leesbaar is voor wie 'm moet fixen.
+    # (Een deel ervan landt via FailureMessages wél in een InfoBar, dus het is
+    # geen "onbereikbaar" maar een bewuste keuze.)
+    'Invalid registry path: {fullPath}': None,
+    'Invalid registry path: {fullKeyPath}': None,
+    'Unsupported hive: {hiveName}': None,
+    'Invalid sub path: {subPath}': None,
+    'Parent key not found: {parentPath}': None,
+    'Key not found: {subPath}': None,
+    'Value name required for MUIcache delete': None,
+    'Cannot open key: {entry.Path}': ('SnapshotService',),
+    'Invalid choice index': ('TweakService',),
+
+    # (c) RestorePointService.CreateAsync geeft een RestorePointResult terug
+    # waarvan .Message door NIEMAND gelezen wordt — DebloatPage doet
+    # `_ = await App.RestorePoint.CreateAsync(...)`. Dode strings, dus niet
+    # vertaald. Staat als bevinding in NEXT-STEPS.md.
+    'Kon elevated process niet starten.': ('RestorePointService',),
+    'Restore point aangemaakt.': ('RestorePointService',),
+    'UAC geweigerd.': ('RestorePointService',),
+
+    # (d) Windows' eigen namen: mapnamen uit de protected-list en registry-
+    # value-namen waarop gematcht wordt. Zelfde identifier-regel als v1.2.7.
+    'User Data': ('DeepCleanService',),
+    'Install Path': ('DeepCleanService',),
+    'Common Files': ('DeepCleanService',),
+    'Internet Explorer': ('DeepCleanService',),
+    'Windows Defender': ('DeepCleanService',),
+    'Windows Mail': ('DeepCleanService',),
+    'Windows Media Player': ('DeepCleanService',),
+    'Windows NT': ('DeepCleanService',),
+    'Windows Photo Viewer': ('DeepCleanService',),
+    'Windows Portable Devices': ('DeepCleanService',),
+    'Windows Sidebar': ('DeepCleanService',),
+    'Microsoft Update Health Tools': ('DeepCleanService',),
+    'Application Verifier': ('DeepCleanService',),
+    'Network Shortcuts': ('DeepCleanService',),
+    'Start Menu': ('DeepCleanService',),
+    'Application Data': ('DeepCleanService',),
+    'Local Settings': ('DeepCleanService',),
+    'Adobe AIR': ('DeepCleanService',),
+
+    # (e) De naam van een context-menu-verb ZOALS DIE IN HET REGISTER STAAT.
+    # Vertalen zou de geschreven registry-waarde veranderen, en de revert van
+    # die tweak matcht op de key — dat is dus geen vertaling maar een
+    # gedragswijziging. Staat als los punt in NEXT-STEPS.md.
+    'Take Ownership': ('TweakService',),
+    'Open Terminal as Admin': ('TweakService',),
+
+    # (f) LOC-MISS-redenen in de vertaal-service zelf. Deze gaan naar
+    # install.log en zijn per definitie niet vertaalbaar: ze bestaan juist om
+    # te melden dát de tabel iets niet kon leveren.
+    'geen vertaling': ('LocalizationService',),
+    'onbekende key': ('LocalizationService',),
+
+    # (g) De sentinel die NIET vertaald mag worden. Wordt op drie plekken
+    # vergeleken; de weergave loopt los via install.state.alreadyInstalled.
+    # Zie de comment bij de declaratie in WingetService.
+    'Al geïnstalleerd': ('WingetService',),
+
+    # (h) Diagnostische context die als argument aan FriendlyError meegaat: de
+    # naam van het winget-commando dat faalde, niet een zin voor de gebruiker.
+    'winget upgrade': ('WingetService',),
+
+    # (i) Afkortingen in de Debloat-teller: MS = Microsoft, OEM = de
+    # vendor-bundleware. Besloten in v1.2.7 — het woord "apps" ernaast loopt
+    # wél via common.appCount. Zichtbaar geworden nu pass 4 ook literals met
+    # één woord meldt.
+    '{ms} MS': ('DebloatPage',),
+    '{oem} OEM': ('DebloatPage',),
 }
 
 
@@ -191,7 +311,27 @@ CS_ANCHOR = re.compile(
     r'SecondaryButtonText|CloseButtonText|Header|Description|DisplayName)\s*=(?!=)'
     r'|\b(body|title|header|caption|confirmText|cancelText|message|placeholder|label)\s*:')
 
-LITERAL = re.compile(r'\$?@?"((?:[^"\\]|\\.)*)"')
+# v1.2.8 — een VERBATIM string (@"…") kent geen backslash-escapes: daar is ""
+# de enige escape. De oude vorm behandelde beide hetzelfde, en liep daardoor
+# stuk op @"HKLM\SOFTWARE\" — de afsluitende \" werd als escape gelezen en de
+# match liep door tot ver in de volgende regels. Onschuldig in Dialogs/, maar
+# Services/ staat vol registry-paden die op een backslash eindigen, en dat
+# leverde tientallen halve literals op. Nu twee aparte takken; lit() geeft de
+# tak terug die daadwerkelijk gevuld is.
+# De eerste tak eet CHAR-literals op zonder ze te melden. Dat moet vóór de rest
+# staan: in DeepCleanService komt .Trim('"') voor, en zonder deze tak begint de
+# match op het aanhalingsteken bínnen die char-literal. Alles ná dat punt loopt
+# dan één quote uit de pas — je krijgt matches die van een AFSLUITEND
+# aanhalingsteken tot het volgende OPENENDE lopen. Eén zo'n literal in het
+# bestand vervuilde zo tientallen treffers verderop.
+LITERAL = re.compile(r"'(?:[^'\\]|\\.)*'"
+                     r'|\$?@"((?:[^"]|"")*)"'
+                     r'|\$?"((?:[^"\\]|\\.)*)"')
+
+
+def lit(m):
+    """De inhoud van de literal, of None als het een char-literal was."""
+    return m.group(1) if m.group(1) is not None else m.group(2)
 
 # Einde van het statement: een ';', of het begin van de volgende property in een
 # object-initializer, of een sluitende accolade. Zonder die grens zou de scan
@@ -242,7 +382,9 @@ for path in walk('.cs'):
         if NOT_UI.search(text[max(0, anchor.start() - 40):anchor.end()]):
             continue
         for m in LITERAL.finditer(span):
-            v = m.group(1)
+            v = lit(m)
+            if v is None:
+                continue
             if skip(v, os.path.relpath(path, ROOT)) or KEY_LIKE.match(v):
                 continue
             pos = anchor.end() + m.start()
@@ -255,13 +397,15 @@ for path in walk('.cs'):
 # Dit is de vorm waarin ~50 badge- en statuslabels stonden: CategoryLabel,
 # TypeBadgeText, ConfidenceLabel, SourceBadgeText, StageLabel, StateLabel en
 # de sectiekoppen van LeftoverCleanupDialog.
-SWITCH_ARM = re.compile(r'=>\s*(\$?@?"(?:[^"\\]|\\.)*")')
+SWITCH_ARM = re.compile(r'=>\s*(\$?@"(?:[^"]|"")*"|\$?"(?:[^"\\]|\\.)*")')
 
 arm_hits = []
 for path in walk('.cs'):
     text = strip_comments(open(path, encoding='utf-8').read())
     for m in SWITCH_ARM.finditer(text):
-        v = LITERAL.match(m.group(1)).group(1)
+        v = lit(LITERAL.match(m.group(1)))
+        if v is None:
+            continue
         rel = os.path.relpath(path, ROOT)
         if skip(v, rel) or KEY_LIKE.match(v) or TECHNICAL.search(v):
             continue
@@ -273,11 +417,12 @@ for path in walk('.cs'):
 # per definitie UI zijn, ELKE literal met twee of meer echte woorden melden.
 #
 # BEWUSTE BEPERKING: Services/ valt hier NIET onder. Daar staan honderden
-# PowerShell-fragmenten, registry-paden en exit-code-teksten, en de foutmeldingen
-# uit de elevated batches ("Cancelled — UAC prompt declined") zijn nog niet
-# vertaald — die staan als apart item op NEXT-STEPS.md. Zet Services/ er pas bij
-# als dat item af is, anders is de exit-code structureel rood.
-UI_DIRS = ('Dialogs', 'Pages', 'Helpers')
+# PowerShell-fragmenten, registry-paden en exit-code-teksten. Sinds v1.2.8 zit
+# Services/ er wél bij: de foutmeldingen uit de elevated batches zijn toen
+# vertaald, en de ruis wordt niet met een ALLOW-lijst van honderden regels
+# weggepoetst maar met de aanroep-context hieronder (een literal die een
+# argument van Log(…) of AppendLine(…) is, is per definitie geen UI-tekst).
+UI_DIRS = ('Dialogs', 'Pages', 'Helpers', 'Services')
 
 # Een literal die direct achter een van deze aanroepen staat is een sleutel, een
 # resourcenaam of een technisch argument — geen weergavetekst.
@@ -287,16 +432,124 @@ NOT_UI_CALL = re.compile(
     r'Log|LogInstall|Trim\w*|ToString|Format|Parse|Append\w*|WriteLine|Write|'
     r'Match|IsMatch|Regex\.\w+)\s*[\(\[]\s*$')
 
-# Let op: de terugkijk gaat over de rúwe tekst, niet over de regel. Een
-# Diagnostics.Log("x.log",\n  $"...") staat op TWEE regels, en dan zit de marker
-# niet op dezelfde regel als de literal.
-NOT_UI_LOOKBACK = re.compile(
-    r'Diagnostics\.Log|LogInstall|\blog\(|FileName\s*=|Arguments\s*=')
+# Toewijzingen die naar een proces gaan in plaats van naar het scherm. Deze
+# blijft op de RÉGEL van de literal kijken — het zijn eenregelige toewijzingen.
+NOT_UI_LOOKBACK = re.compile(r'FileName\s*=|Arguments\s*=')
+
+# v1.2.8 — de aanroep waarvan de literal een ARGUMENT is. Dit verving een
+# terugkijk over 160 tekens ruwe tekst, die in Dialogs/ nog net kon maar in
+# Services/ alles wegvaagde: daar staat vrijwel altijd wel een Diagnostics.Log
+# binnen 160 tekens, dus pass 4 zou daar structureel 0 melden en dus groen
+# liegen. Nu wordt de bijbehorende haakjes-opening opgezocht en de naam ervóór
+# gelezen, zodat alleen de literals die écht in zo'n aanroep zitten wegvallen.
+#
+#   Log / LogInstall / Diagnostics.Log  → gaat naar een logfile, niet naar het scherm.
+#   Append / AppendLine / AppendFormat  → bouwt een PowerShell-script of een
+#       reg-batch. Nagerekend: in Dialogs/, Pages/ en Helpers/ staan drie
+#       Append-aanroepen, geen ervan bouwt UI-tekst (een char-normalisatie in
+#       DeepCleanDialog en File.AppendAllText in Diagnostics). UI-tekst wordt in
+#       deze app nooit met een StringBuilder opgebouwd; string.Join wel, en die
+#       staat hier bewust NIET tussen.
+#
+# Let op de hoofdletter-ongevoeligheid op de log-namen: de scan-methodes in
+# DeepCleanService en LeftoverScannerService krijgen hun logger als lokale
+# `Action<string> log` mee, dus daar heet de aanroep `log(` met een kleine
+# letter. Zonder die vlag zou elke scan-trace als UI-tekst gemeld worden.
+NOT_UI_ENCLOSING = re.compile(
+    r'(?:^|\.)(?:[Ll]og|LogInstall|Append|AppendLine|AppendFormat|'
+    r'WriteLine|WriteAllText|AppendAllText)$')
+
+CALL_NAME = re.compile(r'([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*$')
+
+
+def mask_strings(text):
+    """Vervangt de INHOUD van elke string- en char-literal door 'x', met behoud
+    van lengte en dus van elke positie. Nodig voor de haakjes-telling hieronder:
+    de PowerShell-fragmenten in Services/ staan vol met losse haakjes
+    ($"if ((Test-Path …)") die de telling anders volledig uit de pas laten
+    lopen."""
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '@' and i + 1 < n and text[i + 1] == '"':
+            j = i + 2
+            while j < n:
+                if text[j] == '"':
+                    if j + 1 < n and text[j + 1] == '"':
+                        j += 2
+                        continue
+                    break
+                j += 1
+            for k in range(i + 2, min(j, n)):
+                out[k] = 'x'
+            i = j + 1
+        elif c in '"\'':
+            j = i + 1
+            while j < n:
+                if text[j] == '\\':
+                    j += 2
+                    continue
+                if text[j] == c:
+                    break
+                j += 1
+            for k in range(i + 1, min(j, n)):
+                out[k] = 'x'
+            i = j + 1
+        else:
+            i += 1
+    return ''.join(out)
+
+
+def enclosing_call(masked, pos, window=800):
+    """Naam van de aanroep waarvan de literal op `pos` een argument is, of ''.
+    Loopt terug tot de haakjes-opening die nog niet gesloten is."""
+    depth = 0
+    i = pos - 1
+    stop = max(0, pos - window)
+    while i >= stop:
+        c = masked[i]
+        if c == ')':
+            depth += 1
+        elif c == '(':
+            if depth == 0:
+                m = CALL_NAME.search(masked[max(0, i - 80):i])
+                return m.group(1) if m else ''
+            depth -= 1
+        i -= 1
+    return ''
+
+
+# v1.2.8 — categorische filters voor pass 4, gemaakt toen Services/ erbij kwam.
+# Bewust regels in plaats van losse ALLOW-regels: die map levert honderden
+# PowerShell-fragmenten, winget-argumenten en registry-value-namen op, en een
+# ALLOW-lijst van die omvang leest niemand meer na — dan is 'ie geen
+# verantwoording meer maar een dempknop.
+#
+# 1. Een PowerShell-fragment of een command-line: herkenbaar aan een verb-noun
+#    ("Get-AppxPackage"), een PS-variabele ($_ / $ErrorActionPreference) of een
+#    --vlag. Geen van drieën komt in weergavetekst voor.
+SCRIPT_OR_ARG = re.compile(
+    r'(?:^|\s)--\w|\$_|\$Error|-ErrorAction|'
+    r'\b(?:Get|Set|New|Remove|Add|Clear|Checkpoint|Where|Out|Select|Start|Stop|'
+    r'Test|Import|Export|Invoke|Write)-[A-Z]\w+')
 
 
 def real_words(v):
     """Woorden BUITEN de interpolatie-gaten — $"({item.SizeLabel})" telt er nul."""
     return re.findall(r'[A-Za-zÀ-ſ]{2,}', re.sub(r'\{[^{}]*\}', ' ', v))
+
+
+def is_identifier(v):
+    """Geen enkele spatie buiten de interpolatie-gaten = een identifier, geen zin.
+    Vangt Start_Layout, SubscribedContent-338387Enabled, browser_download_url,
+    SetupToolbox_tweaks_{…}.ps1, nl-NL en --install-runner in één regel.
+
+    ALLEEN voor pass 4, en dat is essentieel: pass 4 zoekt naar ZIN-achtige
+    literals en een zin heeft spaties. Pass 3 (de switch-armen) moet juist wél
+    op losse woorden blijven melden — daar stond "Installed" als badge, en die
+    heeft ook geen spatie."""
+    return not re.search(r'\s', re.sub(r'\{[^{}]*\}', '', v))
 
 
 def is_artifact(v):
@@ -313,18 +566,31 @@ for path in walk('.cs'):
     if not rel.startswith(UI_DIRS):
         continue
     text = strip_comments(open(path, encoding='utf-8').read())
+    masked = mask_strings(text)
     for m in LITERAL.finditer(text):
-        v = m.group(1)
-        if len(real_words(v)) < 2 or is_artifact(v):
+        v = lit(m)
+        if v is None:
+            continue
+        # v1.2.8: was "< 2". Die drempel miste een hele vorm — een literal met
+        # één woord en een interpolatie-gat. Concreet stond in
+        # MixedSourceUninstaller `$"Uninstalling {entry.DisplayName}..."` in de
+        # Nederlandse UI: na het weghalen van het gat blijft er één woord over,
+        # dus de pass sloeg 'm over. Gevonden tijdens de negatieve test van deze
+        # patch, niet door de scan zelf. Nu op "< 1", en dat kost níéts: met de
+        # is_identifier- en SCRIPT_OR_ARG-regels erbij blijft de uitkomst 0.
+        if len(real_words(v)) < 1 or is_artifact(v):
             continue
         if allowed(v, rel) or KEY_LIKE.match(v) or TECHNICAL.search(v) or is_glyph(v):
+            continue
+        if is_identifier(v) or SCRIPT_OR_ARG.search(v):
             continue
         # XAML-resourcenamen (BodyTextBlockStyle, AccentButtonStyle, …)
         if re.match(r'^[A-Z][A-Za-z]*(Style|Brush)$', v):
             continue
         back = text[max(0, m.start() - 160):m.start()]
-        if NOT_UI_CALL.search(back) or NOT_UI_LOOKBACK.search(back.split('\n')[-1]) \
-                or NOT_UI_LOOKBACK.search(back):
+        if NOT_UI_CALL.search(back) or NOT_UI_LOOKBACK.search(back.split('\n')[-1]):
+            continue
+        if NOT_UI_ENCLOSING.search(enclosing_call(masked, m.start())):
             continue
         sentence_hits.append((rel, line_of(text, m.start()), v))
 
@@ -357,4 +623,5 @@ if xaml_hits or cs_hits or arm_hits or sentence_hits:
     print('GEVONDEN: er staat nog niet-vertaalde gebruiker-zichtbare tekst in de app.')
     sys.exit(1)
 print('Schoon: geen hardcoded gebruiker-zichtbare tekst meer.')
-print('Let op: Services/ valt buiten pass 4 — zie de toelichting hierboven.')
+print('Pass 4 dekt sinds v1.2.8 ook Services/; %d uitzonderingen staan met reden '
+      'in ALLOW.' % len(ALLOW))

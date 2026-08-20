@@ -166,7 +166,7 @@ public sealed class SnapshotService
     public async Task<RestoreResult> RestoreAsync(string snapshotId)
     {
         var snapshot = Load(snapshotId);
-        if (snapshot == null) return new RestoreResult(0, 0, false, new[] { "Snapshot niet gevonden of corrupt." });
+        if (snapshot == null) return new RestoreResult(0, 0, false, new[] { App.Loc.S("snapshot.notFoundOrCorrupt") });
 
         var localEntries = new List<SnapshotEntry>();
         var elevatedEntries = new List<SnapshotEntry>();
@@ -294,7 +294,7 @@ public sealed class SnapshotService
             using var proc = Process.Start(psi);
             if (proc == null)
             {
-                foreach (var e in entries) failures.Add($"{ShortKey(e)}: kon elevated process niet starten");
+                foreach (var e in entries) failures.Add($"{ShortKey(e)}: {App.Loc.S("elevated.couldNotStart")}");
                 return (0, failures, false);
             }
             await proc.WaitForExitAsync();
@@ -308,14 +308,14 @@ public sealed class SnapshotService
                     var parts = line.Split('|', 4);
                     if (parts.Length < 3) continue;
                     if (parts[2] == "OK") success++;
-                    else failures.Add($"{parts[1]}: {(parts.Length >= 4 ? parts[3] : "Failed")}");
+                    else failures.Add($"{parts[1]}: {(parts.Length >= 4 ? parts[3] : App.Loc.S("common.failed"))}");
                 }
             }
         }
         catch (System.ComponentModel.Win32Exception)
         {
             cancelled = true;
-            foreach (var e in entries) failures.Add($"{ShortKey(e)}: UAC geweigerd");
+            foreach (var e in entries) failures.Add($"{ShortKey(e)}: {App.Loc.S("elevated.uacDeclined")}");
         }
         finally
         {

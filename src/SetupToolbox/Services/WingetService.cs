@@ -438,37 +438,13 @@ public sealed class WingetService
         return new AutoUpdateResult(updated, failed, null);
     }
 
-    /// <summary>
-    /// Uninstall een batch apps sequentieel. Mirror van InstallAppsAsync's API zodat
-    /// de UI hetzelfde Progress-pattern kan gebruiken. Sequential omdat parallel
-    /// uninstall meer kans geeft op Windows Installer locks (MSI engine = single-instance)
-    /// zonder noemenswaardig snelheidsvoordeel — uninstall zelf is snel.
-    /// </summary>
-    public async Task<Dictionary<string, (bool success, string message)>> UninstallAppsAsync(
-        IReadOnlyList<AppModel> apps,
-        IProgress<UninstallProgress>? overall = null)
-    {
-        var results = new Dictionary<string, (bool, string)>();
-        var total = apps.Count;
-
-        for (var i = 0; i < total; i++)
-        {
-            var app = apps[i];
-            var index = i + 1;
-
-            overall?.Report(new UninstallProgress(index, total, app, UninstallPhase.Running, $"Uninstalling {app.Name}"));
-
-            var (success, message) = await UninstallAppAsync(app.WingetId);
-            results[app.WingetId] = (success, message);
-
-            overall?.Report(new UninstallProgress(
-                index, total, app,
-                success ? UninstallPhase.Success : UninstallPhase.Failed,
-                message));
-        }
-
-        return results;
-    }
+    // v1.2.8: UninstallAppsAsync (de sequentiële batch-mirror van InstallAppsAsync)
+    // is hier weggehaald. De enige aanroeper was Dialogs/UninstallDialog, en die
+    // dialog werd nergens geïnstantieerd — het was sinds v0.8.4 een tweede,
+    // dood uninstall-pad naast AllAppsUninstallDialog + MixedSourceUninstaller.
+    // De bijbehorende UninstallProgress / UninstallPhase records zijn met de
+    // dialog mee verdwenen; UninstallAppAsync (enkelvoud) blijft, want
+    // MixedSourceUninstaller draait daarop.
 
     public async Task<(bool success, string message)> UninstallAppAsync(string wingetId)
     {
@@ -485,12 +461,12 @@ public sealed class WingetService
             if (exitCode == 0)
             {
                 InvalidateInstalledCache();
-                return (true, "Uninstalled");
+                return (true, App.Loc.S("common.uninstalled"));
             }
 
             var combined = error + output;
             if (combined.Contains("No installed package found", StringComparison.OrdinalIgnoreCase))
-                return (false, "Not installed.");
+                return (false, App.Loc.S("winget.uninstall.notInstalled"));
 
             // Common failure mode: app installed in HKLM (Program Files) needs admin
             // to remove. Winget zelf draait als user → underlying uninstaller faalt
@@ -510,13 +486,13 @@ public sealed class WingetService
             if (elevatedOk)
             {
                 InvalidateInstalledCache();
-                return (true, "Uninstalled (elevated)");
+                return (true, App.Loc.S("winget.uninstall.doneElevated"));
             }
 
             // Beide attempts faalden. Geef de meest informatieve message terug.
             return (false, needsElevation
-                ? "Uninstall failed (also when elevated)."
-                : $"Uninstall failed. {elevatedMsg}");
+                ? App.Loc.S("winget.uninstall.failedElevated")
+                : App.Loc.S("winget.uninstall.failedReason", elevatedMsg));
         }
         catch (Exception ex)
         {
@@ -547,18 +523,18 @@ public sealed class WingetService
             };
 
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) return (false, "Could not start elevated winget");
+            if (proc == null) return (false, App.Loc.S("elevated.couldNotStartWinget"));
             await proc.WaitForExitAsync();
 
             InvalidateInstalledCache();
 
-            if (proc.ExitCode == 0) return (true, "Uninstalled (elevated)");
-            return (false, $"Elevated winget exit {proc.ExitCode}");
+            if (proc.ExitCode == 0) return (true, App.Loc.S("winget.uninstall.doneElevated"));
+            return (false, App.Loc.S("winget.uninstall.elevatedExit", proc.ExitCode));
         }
         catch (System.ComponentModel.Win32Exception)
         {
             // User klikte "No" op UAC prompt
-            return (false, "Cancelled — UAC prompt declined");
+            return (false, App.Loc.S("elevated.uacDeclined"));
         }
         catch (Exception ex)
         {
@@ -582,6 +558,15 @@ public sealed class WingetService
     // Sentinel-bericht voor de "zit er al"-uitkomst. Gedeeld met de UI (InstallDialog)
     // zodat die de al-aanwezig-case kan onderscheiden van een verse install zonder op
     // een losse magic string te matchen.
+    //
+    // v1.2.8: blijft bewust een NIET-vertaalde const, in tegenstelling tot de
+    // vier sentinels hieronder. Deze waarde wordt op drie plekken VERGELEKEN —
+    // WingetService.InstallOneInBatchAsync, InstallDialog.MapPhase en
+    // InstallDialog.InstallWithLocationAsync — en de vergelijking is niet
+    // gegarandeerd taal-consistent: de ge-eleveerde runner is een apart proces
+    // dat z'n eigen tabel laadt. Vertalen zou de fase-detectie stil breken.
+    // De weergave is er daarom van losgeknipt (install.state.alreadyInstalled),
+    // zelfde oplossing als RestorePointStatus in v1.2.7.
     public const string AlreadyInstalledMessage = "Al geïnstalleerd";
 
     // Sentinel (v1.0.7): installer weigert elevated context (typisch Spotify met
@@ -609,16 +594,33 @@ public sealed class WingetService
     // (healthy) of via de Store-app zelf in de achtergrond (broken).
     public static string MsStoreOpenedMessage => App.Loc.S("winget.openedInStore");
 
-    // Sentinel (E1): winget geeft aan dat de installer een installatielocatie
-    // vereist. InstallDialog toont een pad-dialog en herprobeert in-process
-    // met --location <gekozen pad>.
-    public const string RequiresLocationMessage = "Installatielocatie vereist";
+    // (E1): winget geeft aan dat de installer een installatielocatie vereist.
+    //
+    // v1.2.8: van const naar property, net als de drie hierboven in v1.2.3.
+    // Dit is ondanks de naam GEEN sentinel meer: nagetrokken op 2026-08-20 en
+    // deze waarde wordt nergens vergeleken. Sinds v1.0.10 lopen
+    // requiresLocation-apps proactief via LocationPrompt.CollectAsync +
+    // --location <pad>, en is de detectie-achteraf verwijderd (zie v1.0.10 in
+    // NEXT-STEPS.md). Wat hier overblijft is het reactieve pad — winget vraagt
+    // zélf om een locatie terwijl er geen pad meegegeven is — en die
+    // returnwaarde wordt uitsluitend getoond. Mag dus gewoon vertaald.
+    public static string RequiresLocationMessage => App.Loc.S("winget.requiresLocation");
 
-    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget", CancellationToken ct = default, string? location = null)
+    // displayName staat bewust ACHTER location: de bestaande aanroepers geven
+    // hun argumenten positioneel mee tot en met location, dus ertussen schuiven
+    // zou die stil verkeerd binden. Valt terug op de wingetId zodat een
+    // aanroeper die 'm niet meegeeft nog steeds iets bruikbaars toont.
+    public async Task<(bool success, string message)> InstallAppAsync(string wingetId, IProgress<string>? progress = null, string source = "winget", CancellationToken ct = default, string? location = null, string? displayName = null)
     {
         try
         {
-            progress?.Report($"Installing {wingetId}...");
+            // v1.2.8: toonde hier de wingetId ("Mozilla.Firefox") terwijl de regel
+            // eronder in de batch de vriendelijke naam gebruikte, en de kaart er
+            // vlak boven ook al "Firefox" toont. Nu allebei de naam. De exacte
+            // wingetId blijft in install.log staan (de START-regel hieronder),
+            // dus er gaat diagnostisch niets verloren.
+            progress?.Report(App.Loc.S("install.installingApp",
+                string.IsNullOrWhiteSpace(displayName) ? wingetId : displayName));
 
             // Source-bewust install:
             //  - msstore apps (productID 9XXX/XPXXX): `winget install <id>` zonder
@@ -658,8 +660,13 @@ public sealed class WingetService
             if (exitCode == 0)
             {
                 LogInstall($"OK    {wingetId}");
-                progress?.Report("Installed");
-                return (true, "Installed");
+                // Hergebruikt de badge-key: dezelfde uitkomst, en op deze
+                // returnwaarde matcht niets (nagelopen in v1.2.8 — alleen
+                // AlreadyInstalledMessage en MsStoreOpenedMessage worden
+                // vergeleken), dus de vertaalde waarde mag ook naar de caller.
+                var installed = App.Loc.S("install.state.installed");
+                progress?.Report(installed);
+                return (true, installed);
             }
 
             // "Already installed" / "niets nieuwers": geen echte fout. NIET gehardcode
@@ -671,7 +678,9 @@ public sealed class WingetService
             if (IsAlreadyInstalled(exitCode, error + output))
             {
                 LogInstall($"SKIP  {wingetId} (already installed, exit=0x{exitCode:X8})");
-                progress?.Report(AlreadyInstalledMessage);
+                // Weergave en sentinel zijn hier bewust twee dingen: wat de
+                // gebruiker leest is vertaald, wat vergeleken wordt niet.
+                progress?.Report(App.Loc.S("install.state.alreadyInstalled"));
                 return (true, AlreadyInstalledMessage);
             }
 
@@ -809,12 +818,13 @@ public sealed class WingetService
 
             try
             {
-                overall?.Report(new InstallProgress(index, total, app, InstallPhase.Starting, $"Starting {app.Name}"));
+                overall?.Report(new InstallProgress(index, total, app, InstallPhase.Starting,
+                    App.Loc.S("install.startingApp", app.Name)));
 
                 var perApp = new Progress<string>(msg =>
                     overall?.Report(new InstallProgress(index, total, app, InstallPhase.Running, msg)));
 
-                var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source, ct);
+                var (success, message) = await InstallAppAsync(app.WingetId, perApp, app.Source, ct, displayName: app.Name);
                 results[app.WingetId] = (success, message);
 
                 var phase = !success ? InstallPhase.Failed
@@ -1059,20 +1069,10 @@ public readonly record struct InstallProgress(
     InstallPhase Phase,
     string Message);
 
-public enum UninstallPhase
-{
-    Pending,
-    Running,
-    Success,
-    Failed
-}
-
-public readonly record struct UninstallProgress(
-    int CurrentIndex,
-    int Total,
-    AppModel App,
-    UninstallPhase Phase,
-    string Message);
+// v1.2.8: UninstallPhase + UninstallProgress zijn hier weggehaald samen met
+// UninstallAppsAsync en Dialogs/UninstallDialog — die drie waren elkaars enige
+// gebruikers. De levende uninstall-flow (AllAppsUninstallDialog) loopt op
+// MixedUninstallProgress in MixedSourceUninstaller.
 
 // Source = "winget" (echt in winget repo), "msstore" (Microsoft Store), of leeg/onbekend.
 // Belangrijk onderscheid: `winget list` toont álle installed apps maar markeert per

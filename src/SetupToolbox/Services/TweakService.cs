@@ -573,7 +573,7 @@ public sealed class TweakService
             if (proc == null)
             {
                 foreach (var (t, op) in items)
-                    results[$"{t.Id}::{op.Path}::{op.ValueName}"] = (false, "Could not start elevated process");
+                    results[$"{t.Id}::{op.Path}::{op.ValueName}"] = (false, App.Loc.S("elevated.couldNotStart"));
                 return (results, false);
             }
             await proc.WaitForExitAsync();
@@ -586,7 +586,7 @@ public sealed class TweakService
             {
                 var key = $"{t.Id}::{op.Path}::{op.ValueName}";
                 if (!results.ContainsKey(key))
-                    results[key] = (false, "Cancelled — UAC prompt declined");
+                    results[key] = (false, App.Loc.S("elevated.uacDeclined"));
             }
         }
         finally
@@ -597,7 +597,7 @@ public sealed class TweakService
         {
             var key = $"{t.Id}::{op.Path}::{op.ValueName}";
             if (!results.ContainsKey(key))
-                results[key] = (false, "Did not run (interrupted)");
+                results[key] = (false, App.Loc.S("elevated.didNotRun"));
         }
         return (results, cancelled);
     }

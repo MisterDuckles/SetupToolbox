@@ -292,7 +292,7 @@ public sealed class BloatwareService
             // Cancelled-flag staat aan zodat de dialog dit visueel anders kan laten
             // zien dan een echte failure (geen rode error glyph, neutrale tekst).
             return new BloatwareUninstallResult(0, items.Count,
-                items.ToDictionary(i => i.DisplayName, i => (false, "Cancelled — UAC prompt declined")),
+                items.ToDictionary(i => i.DisplayName, i => (false, App.Loc.S("elevated.uacDeclined"))),
                 Cancelled: true);
         }
         finally
@@ -334,7 +334,8 @@ public sealed class BloatwareService
                     var displayName = parts[3];
                     var match = items.FirstOrDefault(it => it.DisplayName == displayName);
                     if (match != null)
-                        progress?.Report(new BloatwareProgress(idx, total, match, BloatwarePhase.Running, $"Removing {displayName}..."));
+                        progress?.Report(new BloatwareProgress(idx, total, match, BloatwarePhase.Running,
+                            App.Loc.S("progress.removing", displayName)));
                 }
             }
             else if (line.StartsWith("RESULT|"))
@@ -367,7 +368,7 @@ public sealed class BloatwareService
         {
             // Geen log = niets gestart (bv. UAC denied voor de log werd gecreated).
             return new BloatwareUninstallResult(0, items.Count,
-                items.ToDictionary(i => i.DisplayName, i => (false, "No log produced")),
+                items.ToDictionary(i => i.DisplayName, i => (false, App.Loc.S("elevated.noLog"))),
                 Cancelled: false);
         }
 
@@ -382,7 +383,7 @@ public sealed class BloatwareService
         catch
         {
             return new BloatwareUninstallResult(0, items.Count,
-                items.ToDictionary(i => i.DisplayName, i => (false, "Could not read log")),
+                items.ToDictionary(i => i.DisplayName, i => (false, App.Loc.S("elevated.logUnreadable"))),
                 Cancelled: false);
         }
 
@@ -405,7 +406,7 @@ public sealed class BloatwareService
         foreach (var item in items)
         {
             if (!results.ContainsKey(item.DisplayName))
-                results[item.DisplayName] = (false, "Did not run (interrupted)");
+                results[item.DisplayName] = (false, App.Loc.S("elevated.didNotRun"));
         }
 
         var success = results.Count(kv => kv.Value.Item1);

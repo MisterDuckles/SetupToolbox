@@ -64,7 +64,8 @@ public sealed class GitHubService
         {
             using var resp = await _http.GetAsync(ReleasesApi, ct);
             if (!resp.IsSuccessStatusCode)
-                return UpdateCheckResult.Failure($"GitHub gaf {(int)resp.StatusCode} {resp.ReasonPhrase}.");
+                return UpdateCheckResult.Failure(
+                    App.Loc.S("update.err.httpStatus", (int)resp.StatusCode, resp.ReasonPhrase));
 
             await using var stream = await resp.Content.ReadAsStreamAsync(ct);
             var releases = await JsonSerializer.DeserializeAsync<List<GhRelease>>(stream, _json, ct)

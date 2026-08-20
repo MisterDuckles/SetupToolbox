@@ -25,7 +25,7 @@ public sealed class TaskSchedulerService
         // om te schedulen.
         var exePath = Environment.ProcessPath ?? string.Empty;
         if (string.IsNullOrEmpty(exePath))
-            return new CreateTaskOutcome(CreateTaskResult.Failed, "ProcessPath onbekend — kon de huidige exe niet bepalen.");
+            return new CreateTaskOutcome(CreateTaskResult.Failed, App.Loc.S("schedule.err.noProcessPath"));
 
         // v1.0.14: task aanmaken via een eigen XML-definitie i.p.v. losse schtasks-
         // vlaggen. Reden: `schtasks /create` zet **DisallowStartIfOnBatteries** en
@@ -42,7 +42,7 @@ public sealed class TaskSchedulerService
         catch (Exception ex)
         {
             return new CreateTaskOutcome(CreateTaskResult.Failed,
-                $"Kon de task-definitie niet wegschrijven: {ex.Message}");
+                App.Loc.S("schedule.err.writeTaskXml", ex.Message));
         }
 
         // Wrap in cmd.exe zodat we stdout+stderr kunnen redirecten naar een
@@ -85,7 +85,7 @@ public sealed class TaskSchedulerService
         }
         catch (Exception ex)
         {
-            return new CreateTaskOutcome(CreateTaskResult.Failed, $"Process kon niet starten: {ex.Message}");
+            return new CreateTaskOutcome(CreateTaskResult.Failed, App.Loc.S("schedule.err.processStart", ex.Message));
         }
         finally
         {
@@ -192,7 +192,7 @@ public sealed class TaskSchedulerService
         // Geef de schtasks output één-op-één terug, gevolgd door context (exit
         // code + de gebruikte arguments). Helpt bij debug van quoting/path
         // issues — user ziet de echte schtasks fout i.p.v. een generic message.
-        var output = string.IsNullOrWhiteSpace(schtasksOutput) ? "(geen output)" : schtasksOutput;
+        var output = string.IsNullOrWhiteSpace(schtasksOutput) ? App.Loc.S("schedule.err.noOutput") : schtasksOutput;
         return $"schtasks exit {exitCode}\n\n{output}\n\nargs: {schtasksArgs}";
     }
 
