@@ -287,8 +287,23 @@ public sealed class WingetService
             var idEnd = versionPos;
             var id = line.Substring(idPos, idEnd - idPos).Trim();
 
-            var versionEnd = sourcePos > versionPos ? sourcePos : line.Length;
-            var version = line.Substring(versionPos, versionEnd - versionPos).Trim();
+            // Bij een Tag- of Match-kolom tussen Version en Source loopt deze
+            // substring daar dwars doorheen: "4.9.9   Tag: notepad" belandde zo
+            // in de versie. Een winget-versie bevat nooit een spatie, dus alleen
+            // het eerste token telt. Bewust géén IndexOf("Tag"): de kolomkoppen
+            // zijn Engels op een Engelse Windows en die aanname willen we hier
+            // niet nog een keer maken.
+            //
+            // De Min() is een aparte bug: versionEnd werd niet begrensd op de
+            // regellengte, dus een afgekapte regel gooide een out-of-range. Die
+            // wordt in SearchWingetRepoAsync door de omhullende catch gevangen
+            // en dan verdwijnen ALLE zoekresultaten stil - geen melding, geen
+            // hits, niets.
+            var versionEnd = Math.Min(sourcePos > versionPos ? sourcePos : line.Length, line.Length);
+            var versionCell = line[versionPos..versionEnd];
+            var version = versionCell.Length > 0 && !char.IsWhiteSpace(versionCell[0])
+                ? versionCell.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0]
+                : string.Empty;
 
             // Alleen entries die eruit zien als een echte winget-ID. Filter header
             // noise ("Match", "Moniker", ">") en regels zonder dot in de ID.
@@ -945,7 +960,8 @@ public sealed class WingetService
 
         // Prefix-vorm: de rest van de regel is data (de download-URL) en blijft staan.
         if (line.StartsWith("Downloading ", StringComparison.OrdinalIgnoreCase))
-            return App.Loc.S("install.winget.downloading", line[("Downloading ".Length)..].Trim());
+            return App.Loc.S("install.winget.downloading",
+                ShortenDownloadTarget(line[("Downloading ".Length)..].Trim()));
 
         if (line.Contains("installer hash", StringComparison.OrdinalIgnoreCase))
             return App.Loc.S("install.winget.hashVerified");
@@ -964,6 +980,28 @@ public sealed class WingetService
         return line;
     }
 
+    /// <summary>
+    /// Alleen de bestandsnaam uit winget's download-regel. De volledige URL loopt
+    /// op de install-kaart over twee regels en laat de kaart verspringen; de
+    /// Nederlandse variant is nog net iets langer.
+    ///
+    /// Bewust Uri en niet Path.GetFileName: die laatste knipt op de laatste slash
+    /// en houdt een eventuele ?query of #fragment vast ("setup.exe?token=abc"), en
+    /// op een URL zonder pad geeft 'ie de host terug. AbsolutePath gooit query én
+    /// fragment eraf, UnescapeDataString maakt %20 weer een spatie.
+    ///
+    /// Geen absolute URI - winget kan ook een lokaal pad of een los woord loggen -
+    /// dan blijft de ruwe tekst staan. Liever één lange regel dan een verminkte:
+    /// zelfde regel als de mapping hierboven, wat we niet zeker weten vertalen we
+    /// niet.
+    /// </summary>
+    private static string ShortenDownloadTarget(string target)
+    {
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri)) return target;
+        var path = uri.AbsolutePath;
+        var name = Uri.UnescapeDataString(path[(path.LastIndexOf('/') + 1)..]);
+        return string.IsNullOrWhiteSpace(name) ? target : name;
+    }
     private static string FriendlyError(string error, string output, int exitCode, string wingetId)
     {
         var combined = error + output;

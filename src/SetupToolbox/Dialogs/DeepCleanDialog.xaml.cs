@@ -78,18 +78,25 @@ public sealed partial class DeepCleanDialog : ContentDialog
     {
         GroupContainer.Children.Clear();
 
-        var totalSize = _items.Sum(i => i.SizeBytes);
-        HeaderText.Text = string.IsNullOrEmpty(_filterQuery)
-            ? App.Loc.S(_items.Count == 1 ? "deepclean.foundHeader.one" : "deepclean.foundHeader.other",
-                        _items.Count, App.Loc.FormatBytes(totalSize))
-            : App.Loc.Plural("deepclean.foundFiltered", _items.Count);
-
         // Apply filter eerst: query matcht case-insensitive op DisplayName,
         // Path én category-label. Daarna pas bundle-by-token zodat een filter
         // op "brave" precies de Brave-cluster terugbrengt. Empty query = alles.
         var filteredItems = string.IsNullOrEmpty(_filterQuery)
             ? _items
             : (IReadOnlyList<DeepCleanItem>)_items.Where(MatchesFilter).ToList();
+
+        // De header telt wat er ONDER staat, niet wat er gescand is: bij een
+        // actief filter is dat het aantal treffers. Daarom moet de filter hier
+        // al toegepast zijn - tot v1.2.9.3 stond deze toewijzing erboven en
+        // meldde 'ie "227 items gevonden" terwijl er 30 kaarten onder stonden.
+        // Bewust ook vóór de lege-lijst-return hieronder: anders blijft de
+        // header op de telling van het vorige filter staan, en dat is erger
+        // dan de lichte dubbeling met "geen match voor ...".
+        var totalSize = _items.Sum(i => i.SizeBytes);
+        HeaderText.Text = string.IsNullOrEmpty(_filterQuery)
+            ? App.Loc.S(_items.Count == 1 ? "deepclean.foundHeader.one" : "deepclean.foundHeader.other",
+                        _items.Count, App.Loc.FormatBytes(totalSize))
+            : App.Loc.Plural("deepclean.foundFiltered", filteredItems.Count);
 
         if (filteredItems.Count == 0)
         {
