@@ -708,6 +708,34 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+
+    // Anders dan bij de automatische melding valt deze WEL terug op de nieuwste
+    // release als er geen release met precies dit versienummer bestaat: je klikt
+    // er bewust op, dus je wilt iets zien. Bij de automatische melding zou dat
+    // juist misleiden.
+    private async void WhatsNewLink_Click(object sender, RoutedEventArgs e)
+    {
+        WhatsNewLink.IsEnabled = false;
+        try
+        {
+            var notes = await App.GitHub.GetReleaseNotesAsync(
+                App.GitHub.CurrentVersion, fallbackToLatest: true);
+
+            if (notes == null)
+            {
+                ShowUpdateCheckInfo(InfoBarSeverity.Warning,
+                    App.Loc.S("whatsnew.unavailable.title"),
+                    App.Loc.S("whatsnew.unavailable.body"));
+                return;
+            }
+
+            await DialogService.ShowAsync(new WhatsNewDialog(notes) { XamlRoot = this.XamlRoot });
+        }
+        finally
+        {
+            WhatsNewLink.IsEnabled = true;
+        }
+    }
     private void ShowUpdateCheckInfo(InfoBarSeverity severity, string title, string message)
     {
         UpdateCheckResultBar.Severity = severity;

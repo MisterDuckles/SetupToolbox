@@ -28,6 +28,7 @@ public sealed class GitHubService
     private const string Owner = "MisterDuckles";
     private const string Repo = "SetupToolbox";
     private const string ReleasesApi = "https://api.github.com/repos/" + Owner + "/" + Repo + "/releases";
+    private const string ReleasesPage = "https://github.com/" + Owner + "/" + Repo + "/releases";
 
     // Matcht onze installer-asset: "SetupToolbox-v1.0.0.exe".
     private static readonly Regex SetupAssetRx =
@@ -130,6 +131,54 @@ public sealed class GitHubService
         });
     }
 
+
+    // Haalt de release-notes van EEN specifieke versie op (v1.2.10). De tekst van
+    // de "wat is er nieuw"-melding komt dus LIVE uit de GitHub-release en wordt
+    // niet meegebakken - keuze van user. Gevolg om te weten: die body is geschreven
+    // in EEN taal, dus de melding zelf volgt de taalkeuze in de app niet. De
+    // omlijsting eromheen (titel, intro, knoppen) is wel vertaald.
+    //
+    // fallbackToLatest: is er geen release met precies deze tag, pak dan de
+    // nieuwste stabiele. Dat wil je achter de "Wat is er nieuw"-link in
+    // Instellingen - je klikt er bewust op, dus je wilt iets zien - maar NIET bij
+    // de automatische melding na een update: die moet zwijgen als de notes van
+    // juist deze versie ontbreken, anders toon je de tekst van een oudere release
+    // alsof het de nieuwe is.
+    //
+    // Gooit niet: alles wat misgaat levert null op en de aanroeper toont dan niets.
+    public async Task<ReleaseNotes?> GetReleaseNotesAsync(
+        Version? exact, bool fallbackToLatest = false, CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync(ReleasesApi, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            var releases = await JsonSerializer.DeserializeAsync<List<GhRelease>>(stream, _json, ct)
+                           ?? new List<GhRelease>();
+
+            GhRelease? match = null;
+            GhRelease? newest = null;
+            var newestVer = new Version(0, 0, 0);
+
+            foreach (var rel in releases)
+            {
+                if (rel.Draft || rel.Prerelease) continue;
+                if (!TryParseTag(rel.TagName, out var ver)) continue;
+                if (exact != null && ver == exact) { match = rel; break; }
+                if (ver > newestVer) { newestVer = ver; newest = rel; }
+            }
+
+            var chosen = match ?? (fallbackToLatest ? newest : null);
+            if (chosen == null) return null;
+
+            TryParseTag(chosen.TagName, out var chosenVer);
+            return new ReleaseNotes(chosenVer, chosen.Body ?? string.Empty,
+                chosen.HtmlUrl ?? ReleasesPage);
+        }
+        catch { return null; }
+    }
     private static bool TryParseTag(string? tag, out Version version)
     {
         version = new Version(0, 0, 0);
@@ -147,6 +196,7 @@ public sealed class GitHubService
         [JsonPropertyName("tag_name")] public string? TagName { get; set; }
         [JsonPropertyName("name")] public string? Name { get; set; }
         [JsonPropertyName("body")] public string? Body { get; set; }
+        [JsonPropertyName("html_url")] public string? HtmlUrl { get; set; }
         [JsonPropertyName("draft")] public bool Draft { get; set; }
         [JsonPropertyName("prerelease")] public bool Prerelease { get; set; }
         [JsonPropertyName("assets")] public List<GhAsset>? Assets { get; set; }
@@ -158,6 +208,10 @@ public sealed class GitHubService
         [JsonPropertyName("browser_download_url")] public string? BrowserDownloadUrl { get; set; }
     }
 }
+
+// De release-notes van een gepubliceerde versie. Body is de ruwe markdown zoals
+// die op GitHub staat; WhatsNewDialog maakt er leesbare platte tekst van.
+public sealed record ReleaseNotes(Version Version, string Body, string Url);
 
 public sealed record UpdateInfo(
     Version Version, string TagName, string ReleaseName, string Notes, string AssetName, string DownloadUrl);

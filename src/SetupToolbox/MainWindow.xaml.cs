@@ -2,6 +2,8 @@ using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
+using SetupToolbox.Dialogs;
+using SetupToolbox.Helpers;
 using SetupToolbox.Pages;
 using SetupToolbox.Services;
 
@@ -32,6 +34,12 @@ public sealed partial class MainWindow : Window
 
         // Self-update: stille achtergrond-check bij startup (indien aan).
         _ = CheckForUpdatesOnStartupAsync();
+
+        // "Wat is er nieuw" na een update (v1.2.10). Aan Loaded gehangen en niet
+        // hier direct: een ContentDialog heeft een XamlRoot nodig, en die bestaat
+        // pas als de inhoud in de visual tree zit.
+        if (Content is FrameworkElement root)
+            root.Loaded += (_, _) => _ = ShowWhatsNewIfUpdatedAsync(root);
     }
 
     // ---------------------------------------------------------------
@@ -90,6 +98,42 @@ public sealed partial class MainWindow : Window
     // SELF-UPDATE (v0.10.1)
     // ---------------------------------------------------------------
 
+
+    // ---------------------------------------------------------------
+    // WAT IS ER NIEUW (v1.2.10)
+    // ---------------------------------------------------------------
+
+    private bool _whatsNewChecked;
+
+    // Loaded kan in theorie meer dan een keer vuren, vandaar de vlag.
+    private async System.Threading.Tasks.Task ShowWhatsNewIfUpdatedAsync(FrameworkElement root)
+    {
+        if (_whatsNewChecked) return;
+        _whatsNewChecked = true;
+
+        var current = App.GitHub.CurrentVersion.ToString();
+        if (App.Settings.LastSeenVersion == current) return;   // gewone herstart
+
+        // Uitlezen VOOR het stempelen: LastSeenVersion zetten roept Save() aan en
+        // die maakt de map aan waar IsFirstEverRun op kijkt.
+        var firstRun = App.Settings.IsFirstEverRun;
+
+        // ALTIJD stempelen, ook als we hierna zwijgen. Anders probeert de app het
+        // bij elke start opnieuw zolang er geen release-notes op te halen zijn.
+        App.Settings.LastSeenVersion = current;
+
+        // Verse installatie: er is per definitie niets "nieuw" - de gebruiker ziet
+        // de app voor het eerst. Alleen na een UPDATE is deze melding zinnig.
+        if (firstRun) return;
+
+        // Geen fallback naar de nieuwste release hier: bestaan de notes van juist
+        // deze versie niet, dan zwijgen we. De tekst van een oudere release tonen
+        // alsof het de nieuwe is, is erger dan geen melding.
+        var notes = await App.GitHub.GetReleaseNotesAsync(App.GitHub.CurrentVersion);
+        if (notes == null) return;
+
+        await DialogService.ShowAsync(new WhatsNewDialog(notes) { XamlRoot = root.XamlRoot });
+    }
     private UpdateInfo? _pendingUpdate;
 
     private async System.Threading.Tasks.Task CheckForUpdatesOnStartupAsync()

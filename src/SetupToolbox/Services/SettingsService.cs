@@ -39,8 +39,22 @@ public sealed class SettingsService
 
     private SettingsData _data;
 
+    // Is dit de allereerste keer dat de app op deze machine draait? Vastgesteld in
+    // de CONSTRUCTOR, want dat is het vroegste moment: settings.json bestaat dan nog
+    // niet en de logmap ernaast is nog niet aangemaakt. Diagnostics leest App.Settings
+    // voor zijn Enabled-vlag, dus deze ctor is per definitie klaar voordat er iets
+    // logt en de map dus aangemaakt wordt.
+    //
+    // Nodig om "je bent net bijgewerkt" te onderscheiden van "je hebt de app net
+    // geinstalleerd" - zonder dat zou de wat-is-er-nieuw-melding ook op een schone
+    // installatie vuren, waar per definitie niets nieuw is. De installer raakt deze
+    // map niet aan (die installeert naar %LocalAppData%\Programs), dus het bestaan
+    // ervan betekent: hier heeft de app al eens gedraaid.
+    public bool IsFirstEverRun { get; }
+
     public SettingsService()
     {
+        IsFirstEverRun = !Directory.Exists(_settingsDir);
         _data = Load();
     }
 
@@ -96,6 +110,24 @@ public sealed class SettingsService
     // Wordt true gezet zodra user een keuze maakt — daarna nooit meer vragen.
     // Setting is bedoeld voor users die niet zelf naar Settings navigeren maar
     // wel willen profiteren van de speed-up.
+    // Het versienummer waarvoor de "wat is er nieuw"-melding al getoond is (v1.2.10).
+    // Wordt ALTIJD gestempeld zodra de check gedraaid heeft, ook als er niets te tonen
+    // viel - anders komt de melding bij elke start terug zolang er geen release-notes
+    // op te halen zijn.
+    //
+    // Geen voorkeur maar interactie-historie, dus bewust NIET exporteerbaar in de
+    // config-backup: zie de noot bij ConfigSettingsValues.
+    public string? LastSeenVersion
+    {
+        get => _data.LastSeenVersion;
+        set
+        {
+            if (_data.LastSeenVersion == value) return;
+            _data.LastSeenVersion = value;
+            Save();
+        }
+    }
+
     public bool ParallelInstallsAsked
     {
         get => _data.ParallelInstallsAsked;
@@ -341,6 +373,9 @@ public sealed class SettingsService
 
         [JsonPropertyName("parallelInstallsAsked")]
         public bool ParallelInstallsAsked { get; set; } = false;
+
+        [JsonPropertyName("lastSeenVersion")]
+        public string? LastSeenVersion { get; set; }
 
         [JsonPropertyName("scanLeftoversAfterUninstall")]
         public bool ScanLeftoversAfterUninstall { get; set; } = true;

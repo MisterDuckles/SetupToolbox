@@ -786,6 +786,13 @@
                             <TextBlock x:Name="AppVersionText"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <!-- De wat-is-er-nieuw-melding verschijnt vanzelf na een
+                                 update, maar je klikt 'm makkelijk weg. Dit is de
+                                 weg terug. -->
+                            <HyperlinkButton x:Name="WhatsNewLink"
+                                             Click="WhatsNewLink_Click"
+                                             Padding="0"
+                                             Content="{loc:Localize Key=settings.whatsnew.link}" />
                         </StackPanel>
                         <Button Grid.Column="2"
                                 x:Name="CheckUpdatesButton"

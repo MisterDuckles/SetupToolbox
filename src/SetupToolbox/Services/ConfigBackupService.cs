@@ -491,11 +491,12 @@ public sealed class ConfigBackupService
 // kent die voorkeur op de doelmachine met rust laat in plaats van 'm op de default
 // terug te zetten.
 //
-// BEWUST NIET IN DEZE LIJST — de vijf vlaggen die geen voorkeur zijn maar
+// BEWUST NIET IN DEZE LIJST — de zes vlaggen die geen voorkeur zijn maar
 // interactie-historie: ParallelInstallsAsked, DontAskAboutScheduling,
-// DeepCleanRestorePointConfigured, DebloatRestorePointConfigured en
-// ShowWelcomeBanner. Die meenemen onderdrukt op de nieuwe machine first-run-prompts
-// en een welkomstbanner die de gebruiker daar nog nooit gezien heeft. De echte
+// DeepCleanRestorePointConfigured, DebloatRestorePointConfigured,
+// ShowWelcomeBanner en (sinds v1.2.10) LastSeenVersion. Die meenemen onderdrukt op
+// de nieuwe machine first-run-prompts, een welkomstbanner en een
+// wat-is-er-nieuw-melding die de gebruiker daar nog nooit gezien heeft. De echte
 // voorkeuren eronder (RestorePointBeforeDeepClean / -Debloat) gaan wél mee, dus de
 // prompt verschijnt daar één keer met jouw antwoord al ingevuld.
 public sealed class ConfigSettingsValues

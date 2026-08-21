@@ -27,19 +27,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 >
 > **De versie-indeling van deze sessie:** v1.2.9.2 (export-dialog: layout + teller + winget-search) · v1.2.9.3 (zichtbare UI-defecten) · v1.2.9.4 (veiligheidsnet: herstelpunt-uitkomst + bevestiging vóór de destructieve losse import) · v1.2.9.5 (vertaalrestje `BackupPromptDialog` + scanner pass 1 leert inline-XAML zien) · v1.2.9.6 (opruimen: dode weergave-strings, subcategorie-descriptions, `CONTRIBUTING.md`) · v1.2.10 (wat-is-er-nieuw-melding) · website (eigen commit). **v1.3.0 blijft expliciet buiten deze sessie** — die cut doet user zelf.
 
-### v1.2.10 — "Wat is er nieuw"-melding na een update
-
-**Gevraagd door user op 2026-08-17.** Na een self-update en de automatische herstart krijgt de gebruiker nu niets te zien: de app komt terug en niets wijst erop dát er iets veranderd is, laat staan wát. Voorstel: bij de eerste start op een nieuw versienummer één compacte melding met de highlights — bv. "Toast-notificaties toegevoegd", "Taalkeuze NL/EN", "Auto-update draait nu ook op accu".
-
-**Wat er al is om op te bouwen:** `GitHubService` kent de huidige `AssemblyVersion` en haalt release-info op; `SettingsService` kan de laatst-getoonde versie onthouden (zelfde patroon als `ParallelInstallsAsked`); `ToastHelper` en de InfoBar in `MainWindow` zijn allebei bestaande kanalen.
-
-**Uit te werken vóór implementatie:**
-- **Waar komt de tekst vandaan?** Meegebakken in de app (een `data/whatsnew.json` per versie, offline en voorspelbaar) versus de GitHub release-notes live ophalen (altijd actueel, maar afhankelijk van netwerk én van hoe netjes de release-body geschreven is). Meegebakken sluit aan op hoe `apps.json` en de vertaaltabellen al werken — en is meteen vertaalbaar, wat bij live release-notes niet kan.
-- **Toast of in-app?** Een toast is makkelijk te missen en werkt niet elevated (zie het MSIX-onderzoek); de InfoBar bovenaan `MainWindow` staat er al voor de update-melding en is de logische plek. Mogelijk allebei.
-- **Trigger-conditie.** "Eerste start nadat het versienummer wijzigde" is de simpele regel, maar die vuurt ook bij een schone eerste installatie — daar wil je 'm juist níét. Onderscheid nodig tussen "geüpdatet" en "nieuw geïnstalleerd".
-- **Hoeveel regels?** Compact houden was de expliciete wens: een handvol bullets, niet de volledige changelog.
-- **Vertaling.** Valt onder de multi-language-reeks: de highlights moeten in beide talen bestaan, dus het formaat moet daar rekening mee houden.
-
 ### v1.3.0 — Milestone-release: v1.2.1 t/m v1.2.10 uitleveren
 
 **Besloten door user op 2026-08-20:** zodra v1.2.8 (install-voortgangsregel), v1.2.9 (config-backup) en v1.2.10 (wat-is-er-nieuw-melding) af zijn, wordt er **een Release gecut**. Niet eerder — deze drie horen als één verhaal naar buiten.
@@ -121,6 +108,65 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.10 — "Wat is er nieuw"-melding na een update
+
+**Gevraagd door user op 2026-08-17.** Na een self-update en de automatische herstart kreeg je niets te zien: de app kwam terug en niets wees erop dát er iets veranderd was, laat staan wát. De stringtabellen gaan van 1347 naar **1355 keys**.
+
+#### Drie keuzes van user (2026-08-21)
+
+1. **De tekst komt LIVE uit de GitHub release-notes**, niet uit een meegebakken `data/whatsnew.json`.
+2. **Een popup midden op het scherm** (`ContentDialog`), niet de InfoBar bovenaan en geen toast.
+3. **Plus een "Wat is er nieuw"-link in Instellingen**, bij het versienummer.
+
+> **Het gevolg van keuze 1, expliciet vastgelegd:** de release-body is één tekst, in één taal. De **inhoud** van de melding volgt de taalkeuze in de app dus niet — alles erómheen (titel, intro, knop, link, foutmelding) wél. Dat is het enige scherm in de app waar dat zo is. De afgewogen alternatieve route — id’s in een `whatsnew.json` met een loc-key per bullet, zoals `apps.json` het sinds v1.2.6 doet — is bewust niet gekozen; die zou vertaalbaar zijn geweest maar vraagt dat het blok voor een versie geschreven is vóórdat je die release cut.
+
+#### De trigger
+
+Het lastige deel was niet "is het versienummer gewijzigd" maar **"is dit een update of een verse installatie"**. De simpele regel vuurt namelijk ook bij een schone eerste start, en daar wil je ‘m juist niet — er is dan per definitie niets nieuw.
+
+Onderscheid: **het bestaan van `%LocalAppData%\SetupToolbox`**. `SettingsService.Load()` doet `if (!File.Exists(...)) return new SettingsData()`, dus `settings.json` bestaat pas na de eerste gewijzigde instelling — te zwak op zichzelf. Maar de logmap ernaast wordt bij **elke** start geschreven, en de installer raakt die map niet aan (die installeert naar `%LocalAppData%\Programs`). Bestaat de map, dan heeft de app hier al eens gedraaid.
+
+Vastgelegd in de **constructor** van `SettingsService`, want dat is het vroegste moment: `Diagnostics.Enabled` leest `App.Settings`, dus die ctor is per definitie klaar vóórdat er iets logt en de map dus aangemaakt wordt.
+
+| situatie | map bestaat | `lastSeenVersion` | uitkomst |
+| --- | --- | --- | --- |
+| Schone installatie | nee | leeg | stempelen, **niets tonen** |
+| Update v1.2.x → v1.3.0 | ja | leeg | **tonen** |
+| Update v1.3.0 → v1.4.0 | ja | `1.3.0` | **tonen** |
+| Gewone herstart | ja | gelijk aan huidig | niets |
+| Headless `/autoupdate` e.d. | n.v.t. | — | code wordt niet bereikt: die takken `return`en vóór `new MainWindow()`, dus de melding blijft bewaard voor de volgende echte start |
+
+Twee dingen die anders stil fout gaan, en die als comment in de code staan:
+
+- **`IsFirstEverRun` uitlezen vóór het stempelen.** `LastSeenVersion` zetten roept `Save()` aan, en die maakt precies de map aan waar `IsFirstEverRun` op kijkt.
+- **Altijd stempelen, ook als we daarna zwijgen.** Anders probeert de app het bij elke start opnieuw zolang de release-notes niet op te halen zijn.
+
+#### Geen fallback bij de automatische melding, wél bij de link
+
+`GetReleaseNotesAsync(exact, fallbackToLatest)` zoekt de release waarvan de tag naar precies deze versie parset. Bestaat die niet:
+
+- **Automatische melding: zwijgen.** De tekst van een oudere release tonen alsof het de nieuwe is, is erger dan geen melding.
+- **De link in Instellingen: de nieuwste stabiele release.** Je klikt er bewust op, dus je wilt iets zien. Lukt ook dat niet, dan een InfoBar-waarschuwing in plaats van een stille no-op — een link die niets doet leest als kapot.
+
+Netwerk- of parsefouten leveren `null` op; de methode gooit niet.
+
+#### De markdown
+
+De release-body is markdown en wordt als **platte tekst** getoond. Een echte renderer kost een dependency of een eigen parser voor tekst die je één keer per release leest. Opgeruimd worden alleen de vormen die anders als ruwe tekens in beeld staan: kop-hekjes, `**vet**`, backticks, de horizontale streep en de streepjes-opsomming (die wordt een echte bullet). De rest blijft letterlijk staan — half interpreteren is slechter dan niet interpreteren. Meer dan één lege regel achter elkaar wordt ingeklapt, anders staat er een gat in de dialog.
+
+#### 8 nieuwe keys
+
+`whatsnew.title` / `.intro` / `.close` / `.releaseNotes` / `.empty` / `.unavailable.title` / `.unavailable.body`, plus `settings.whatsnew.link`. 1347 → **1355**. `lastSeenVersion` gaat **niet** mee in de config-backup — de noot bij `ConfigSettingsValues` spreekt nu van **zes** vlaggen die interactie-historie zijn in plaats van vijf.
+
+> **Aangetoond (2026-08-21):**
+> - Build: **0 errors, 0 warnings** op `1.2.10`.
+> - `WhatsNewDialog.xaml` compileert daadwerkelijk: `.g.cs` én `.xbf` staan in `obj/` èn in `bin/`, dus de markup is niet alleen syntactisch goed maar ook echt meegenomen.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0 / 0**. `check-catalog-keys.py`: **1355 = 1355**, "gecontroleerd op aanroep" 628 → **636** — exact +8, dus elke nieuwe key wordt aangeroepen.
+>
+> **Het bewijsgat, eerlijk benoemd:** de **automatische** melding is op deze machine niet uit te lokken. Er bestaat geen GitHub-release met tag `v1.2.10` — die komt er ook niet, want patches krijgen geen Release — dus `GetReleaseNotesAsync(exact)` geeft `null` en de dialog zwijgt, precies zoals bedoeld. **De link in Instellingen is wél meteen te testen**: die valt terug op de nieuwste stabiele release en toont dus de notes van v1.2.0. Dat dekt de dialog, de markdown-opschoning, de link naar GitHub en de foutmelding. Wat pas bij de v1.3.0-update in het echt blijkt, is de trigger zelf.
+>
+> **Handmatig te forceren:** `lastSeenVersion` uit `%LocalAppData%\SetupToolbox\settings.json` verwijderen terwijl die map blijft bestaan — dan denkt de app dat ‘ie net bijgewerkt is. Er moet dan wél een release met de huidige tag bestaan om iets te zien.
 
 ### Website — professionaliseren + bijwerken (stond gepland als v1.3.1)
 
