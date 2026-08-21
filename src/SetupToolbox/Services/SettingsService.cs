@@ -264,6 +264,38 @@ public sealed class SettingsService
         }
     }
 
+    // Onderdrukt Save() zolang een batch loopt. Zonder dit schrijft een import van
+    // negen voorkeuren negen keer settings.json weg — elke setter roept Save() aan.
+    private bool _batching;
+
+    /// <summary>
+    /// Groepeert meerdere setter-aanroepen tot één schrijfactie:
+    /// <c>using (App.Settings.BatchSave()) { ... }</c>. Bewust een using-scope en
+    /// geen los Begin/End-paar: bij een exception halverwege zou de vlag anders
+    /// blijven hangen en zouden latere wijzigingen stil niet meer persisteren.
+    /// </summary>
+    public IDisposable BatchSave() => new SaveBatch(this);
+
+    private sealed class SaveBatch : IDisposable
+    {
+        private readonly SettingsService _owner;
+        private readonly bool _outermost;
+
+        public SaveBatch(SettingsService owner)
+        {
+            _owner = owner;
+            _outermost = !owner._batching;
+            owner._batching = true;
+        }
+
+        public void Dispose()
+        {
+            if (!_outermost) return;
+            _owner._batching = false;
+            _owner.Save();
+        }
+    }
+
     private static SettingsData Load()
     {
         try
@@ -280,6 +312,8 @@ public sealed class SettingsService
 
     private void Save()
     {
+        if (_batching) return;   // BatchSave() schrijft één keer weg bij Dispose
+
         try
         {
             Directory.CreateDirectory(_settingsDir);

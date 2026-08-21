@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.8.1** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.9** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -16,19 +16,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 > **Route naar de volgende release, vastgelegd op 2026-08-20 (user).** Drie items achter elkaar — **v1.2.8 → v1.2.9 → v1.2.10** — en zodra die binnen zijn wordt er een **milestone-release** gecut. De website schuift daarachteraan, want die trekt versie en downloadlink live uit de GitHub-API en heeft die Release dus nodig. Elk van de drie in een **eigen chat**: de context van de vertaalreeks is niet meer nodig en NEXT-STEPS.md is de overdracht.
 >
-> **Stand 2026-08-20: v1.2.8 is af en door user getest**, en de test leverde meteen **v1.2.8.1** op — winget's eigen stdout stond nog Engels op de install-kaart. Zie beide secties onder *Voltooide versies*. Wat nog open staat aan verificatie: de vertaalde winget-regels zijn zelf nog niet op het scherm gezien (v1.2.8.1 is ná de testrun gebouwd). Volgende aan de beurt is **v1.2.9**.
-
-### v1.2.9 — Eén-klik volledige config-backup (apps + tweaks + settings)
-
-Eén bestand waarmee je je complete Setup Toolbox-configuratie meeneemt naar een nieuwe of andere pc.
-
-**Wat er al is** (dus niet opnieuw bouwen): `SelectionImportExportService` exporteert de app-selectie, `TweakProfileService` (v0.9.20) exporteert een tweak-profiel — beide los, beide via de file-picker. `SnapshotService` (registry-undo vóór elke Tweaks-Apply) en `RestorePointService` (System Restore Points vóór Deep Clean / Debloat) zijn veiligheidsnetten voor ándere doeleinden en horen hier niet bij.
-
-**Wat ontbreekt:**
-- De voorkeuren in `SettingsService` (`%LOCALAPPDATA%\SetupToolbox\settings.json` — parallelisme, notificatie-toggles, restore-point-keuzes, logging) zijn **nergens** exporteerbaar.
-- Er is geen gebundelde export: je moet nu twee losse bestanden apart maken en apart weer importeren.
-
-**Scope:** één "Configuratie exporteren"-knop → één JSON met de drie onderdelen (app-selectie + tweak-profiel + settings), en één "Importeren" die ze samen terugzet. Uit te werken vóór implementatie: versie-veld voor forward-compat, wat te doen bij een deels-onbekende catalogus op de doelmachine (bestaande import-flows melden dat al per app/tweak), en of settings selectief overslaan mogelijk moet zijn (bv. wél je tweak-profiel, níét je logging-voorkeur).
+> **Stand 2026-08-20: v1.2.8, v1.2.8.1 én v1.2.9 zijn af.** v1.2.8 is door user getest (install, uninstall, geweigerde UAC, reeds-geïnstalleerd); die test leverde v1.2.8.1 op omdat winget's eigen stdout nog Engels op de install-kaart stond. v1.2.9 (config-backup) is gebouwd en op de checkers geverifieerd; de round-trip zelf staat nog bij user open — zie de noot in die sectie. v1.2.8.1 zelf is op verzoek van user **niet meer visueel nagelopen** — zie de noot in die sectie. **Nog open aan verificatie: de export/import-round-trip van v1.2.9.** Volgende aan de beurt: **v1.2.10**, in een eigen chat.
 
 ### v1.2.10 — "Wat is er nieuw"-melding na een update
 
@@ -68,6 +56,16 @@ De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
 **Wat er moet gebeuren:** de site is gebouwd in mei 2026 bij v1.0.0 en is sindsdien niet meer bijgewerkt, terwijl het project 14 patches verder is (toast-notificaties, install-lanes, deep clean-uitbreidingen, accu-fix). Twee doelen: (1) **professioneler uiterlijk**, (2) **inhoud synchroon met wat de app nu daadwerkelijk kan**. Versie + downloadlink komen al live uit de GitHub-API, dus die lopen automatisch mee — maar alleen als er ook echt een nieuwe Release gepubliceerd wordt (zie de release-cadans-notitie hieronder).
 
 Bewust achteraan gezet, en sinds 2026-08-20 expliciet **ná v1.3.0**: de site trekt versie en downloadlink live uit de GitHub-API, dus zonder gepubliceerde Release valt er niets te synchroniseren. Bovendien kun je dan in één keer een actueel verhaal neerzetten in plaats van twee keer half.
+
+### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.9
+
+Boven komen tijdens het bouwen van de config-backup, bewust apart gehouden omdat ze bestaande code raken en niet de nieuwe bundel.
+
+- **De losse app-import wist je huidige selectie zonder te vragen.** `SettingsPage.ImportButton_Click` roept `ImportAsync(..., clearFirst: true)` aan en er zit geen bevestiging tussen: één misklik op *Importeren* + een bestand kiezen en de selectie waar je net een kwartier aan gewerkt hebt is weg, zonder undo. Bestaat sinds v0.7.4 en is nooit gemeld, maar het is de enige destructieve knop in de app zonder confirm. Krijgt de bundel-import een voorbeeld-dialog (zie de v1.2.9-beslissing over selectief importeren), dan staat die inconsistentie er straks naast: de ene import vraagt wel, de andere niet. Twee uitwegen: dezelfde voorbeeld-dialog ook voor de losse import, of `clearFirst` naar een keuze in die dialog tillen.
+
+- **Er staat nog een hardcoded Nederlandse alinea in de UI, en geen enkele scanner-pass ziet 'm.** `Dialogs/BackupPromptDialog.xaml:20` heeft zijn uitlegtekst als **inline XAML-inhoud** staan (`<TextBlock>tekst</TextBlock>`) in plaats van als `Text="..."`-attribuut. Pass 1 kijkt alleen naar tekst-*attributen*, dus dit is de vierde vorm die structureel buiten beeld blijft — na geïnterpoleerde strings (v1.2.6), switch-armen en lokale variabelen (v1.2.7) en de kapotte `Services/`-pass (v1.2.8). De alinea is zichtbaar bij **elke** Tweaks-Apply met `BackupBeforeApply = Ask`, dus in de Engelse UI staat er gewoon Nederlands. Het is bewust **niet** in v1.2.9 meegenomen: het is vertaalwerk in een patch over config-backup, en het vraagt een eigen keuze omdat er een `<Run FontWeight="SemiBold">` middenin staat — dat wordt dus óf drie keys (voor, vet, na), óf één key zonder het vet. Neem bij het oppakken meteen pass 1 mee: die moet inline-inhoud gaan zien, anders vindt de volgende ronde ‘m weer niet.
+
+- **Apps buiten de catalogus gaan niet mee in de config-backup.** De export lijst alleen de 108 catalogus-apps; een winget-id dat niet in `apps.json` staat heeft aan de importkant nergens een plek om te landen, want de import zet `IsSelected` op een catalogus-app. Voor "verhuis mijn pc" is dat een echte beperking: de meeste geïnstalleerde apps van een power-user staan niet in de curated lijst. Er is wel een aanknopingspunt — `SelectionHelper.ExtraSelectedApps` bestaat al voor synthetische apps uit winget-repo-zoekresultaten, dus een bundel zou `{ wingetId, name, source }` kunnen bewaren en die bij import als extra’s terugzetten. Eigen patch waard; het raakt de install-flow en niet alleen het bestandsformaat.
 
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.7
 
@@ -121,6 +119,65 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 
 ## Voltooide versies
 
+### v1.2.9 — Eén-klik volledige config-backup (apps + tweaks + settings)
+
+Eén bestand met je app-keuze, de tweaks die op deze pc aanstaan en je voorkeuren, plus één import die per onderdeel te kiezen is. De stringtabellen gaan van 1288 naar **1325 keys**, in beide talen even groot.
+
+#### Zeven beslissingen vooraf (user, 2026-08-20)
+
+Vijf stonden er als vraag in de roadmap; **twee zijn er tijdens het uitzoeken bijgekomen**, en dat waren precies de twee die de rest bepaalden.
+
+1. **Tweaks = de live gedetecteerde staat.** Dit was de niet-gestelde vraag. `TweakProfileService.ExportAsync` neemt `App.ProfileSelection` als bron — de handmatige wenslijst uit profiel-modus — en die is **leeg zodra je niet in profiel-modus zit**. Een knop in Settings had er dus niets aan. De bundel legt daarom vast wat er nú aanstaat: `ConfigBackupService.CaptureTweakState` na een `DetectStatesAsync()`. Toggle-tweaks tellen mee bij `Enabled` **én** `Partial` (op de doelmachine wil je ‘m compleet, en `StageDelta` slaat 'm over als 'ie daar al goed staat); choice-tweaks alleen bij `SelectedChoiceIndex >= 0`, want index `-1` betekent een waarde die niet bij onze opties hoort en die is niet reproduceerbaar. **Zelfde bestandsvorm als een tweak-profiel, ander begrip:** een profiel is *wat ik wil*, een backup is *wat het is*.
+2. **Apps = wat er geïnstalleerd staat, met vinkjes eromheen.** Ook nieuw. De losse export schrijft je *selectie*; voor "verhuis naar een nieuwe pc" is dat het verkeerde ding. De export opent nu een keuze-dialog met de hele catalogus, waarin de geïnstalleerde apps bovenaan staan en **voorgevinkt** zijn: uitvinken wat niet mee hoeft, extra’s bij vinken. De zoekbalk filtert, en *Alles / Niets selecteren* werkt bewust op wat **zichtbaar** is — anders zet één klik tijdens een actief filter stilletjes 108 apps aan.
+3. **Bundel met een eigen versie eromheen**, de bestaande payloads als sub-objecten mét hun eigen versie. De twee losse knoppen **blijven** bestaan, en de nieuwe Importeren slikt **alle drie** de bestandsvormen.
+4. **De “is dit al gevraagd”-vlaggen blijven achter — en het zijn er víjf, niet vier.** Naast `ParallelInstallsAsked`, `DontAskAboutScheduling`, `DeepCleanRestorePointConfigured` en `DebloatRestorePointConfigured` hoort **`ShowWelcomeBanner`** in dezelfde categorie: die staat op `false` omdat jíj de banner hebt weggeklikt, en meenemen verbergt op de nieuwe machine een banner die die gebruiker nooit gezien heeft. Blijft dus staan. De echte voorkeuren ernaast (`RestorePointBeforeDeepClean` / `-Debloat`) gaan wél mee, dus daar verschijnt de first-run-prompt één keer met jouw antwoord al ingevuld. Netto: **9 voorkeuren** exporteerbaar van de 15.
+5. **Taal gaat mee in het bestand maar krijgt een eigen vinkje**, standaard **uit**, en de rij is alleen zichtbaar als het bestand een andere keuze draagt dan de machine. Een gedeeld profiel zet zo niet stilzwijgend andermans UI om.
+6. **Eén melding met een regel per onderdeel**, ernst = de zwaarste van de drie. Samenvoegen tot één totaal zou verbergen wélk onderdeel iets moest overslaan, en dat is precies waar de losse meldingen voor bestaan.
+7. **Selectief importeren per onderdeel**, niet per veld. Drie vinkjes met tellingen in een voorbeeld-dialog; 15 losse vinkjes leest niemand na.
+
+#### Het formaat
+
+```
+{ version, kind: "setuptoolbox-config", exportedAt,
+  apps:     { version, exportedAt, appCount, apps: [wingetId, ...] },
+  tweaks:   { version, exportedAt, count, tweaks: [{ id, choice? }] },
+  settings: { version, values: { ... , language: "en" | "nl" | "system" } } }
+```
+
+De sub-objecten zijn **byte-identiek aan wat de losse exporters schrijven** — knip het `apps`-blok eruit en je hebt een geldige `my-apps.json`. Daardoor kan het tweak-formaat straks doorgroeien zonder de bundelversie te bumpen.
+
+Twee dingen die anders stil fout zouden gaan:
+
+- **`backupBeforeApply` staat als naam in het bestand** (`"Always"`), niet als `1`. De `JsonStringEnumConverter` zit bewust **alleen** op deze service: `settings.json` zelf houdt zijn numerieke vorm, want anders zou een bestaande settings.json na de update niet meer laden.
+- **"volg de Windows-weergavetaal" is een expliciete sentinel** (`"system"`) en geen `null`. Met `WhenWritingNull` zou een `null` uit het bestand verdwijnen en is "volg systeem" niet meer te onderscheiden van "dit bestand weet niets van taal".
+
+De drie vormen worden herkend aan de **vorm van de JSON**, niet aan de bestandsnaam: `kind` aanwezig → bundel; `apps` is een array → app-selectie; `tweaks` is een array → tweak-profiel. Iets anders → `io.notAConfigFile`.
+
+#### Wat er in bestaande code moest
+
+- **`TweakProfileService` heeft twee gedeelde statics gekregen** — `MatchEntries` en `EnglishChoiceLabel` — en `ImportAsync`/`ExportAsync` lopen daar nu zelf ook over. Reden: de v1.2.4-eigenschap (een profiel overleeft een taalwissel omdat er altijd het **Engelse** label in gaat en er bij inlezen tegen béíde tabellen gematcht wordt) mocht niet per aanroeper opnieuw goed moeten gaan. Één implementatie, twee gebruikers.
+- **`SettingsService.BatchSave()`**, een `using`-scope die `Save()` onderdrukt. Zonder dat schrijft een import van negen voorkeuren negen keer `settings.json` weg — elke setter roept `Save()` aan. Bewust een scope en geen los Begin/End-paar: bij een exception halverwege zou de vlag anders blijven hangen en zouden latere wijzigingen stíl niet meer persisteren.
+- **Het sync-blok in `SettingsPage.OnNavigatedTo` is `SyncAllControls()` geworden.** Een import wijzigt voorkeuren onder de besturingen vandaan; zonder hersynchronisatie staat de pagina te liegen.
+- **De 26 `Grid.Row`-nummers in `SettingsPage.xaml` zijn hernummerd** om de kaart tussen *Tweak-profielen* en *Backup & herstel* te krijgen (nu 29 rijen).
+
+#### De valkuil: de taalwissel sloopt zijn eigen resultaatmelding
+
+`App.Loc.Set()` vuurt `LanguageChanged`, waarna `MainWindow` de huidige page opnieuw navigeert. Zet je de taal dus toe midden in de import-handler, dan wordt de SettingsPage-instantie vervangen en schrijft de handler daarna zijn resultaat naar een **losgekoppelde** InfoBar — zichtbaar gebeurt er niets. Opgelost door de taal als **laatste** stap te doen en de uitkomst als **data** (`ConfigApplyResult`, static) te parkeren; `OnNavigatedTo` rendert ‘m opnieuw, en dus meteen in de nieuwe taal. En alleen wanneer de **effectieve** taal wijzigt: `Set(English)` op een machine die het systeem al volgt en waar dat Engels oplevert, vuurt niets — dan moet de melding gewoon direct getoond worden.
+
+#### 37 nieuwe keys
+
+`config.export.*` (11), `config.import.*` (12), `config.result.*` (9), `settings.fullConfig.*` + `settings.section.fullConfig` (3), `io.fileType.fullConfig` en `io.notAConfigFile` (2). Hergebruikt zonder nieuwe key: `common.export` / `.import` / `.cancel` / `.selectAll` / `.deselectAll` / `.installed` / `.appCount` / `.tweakCount`, plus `settings.profiles.alreadyGood.*` en `settings.profiles.skipped` voor de tweak-regel in de samenvatting. 1288 → **1325**.
+
+> **Aangetoond (2026-08-20):**
+> - Build: **0 errors, 0 warnings**. `Version` / `AssemblyVersion` / `FileVersion` op 1.2.9.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0** over alle vier de passes, inclusief de twee nieuwe dialogs en de nieuwe service.
+> - `check-catalog-keys.py`: 152/152 catalogus-keys, **1325 = 1325**, geen wezen, geen lege waardes. De teller "gecontroleerd op aanroep" loopt van 569 naar **606** — exact +37, dus elke nieuwe key wordt aantoonbaar aangeroepen en er is er geen één dood.
+> - Beide XAML-dialogs compileren daadwerkelijk (`.g.cs` + `.xbf` aanwezig), dus de `x:Bind`-DataTemplate en de markup-extensies zijn niet alleen syntactisch goed.
+>
+> **Niet getest, en dat is het hele bewijsgat:** de round-trip zelf. Er is géén export gemaakt en géén bestand geïmporteerd — een import schrijft `settings.json` en wist de huidige app-selectie op de machine van user, en dat is niets om ongevraagd te doen. Wat daardoor onbevestigd blijft: (1) of de app-keuze-dialog de geïnstalleerde apps daadwerkelijk voorgevinkt toont, (2) of de drie bestandsvormen alle drie herkend worden, (3) of de aparte taal-rij verschijnt en de her-navigatie de melding netjes opnieuw rendert, (4) of `BatchSave` echt één keer schrijft. **Klaargezet om dat in vijf minuten te doen:** vijf voorbeeldbestanden in de scratchpad (losse app-selectie, los tweak-profiel, volledige bundel, een niet-Setup-Toolbox-bestand voor de foutmelding, en een bundel met `language: "nl"` voor de taal-rij).
+
+**Werkwijze-notitie — correctie op de v1.2.8-notitie, opnieuw gemeten.** Daar staat dat de `.cs`-bestanden CRLF zijn en alleen `data/apps.json` LF. Dat klopt niet: de bronboom is **gemengd** — geteld over `src/SetupToolbox` (zonder `bin`/`obj`): **34 CRLF tegenover 47 LF**, en het loopt dwars door mappen heen (`TweakProfileService.cs` is CRLF, `SettingsService.cs` in dezelfde map is LF). `NEXT-STEPS.md` en `SetupToolbox.csproj` zijn ook LF; de twee stringtabellen zíjn CRLF, dus dát deel van de notitie klopte wel. Conclusie blijft dezelfde en wordt alleen belangrijker: lees en schrijf **altijd** met expliciete `newline=''` en bepaal de regeleinden **per bestand**, nooit één aanname voor de hele boom. Zo bleef de diff hier overal beperkt tot de daadwerkelijk gewijzigde regels.
+
 ### v1.2.8.1 — Winget's eigen stdout stond nog Engels op de install-kaart
 
 **Gevonden door user, direct na de v1.2.8-testrun.** De vier vertaalfasen hadden alle *onze* strings gedekt, maar op de install-kaart stond nog steeds Engels:
@@ -142,7 +199,9 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 
 > **Aangetoond (2026-08-20):** build **0 errors / 0 warnings** op `1.2.8.1`; beide checkers exit 0; de vier keys staan in beide tabellen en worden aangeroepen; en elk van de vijf herkende regels landt aantoonbaar op de bedoelde tak terwijl de byte-teller (*"1.23 MB / 45.6 MB"*) en de `Found`-regel ongewijzigd doorgaan — precedentie dus getest, niet aangenomen.
 >
-> **Niet getest:** de vertaalde regels zijn nog niet op het scherm gezien. v1.2.8.1 is ná de testrun van user gebouwd, dus dit vraagt nog één install-batch.
+> **Niet visueel getest, en dat blijft zo — bewuste keuze van user (2026-08-20): "ik geloof het wel".** De vertaalde regels zijn dus nooit op het scherm gezien; v1.2.8.1 leunt volledig op de build, de twee checkers en de precedentie-test hierboven. Géén openstaande taak, wél een gat in de bewijsketen, en het staat hier zodat het bij een volgend probleem op de install-kaart als eerste verdachte in beeld komt.
+>
+> Twee dingen zijn daardoor onbevestigd: (1) of de **stage-ring** nog doorloopt naar 2/4 en 3/4 — dat is het enige wat deze wijziging kón breken, want de detectie matcht op de ruwe regel terwijl de weergave vertaald is; (2) of er nog andere winget-regels langskomen die niet in de mapping staan. Beide zijn in één install-batch te zien.
 
 > **Afwijking van de nummering-conventie, bewust.** De roadmap gebruikt drie delen (`1.2.7`, `1.2.8`). Dit is op verzoek van user een vierde component geworden omdat het een directe hotfix op v1.2.8 is en geen eigen roadmap-item. `AssemblyVersion` is sowieso een viervelds-nummer, dus `GitHubService.TryParseTag` en de self-update-vergelijking hebben er geen last van.
 

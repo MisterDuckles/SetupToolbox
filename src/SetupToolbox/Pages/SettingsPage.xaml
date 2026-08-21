@@ -39,6 +39,9 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0"
@@ -437,13 +440,77 @@
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
-            <!-- ── BACKUP & HERSTEL (Tweaks snapshots) ── -->
+            <!-- ── VOLLEDIGE CONFIGURATIE (v1.2.9) ── -->
             <TextBlock Grid.Row="16"
-                       Text="{loc:Localize Key=settings.section.backup}"
+                       Text="{loc:Localize Key=settings.section.fullConfig}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
             <Border Grid.Row="17"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0"
+                              Glyph="&#xE8F1;"
+                              FontSize="20"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="{loc:Localize Key=settings.fullConfig.title}"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="{loc:Localize Key=settings.fullConfig.desc}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
+                        <Button x:Name="ConfigExportButton"
+                                Click="ConfigExportButton_Click"
+                                Style="{ThemeResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xEDE1;" FontSize="14" />
+                                <TextBlock Text="{loc:Localize Key=common.export}" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="ConfigImportButton"
+                                Click="ConfigImportButton_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                                <TextBlock Text="{loc:Localize Key=common.import}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <InfoBar x:Name="ConfigResultBar"
+                     Grid.Row="18"
+                     Severity="Informational"
+                     IsOpen="False"
+                     IsClosable="True"
+                     Margin="0,12,0,0" />
+
+            <!-- ── BACKUP & HERSTEL (Tweaks snapshots) ── -->
+            <TextBlock Grid.Row="19"
+                       Text="{loc:Localize Key=settings.section.backup}"
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,28,0,12" />
+
+            <Border Grid.Row="20"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -493,12 +560,12 @@
             </Border>
 
             <!-- ── SYSTEM RESTORE POINTS (Deep Clean + Debloat) ── -->
-            <TextBlock Grid.Row="18"
+            <TextBlock Grid.Row="21"
                        Text="{loc:Localize Key=settings.section.restorePoints}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="19"
+            <Border Grid.Row="22"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -630,19 +697,19 @@
             </Border>
 
             <InfoBar x:Name="BackupResultBar"
-                     Grid.Row="20"
+                     Grid.Row="23"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
             <!-- ── APP-UPDATES (self-update, v0.10.1) ── -->
-            <TextBlock Grid.Row="21"
+            <TextBlock Grid.Row="24"
                        Text="{loc:Localize Key=settings.section.appUpdates}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="22"
+            <Border Grid.Row="25"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
@@ -741,19 +808,19 @@
             </Border>
 
             <InfoBar x:Name="UpdateCheckResultBar"
-                     Grid.Row="23"
+                     Grid.Row="26"
                      Severity="Informational"
                      IsOpen="False"
                      IsClosable="True"
                      Margin="0,12,0,0" />
 
             <!-- ── DIAGNOSTIEK (foutlogging) ── -->
-            <TextBlock Grid.Row="24"
+            <TextBlock Grid.Row="27"
                        Text="{loc:Localize Key=settings.section.diagnostics}"
                        Style="{StaticResource SubtitleTextBlockStyle}"
                        Margin="0,28,0,12" />
 
-            <Border Grid.Row="25"
+            <Border Grid.Row="28"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"

@@ -39,18 +39,7 @@ public sealed class TweakProfileService
             .OrderBy(kv => kv.Key.Id, StringComparer.OrdinalIgnoreCase)
             .Select(kv =>
             {
-                string? choice = null;
-                if (kv.Value is int idx && kv.Key.Choices != null && idx >= 0 && idx < kv.Key.Choices.Count)
-                {
-                    // Bewust het ENGELSE label, niet het actieve: sinds v1.2.4 zijn
-                    // choice-labels vertaald, en een profiel moet leesbaar blijven
-                    // als je later van taal wisselt of het bestand deelt met iemand
-                    // die de app in de andere taal draait. Engels is de brontaal en
-                    // bestaat dus gegarandeerd. ResolveChoiceIndex accepteert bij het
-                    // inlezen beide talen, zodat oudere profielen blijven werken.
-                    var c = kv.Key.Choices[idx];
-                    choice = App.Loc.Raw(c.Key, AppLanguage.English) ?? c.Label;
-                }
+                var choice = kv.Value is int idx ? EnglishChoiceLabel(kv.Key, idx) : null;
                 return new TweakProfileEntry { Id = kv.Key.Id, Choice = choice };
             })
             .ToList();
@@ -90,13 +79,24 @@ public sealed class TweakProfileService
         if (payload?.Tweaks == null || payload.Tweaks.Count == 0)
             return new TweakProfileImportResult(Array.Empty<TweakProfileMatch>(), Array.Empty<string>(), App.Loc.S("io.noTweaksInFile"));
 
+        return MatchEntries(payload.Tweaks.Select(t => (t.Id, t.Choice)), catalog);
+    }
+
+    // Matcht ruwe (id, choice)-paren tegen de huidige tweak-catalog. Gedeeld met
+    // ConfigBackupService (v1.2.9): die leest dezelfde entries uit een bundel en moet
+    // exact dezelfde choice-label-resolutie krijgen. Eén implementatie, zodat de
+    // v1.2.4-eigenschap (een profiel overleeft een taalwissel) niet per aanroeper
+    // opnieuw goed moet gaan.
+    public static TweakProfileImportResult MatchEntries(
+        IEnumerable<(string Id, string? Choice)> entries, IEnumerable<Tweak> catalog)
+    {
         var lookup = catalog
             .GroupBy(t => t.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var matched = new List<TweakProfileMatch>();
         var skipped = new List<string>();
-        foreach (var entry in payload.Tweaks)
+        foreach (var entry in entries)
         {
             if (string.IsNullOrEmpty(entry.Id) || !lookup.TryGetValue(entry.Id, out var tweak))
             {
@@ -117,6 +117,19 @@ public sealed class TweakProfileService
         }
 
         return new TweakProfileImportResult(matched, skipped, null);
+    }
+
+    // Het ENGELSE label van een choice, niet het actieve: sinds v1.2.4 zijn
+    // choice-labels vertaald, en een profiel of backup moet leesbaar blijven als je
+    // later van taal wisselt of het bestand deelt met iemand die de app in de andere
+    // taal draait. Engels is de brontaal en bestaat dus gegarandeerd.
+    // ResolveChoiceIndex accepteert bij het inlezen beide talen, zodat oudere
+    // bestanden blijven werken.
+    public static string? EnglishChoiceLabel(Tweak tweak, int index)
+    {
+        if (tweak.Choices == null || index < 0 || index >= tweak.Choices.Count) return null;
+        var c = tweak.Choices[index];
+        return App.Loc.Raw(c.Key, AppLanguage.English) ?? c.Label;
     }
 
     // Matcht het opgeslagen label tegen ALLE talen, niet alleen de actieve. Nieuwe

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="SetupToolbox.Dialogs.ConfigImportDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:SetupToolbox.Helpers"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="{loc:Localize Key=config.import.title}"
+    PrimaryButtonText="{loc:Localize Key=common.import}"
+    CloseButtonText="{loc:Localize Key=common.cancel}"
+    DefaultButton="Primary"
+    CornerRadius="8">
+
+    <StackPanel Spacing="14" MinWidth="460">
+        <TextBlock x:Name="SubtitleText"
+                   TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        <StackPanel Spacing="10">
+            <CheckBox x:Name="AppsCheck" Checked="Part_Toggled" Unchecked="Part_Toggled">
+                <StackPanel>
+                    <TextBlock x:Name="AppsLabel" />
+                    <TextBlock x:Name="AppsCaption"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </CheckBox>
+
+            <CheckBox x:Name="TweaksCheck" Checked="Part_Toggled" Unchecked="Part_Toggled">
+                <StackPanel>
+                    <TextBlock x:Name="TweaksLabel" />
+                    <TextBlock x:Name="TweaksCaption"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </CheckBox>
+
+            <CheckBox x:Name="SettingsCheck" Checked="Part_Toggled" Unchecked="Part_Toggled">
+                <TextBlock x:Name="SettingsLabel" />
+            </CheckBox>
+
+            <!-- Taal staat bewust apart en niet onder het settings-vinkje: een
+                 gedeeld profiel zou anders stilzwijgend de UI-taal van iemand
+                 anders omzetten. Standaard UIT, en alleen zichtbaar wanneer het
+                 bestand een andere taal draagt dan wat er nu actief is. -->
+            <CheckBox x:Name="LanguageCheck"
+                      Visibility="Collapsed"
+                      Checked="Part_Toggled"
+                      Unchecked="Part_Toggled">
+                <TextBlock x:Name="LanguageLabel" TextWrapping="Wrap" />
+            </CheckBox>
+        </StackPanel>
+
+        <InfoBar x:Name="OverwriteBar"
+                 Severity="Warning"
+                 IsOpen="False"
+                 IsClosable="False"
+                 Title="{loc:Localize Key=config.import.overwrite.title}"
+                 Message="{loc:Localize Key=config.import.overwrite.body}" />
+    </StackPanel>
+</ContentDialog>

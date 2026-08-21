@@ -18,12 +18,18 @@ public sealed partial class SettingsPage : Page
 
     private bool _suppressToggleEvent;
 
-    protected override async void OnNavigatedTo(NavigationEventArgs e)
-    {
-        base.OnNavigatedTo(e);
+    // Uitkomst van een config-import die nog getoond moet worden nadat een
+    // taalwissel deze page opnieuw heeft laten opbouwen. Static omdat de instantie
+    // die de import deed dan al vervangen is.
+    private static ConfigApplyResult? _pendingConfigResult;
 
-        // Suppress Toggled event tijdens initial sync — anders schrijft elke
-        // page-navigatie de current value terug naar disk (no-op maar onnodig IO).
+    // Zet elke besturing gelijk aan wat er in de settings-store staat. Los van
+    // OnNavigatedTo omdat een config-import dezelfde hersynchronisatie nodig heeft.
+    //
+    // Suppress Toggled event tijdens de sync — anders schrijft elke page-navigatie
+    // de current value terug naar disk (no-op maar onnodig IO).
+    private void SyncAllControls()
+    {
         _suppressToggleEvent = true;
         FallbackToggle.IsOn = App.Settings.FallbackToDownloadPage;
         ParallelCountBox.Value = App.Settings.MaxParallelInstalls;
@@ -37,6 +43,23 @@ public sealed partial class SettingsPage : Page
         SyncBackupModeRadios();
         SyncLanguageCombo();
         _suppressToggleEvent = false;
+    }
+
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+
+        SyncAllControls();
+
+        // Een config-import die de taal omzet laat MainWindow deze page opnieuw
+        // opbouwen, waardoor de resultaat-InfoBar meteen weer weg zou zijn. De
+        // uitkomst wordt daarom als DATA geparkeerd en hier opnieuw gerenderd —
+        // in de nieuwe taal, want de tekst wordt vers opgebouwd.
+        if (_pendingConfigResult != null)
+        {
+            ShowConfigResult(_pendingConfigResult);
+            _pendingConfigResult = null;
+        }
 
         AppVersionText.Text = App.Loc.S("settings.checkNow.version", App.GitHub.CurrentVersion);
         UpdateBrowseSnapshotsLabel();
@@ -437,6 +460,221 @@ public sealed partial class SettingsPage : Page
         TweakProfileResultBar.Title = title;
         TweakProfileResultBar.Message = message;
         TweakProfileResultBar.IsOpen = true;
+    }
+
+    // ── VOLLEDIGE CONFIGURATIE (v1.2.9) ──
+
+    // Eén bestand met app-keuze + tweaks + voorkeuren. De app-lijst gaat eerst door
+    // een keuze-dialog: standaard staat aangevinkt wat er op déze pc geïnstalleerd
+    // is, en daar kun je uit weglaten of extra's bij vinken.
+    private async void ConfigExportButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetConfigButtonsEnabled(false);
+        try
+        {
+            // Een verse winget list, want dit is precies de vraag "wat staat hier nu".
+            // Duurt seconden, vandaar de melding.
+            ShowConfigInfo(InfoBarSeverity.Informational,
+                App.Loc.S("config.export.scanning.title"),
+                App.Loc.S("config.export.scanning.body"));
+
+            var db = await App.Database.GetAppDatabaseAsync();
+            var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh: true);
+            try { await App.Tweaks.DetectStatesAsync(); } catch { }
+
+            var tweaks = ConfigBackupService.CaptureTweakState(App.Tweaks.All);
+            var settings = ConfigBackupService.CaptureSettings(App.Settings);
+
+            var picker = new ConfigExportDialog(
+                SelectionHelper.EnumerateAllApps(db), installedIds, tweaks.Count, settings.Count)
+            {
+                XamlRoot = this.XamlRoot
+            };
+            ConfigResultBar.IsOpen = false;
+            if (await picker.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var appIds = picker.SelectedAppIds;
+            var file = await FilePickerHelper.PickSaveFileAsync(
+                $"my-config-{DateTime.Now:yyyy-MM-dd}",
+                App.Loc.S("io.fileType.fullConfig"), ".json");
+            if (file == null) return;
+
+            await App.ConfigIO.ExportAsync(file.Path,
+                new ConfigBackupContent(DateTimeOffset.UtcNow, appIds, tweaks, settings));
+
+            ShowConfigInfo(InfoBarSeverity.Success,
+                App.Loc.S("config.export.done.title"),
+                App.Loc.S("config.export.done.body",
+                    App.Loc.Plural("common.appCount", appIds.Count),
+                    App.Loc.Plural("common.tweakCount", tweaks.Count),
+                    settings.Count,
+                    file.Name));
+        }
+        catch (Exception ex)
+        {
+            ShowConfigInfo(InfoBarSeverity.Error, App.Loc.S("config.export.failed.title"), ex.Message);
+        }
+        finally
+        {
+            SetConfigButtonsEnabled(true);
+        }
+    }
+
+    // Slikt de bundel én de twee losse formats, zodat je hier ook een oude
+    // my-apps.json of my-tweaks.json kunt openen zonder de juiste knop te zoeken.
+    private async void ConfigImportButton_Click(object sender, RoutedEventArgs e)
+    {
+        var file = await FilePickerHelper.PickOpenFileAsync(".json");
+        if (file == null) return;
+
+        SetConfigButtonsEnabled(false);
+        try
+        {
+            var read = await App.ConfigIO.ReadAsync(file.Path);
+            if (read.Error != null || read.Content == null)
+            {
+                ShowConfigInfo(InfoBarSeverity.Error,
+                    App.Loc.S("config.import.failed.title"),
+                    read.Error ?? App.Loc.S("io.notAConfigFile"));
+                return;
+            }
+
+            var content = read.Content;
+            var dialog = new ConfigImportDialog(content, DescribeImportedLanguage(content))
+            {
+                XamlRoot = this.XamlRoot
+            };
+            ConfigResultBar.IsOpen = false;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var db = await App.Database.GetAppDatabaseAsync();
+            var result = await App.ConfigIO.ApplyAsync(
+                content, dialog.Options, db, App.Tweaks, App.TweakPending);
+
+            // Voorkeuren kunnen gewijzigd zijn, dus de besturingen op deze page
+            // lopen anders achter op wat er in settings.json staat.
+            if (result.SettingsApplied) SyncAllControls();
+
+            // Taal als laatste: Set() vuurt LanguageChanged en MainWindow bouwt deze
+            // page dan opnieuw op. Alleen wanneer de EFFECTIEVE taal wijzigt — anders
+            // gebeurt er niets en moet het resultaat gewoon hier getoond worden.
+            var target = ParseLanguageCode(result.LanguageApplied ? result.LanguageCode : null);
+            if (target.HasValue && target.Value.effective != App.Loc.Current)
+            {
+                _pendingConfigResult = result;
+                App.Loc.Set(target.Value.setting);
+                return;
+            }
+
+            ShowConfigResult(result);
+        }
+        catch (Exception ex)
+        {
+            ShowConfigInfo(InfoBarSeverity.Error, App.Loc.S("config.import.failed.title"), ex.Message);
+        }
+        finally
+        {
+            SetConfigButtonsEnabled(true);
+        }
+    }
+
+    // Menselijke naam van de taal in het bestand, of null wanneer het bestand geen
+    // taal draagt of dezelfde keuze heeft als deze machine — dan is er niets te
+    // bevestigen en hoort het vinkje er ook niet te staan.
+    private static string? DescribeImportedLanguage(ConfigBackupContent content)
+    {
+        var code = content.Settings?.Language;
+        if (code == null) return null;
+        if (string.Equals(code, App.Settings.Language ?? ConfigBackupService.FollowSystemLanguage,
+                StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var parsed = ParseLanguageCode(code);
+        if (parsed == null) return null;
+
+        if (parsed.Value.setting == null)
+        {
+            var systemName = App.Loc.S(LocalizationService.SystemLanguage == AppLanguage.Dutch
+                ? "settings.language.dutch"
+                : "settings.language.english");
+            return $"{App.Loc.S("settings.language.followSystem")} — {systemName}";
+        }
+
+        return App.Loc.S(parsed.Value.setting == AppLanguage.Dutch
+            ? "settings.language.dutch"
+            : "settings.language.english");
+    }
+
+    // "en" / "nl" / "system" → (wat er in settings.json komt, welke taal dat oplevert).
+    private static (AppLanguage? setting, AppLanguage effective)? ParseLanguageCode(string? code) => code switch
+    {
+        "en" => (AppLanguage.English, AppLanguage.English),
+        "nl" => (AppLanguage.Dutch, AppLanguage.Dutch),
+        ConfigBackupService.FollowSystemLanguage => (null, LocalizationService.SystemLanguage),
+        _ => null
+    };
+
+    // Eén melding voor de hele import, met een regel per onderdeel. Bewust niet één
+    // samengevat totaal: dan zie je niet meer wélk onderdeel iets moest overslaan,
+    // en dat is precies waar de losse import-meldingen voor bestaan.
+    private void ShowConfigResult(ConfigApplyResult r)
+    {
+        var lines = new System.Collections.Generic.List<string>();
+
+        if (r.AppsApplied)
+            lines.Add(r.AppsSkipped == 0
+                ? App.Loc.S("config.result.apps", App.Loc.Plural("common.appCount", r.AppsMatched))
+                : App.Loc.S("config.result.appsSkipped",
+                    App.Loc.Plural("common.appCount", r.AppsMatched), r.AppsSkipped));
+
+        if (r.TweaksApplied)
+        {
+            var line = App.Loc.S("config.result.tweaks",
+                App.Loc.Plural("common.tweakCount", r.TweaksStaged));
+            if (r.TweaksAlreadyGood > 0)
+                line += App.Loc.S(r.TweaksAlreadyGood == 1
+                    ? "settings.profiles.alreadyGood.one"
+                    : "settings.profiles.alreadyGood.other", r.TweaksAlreadyGood);
+            if (r.TweaksSkipped > 0)
+                line += App.Loc.S("settings.profiles.skipped", r.TweaksSkipped);
+            lines.Add(line);
+        }
+
+        if (r.SettingsApplied)
+            lines.Add(App.Loc.S("config.result.settings", r.SettingsCount));
+
+        if (r.LanguageApplied)
+            lines.Add(App.Loc.S("config.result.language"));
+
+        if (lines.Count == 0)
+        {
+            ShowConfigInfo(InfoBarSeverity.Informational,
+                App.Loc.S("config.result.nothing.title"),
+                App.Loc.S("config.result.nothing.body"));
+            return;
+        }
+
+        // Tweaks worden alleen KLAARGEZET, niet geschreven — de Apply (met
+        // backup-prompt en één UAC) hoort op de Tweaks-tab, net als bij de
+        // profiel-import. Zonder deze regel denkt iedereen dat het al gebeurd is.
+        if (r.TweaksStaged > 0) lines.Add(App.Loc.S("config.result.applyHint"));
+
+        var severity = r.AnythingSkipped ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
+        ShowConfigInfo(severity, App.Loc.S("config.result.title"), string.Join(Environment.NewLine, lines));
+    }
+
+    private void SetConfigButtonsEnabled(bool enabled)
+    {
+        ConfigExportButton.IsEnabled = enabled;
+        ConfigImportButton.IsEnabled = enabled;
+    }
+
+    private void ShowConfigInfo(InfoBarSeverity severity, string title, string message)
+    {
+        ConfigResultBar.Severity = severity;
+        ConfigResultBar.Title = title;
+        ConfigResultBar.Message = message;
+        ConfigResultBar.IsOpen = true;
     }
 
     // Toasts rond de geplande winget auto-update (v1.0.13). ToastHelper leest deze

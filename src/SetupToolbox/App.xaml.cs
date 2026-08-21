@@ -60,6 +60,9 @@ public partial class App : Application
     // selectie-modus zet — zie TweaksPage / MainWindow.EnterTweakProfileMode.
     public static TweakPendingService ProfileSelection { get; } = new();
     public static TweakProfileService TweakProfileIO { get; } = new();
+    // Gebundelde config-backup (v1.2.9): apps + tweaks + voorkeuren in één bestand.
+    // Leest ook de twee losse formats, zodat één Importeren-knop alles aankan.
+    public static ConfigBackupService ConfigIO { get; } = new();
     public static bool ProfileMode { get; set; }
     // Self-update (v0.10.1): GitHub release-check + installer-download/-launch.
     public static GitHubService GitHub { get; } = new();
