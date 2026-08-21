@@ -56,7 +56,6 @@
       "subcategories": [
         {
           "id": "ide-editors",
-          "description": "Code editors and integrated development environments",
           "apps": [
             {
               "name": "Visual Studio Code",
@@ -83,7 +82,6 @@
         },
         {
           "id": "version-control",
-          "description": "Git clients and tooling",
           "apps": [
             {
               "name": "Git",
@@ -98,7 +96,6 @@
         },
         {
           "id": "runtimes",
-          "description": "Language runtimes and SDKs",
           "apps": [
             {
               "name": "Node.js LTS",
@@ -122,7 +119,6 @@
         },
         {
           "id": "vms",
-          "description": "Containerization and virtualization tools",
           "apps": [
             {
               "name": "Docker Desktop",
@@ -143,7 +139,6 @@
         },
         {
           "id": "databases",
-          "description": "Database GUIs and servers",
           "apps": [
             {
               "name": "MySQL Workbench",
@@ -159,7 +154,6 @@
         },
         {
           "id": "api-tools",
-          "description": "Tools for testing and exploring APIs",
           "apps": [
             {
               "name": "Postman",
@@ -180,7 +174,6 @@
       "subcategories": [
         {
           "id": "password-managers",
-          "description": "Store and sync your credentials securely",
           "apps": [
             {
               "name": "Bitwarden",
@@ -211,7 +204,6 @@
         },
         {
           "id": "vpn",
-          "description": "Encrypt your connection",
           "apps": [
             {
               "name": "NordVPN",
@@ -233,7 +225,6 @@
         },
         {
           "id": "antivirus",
-          "description": "On-demand malware scanners",
           "apps": [
             {
               "name": "Malwarebytes",
@@ -259,7 +250,6 @@
       "subcategories": [
         {
           "id": "office",
-          "description": "Word processing, spreadsheets, presentations",
           "apps": [
             {
               "name": "Microsoft Office 365",
@@ -278,7 +268,6 @@
         },
         {
           "id": "cloud-storage",
-          "description": "Sync and back up your files",
           "apps": [
             {
               "name": "OneDrive",
@@ -311,7 +300,6 @@
         },
         {
           "id": "notes",
-          "description": "Notes, knowledge bases, second brain",
           "apps": [
             {
               "name": "Notion",
@@ -327,7 +315,6 @@
         },
         {
           "id": "pdf",
-          "description": "Read and annotate PDF files",
           "apps": [
             {
               "name": "Adobe Acrobat Reader",
@@ -345,7 +332,6 @@
         },
         {
           "id": "ai-assistants",
-          "description": "Desktop apps for chatting with AI models",
           "apps": [
             {
               "name": "ChatGPT",
@@ -406,7 +392,6 @@
       "subcategories": [
         {
           "id": "music",
-          "description": "Music streaming and players",
           "apps": [
             {
               "name": "Spotify",
@@ -423,7 +408,6 @@
         },
         {
           "id": "audio-video",
-          "description": "Media players and audio editors",
           "apps": [
             {
               "name": "VLC Media Player",
@@ -438,7 +422,6 @@
         },
         {
           "id": "streaming-recording",
-          "description": "Stream and record screen/webcam",
           "apps": [
             {
               "name": "OBS Studio",
@@ -488,7 +471,6 @@
       "subcategories": [
         {
           "id": "system-tools",
-          "description": "Compression, search, cleanup, and system tweaks",
           "apps": [
             {
               "name": "PowerToys",
@@ -543,7 +525,6 @@
         },
         {
           "id": "remote-access",
-          "description": "Connect to remote computers",
           "apps": [
             {
               "name": "TeamViewer",
@@ -563,7 +544,6 @@
       "subcategories": [
         {
           "id": "graphics-photo",
-          "description": "Image editors and raw processors",
           "apps": [
             {
               "name": "GIMP",
@@ -587,7 +567,6 @@
         },
         {
           "id": "video-editing",
-          "description": "Edit and encode video",
           "apps": [
             {
               "name": "DaVinci Resolve",
@@ -607,7 +586,6 @@
         },
         {
           "id": "3d",
-          "description": "3D modeling and printing",
           "apps": [
             {
               "name": "Blender",
@@ -628,7 +606,6 @@
       "subcategories": [
         {
           "id": "proton-suite",
-          "description": "Privacy-focused Swiss apps — VPN, mail, drive, and password manager",
           "apps": [
             {
               "name": "Proton VPN",
@@ -682,7 +659,6 @@
         },
         {
           "id": "adobe-suite",
-          "description": "Adobe entrypoints — installeer Creative Cloud zelf om Photoshop/Premiere/etc. te krijgen",
           "apps": [
             {
               "name": "Adobe Creative Cloud",

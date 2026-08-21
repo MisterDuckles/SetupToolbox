@@ -679,17 +679,16 @@ public sealed class LeftoverScannerService
     public async Task<LeftoverDeleteResult> DeleteAsync(IReadOnlyList<LeftoverItem> items)
     {
         if (items.Count == 0)
-            return new LeftoverDeleteResult(0, 0, new Dictionary<string, (bool, string)>(), Cancelled: false);
+            return new LeftoverDeleteResult(0, 0, new Dictionary<string, bool>(), Cancelled: false);
 
-        var results = new Dictionary<string, (bool, string)>();
+        var results = new Dictionary<string, bool>();
         var elevated = items.Where(i => i.RequiresElevation).ToList();
         var local = items.Where(i => !i.RequiresElevation).ToList();
 
         // 1) Local deletes — geen UAC nodig.
         foreach (var item in local)
         {
-            var (ok, msg) = TryDeleteLocal(item);
-            results[item.Path] = (ok, msg);
+            results[item.Path] = TryDeleteLocal(item);
         }
 
         // 2) Elevated batch — één UAC prompt.
@@ -702,12 +701,12 @@ public sealed class LeftoverScannerService
                 results[kv.Key] = kv.Value;
         }
 
-        var successCount = results.Count(kv => kv.Value.Item1);
+        var successCount = results.Count(kv => kv.Value);
         var failedCount = results.Count - successCount;
         return new LeftoverDeleteResult(successCount, failedCount, results, cancelled);
     }
 
-    private static (bool ok, string msg) TryDeleteLocal(LeftoverItem item)
+    private static bool TryDeleteLocal(LeftoverItem item)
     {
         try
         {
@@ -717,26 +716,26 @@ public sealed class LeftoverScannerService
                 case LeftoverType.AppPath:
                 case LeftoverType.ClassHandler:
                     DeleteRegistryKey(item.Path);
-                    return (true, "Removed registry key");
+                    return true;
                 case LeftoverType.MuiCache:
                     // MUIcache: hardcoded key, value-name in RegistryValueName.
                     const string muiKey = @"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
                     DeleteRegistryValue(muiKey, item.RegistryValueName ?? string.Empty);
-                    return (true, "Removed MUIcache value");
+                    return true;
                 case LeftoverType.Shortcut:
                     File.Delete(item.Path);
-                    return (true, "Deleted shortcut");
+                    return true;
                 case LeftoverType.AppDataFolder:
                 case LeftoverType.ProgramFilesFolder:
                     Directory.Delete(item.Path, recursive: true);
-                    return (true, "Deleted folder");
+                    return true;
                 default:
-                    return (false, "Unknown type");
+                    return false;
             }
         }
-        catch (Exception ex)
+        catch
         {
-            return (false, ex.Message);
+            return false;
         }
     }
 
@@ -859,14 +858,14 @@ public sealed class LeftoverScannerService
             WindowStyle = ProcessWindowStyle.Hidden
         };
 
-        var results = new Dictionary<string, (bool, string)>();
+        var results = new Dictionary<string, bool>();
         var cancelled = false;
         try
         {
             using var proc = Process.Start(psi);
             if (proc == null)
             {
-                foreach (var item in items) results[item.Path] = (false, "Could not start elevated process");
+                foreach (var item in items) results[item.Path] = false;
                 return new ElevatedDeleteResult(results, false);
             }
             await proc.WaitForExitAsync();
@@ -876,7 +875,7 @@ public sealed class LeftoverScannerService
         {
             cancelled = true;
             foreach (var item in items)
-                if (!results.ContainsKey(item.Path)) results[item.Path] = (false, "Cancelled — UAC prompt declined");
+                if (!results.ContainsKey(item.Path)) results[item.Path] = false;
         }
         finally
         {
@@ -886,12 +885,12 @@ public sealed class LeftoverScannerService
         // Items zonder RESULT-line → markeren als failed.
         foreach (var item in items)
             if (!results.ContainsKey(item.Path))
-                results[item.Path] = (false, "Did not run (interrupted)");
+                results[item.Path] = false;
 
         return new ElevatedDeleteResult(results, cancelled);
     }
 
-    private static void ParseResults(string logPath, IReadOnlyList<LeftoverItem> items, Dictionary<string, (bool, string)> results)
+    private static void ParseResults(string logPath, IReadOnlyList<LeftoverItem> items, Dictionary<string, bool> results)
     {
         if (!File.Exists(logPath)) return;
         string[] lines;
@@ -911,20 +910,23 @@ public sealed class LeftoverScannerService
             if (parts.Length < 3) continue;
             var path = parts[1];
             var ok = parts[2] == "OK";
-            var msg = parts.Length >= 4 ? parts[3] : (ok ? "Removed" : "Failed");
-            results[path] = (ok, msg);
+            results[path] = ok;
         }
     }
 
     private static string Escape(string s) => s.Replace("'", "''");
 
     private sealed record ElevatedDeleteResult(
-        IReadOnlyDictionary<string, (bool ok, string msg)> ResultsByPath,
+        IReadOnlyDictionary<string, bool> ResultsByPath,
         bool Cancelled);
 }
 
+// v1.2.9.6: was IReadOnlyDictionary<string,(bool,string)>. De message-helft werd
+// nergens gebonden - de UI leest alleen de tellers - dus die droeg een weergavelaag
+// die niets weergaf. Het pad-naar-succes blijft: daar telt SuccessCount op, en het
+// houdt de per-pad-dedup intact.
 public sealed record LeftoverDeleteResult(
     int SuccessCount,
     int FailedCount,
-    IReadOnlyDictionary<string, (bool success, string message)> ResultsByPath,
+    IReadOnlyDictionary<string, bool> ResultsByPath,
     bool Cancelled);

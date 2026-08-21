@@ -147,7 +147,7 @@ Zie [NEXT-STEPS.md](NEXT-STEPS.md) voor de volledige feature roadmap. Highlights
 
 ## 📜 License
 
-MIT — zie LICENSE.
+Source-available onder een propriëtaire licentie — zie `LICENSE`. Dat is uitdrukkelijk **geen** open-source-licentie: de broncode is gepubliceerd om gelezen te worden en om bijdragen mogelijk te maken, niet om hergebruikt te worden. De gecompileerde app zelf is gratis te gebruiken, privé en zakelijk.
 
 ---
 

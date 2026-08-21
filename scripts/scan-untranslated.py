@@ -159,26 +159,6 @@ ALLOW = {
     # nagetrokken op de vraag "wordt dit gerenderd of alleen geteld", want dat
     # onderscheid is de helft van het werk. ────────────────────────────────
 
-    # (a) Resultaat-dictionaries die NERGENS gerenderd worden. Gecontroleerd:
-    # DeepCleanDeleteResult.ResultsByPath en LeftoverDeleteResult.ResultsByPath
-    # worden door geen enkele Dialog of Page gebonden — de UI leest alleen
-    # SuccessCount / FailedCount / BytesFreed. Dit zijn dus dode weergave-
-    # strings. Bewust NIET vertaald: onzichtbare tekst kun je niet verifiëren
-    # (zelfde regel als de 24 subcategorie-descriptions in v1.2.6). Als ze ooit
-    # wél gerenderd gaan worden, hoort deze uitzondering te vervallen.
-    'Removed registry key': ('DeepCleanService', 'LeftoverScannerService'),
-    'Removed MUIcache value': ('DeepCleanService', 'LeftoverScannerService'),
-    'Deleted shortcut': ('DeepCleanService', 'LeftoverScannerService'),
-    'Deleted folder': ('DeepCleanService', 'LeftoverScannerService'),
-    'Unknown type': ('LeftoverScannerService',),
-    # Let op: exact dezelfde drie zinnen wórden wél vertaald in
-    # BloatwareService, MixedSourceUninstaller, TweakService en WingetService.
-    # Daarom is deze uitzondering bestand-gebonden — een waarde-gebonden ALLOW
-    # zou een regressie daar nooit meer melden.
-    'Could not start elevated process': ('DeepCleanService', 'LeftoverScannerService'),
-    'Cancelled — UAC prompt declined': ('DeepCleanService', 'LeftoverScannerService'),
-    'Did not run (interrupted)': ('DeepCleanService', 'LeftoverScannerService'),
-
     # (b) Interne invarianten. Deze verschijnen alleen als een HARDCODED pad of
     # index in onze eigen code niet klopt — een bug, geen gebruikersfout. Ze
     # blijven Engels zodat een bugmelding leesbaar is voor wie 'm moet fixen.

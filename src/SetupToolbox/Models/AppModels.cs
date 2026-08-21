@@ -74,12 +74,14 @@ public class SubCategory
     [JsonIgnore]
     public string Name => SetupToolbox.App.Loc.S($"appSubcategory.{Id}.name");
 
-    // LET OP: dit veld staat wél in apps.json maar wordt NERGENS gebonden —
-    // CategoryDetailPage gebruikt alleen Name voor de groepsheader. Bewust niet
-    // vertaald in v1.2.6 (je kunt onzichtbare tekst niet verifiëren); staat als
-    // los punt in NEXT-STEPS: weghalen of alsnog tonen.
-    [JsonPropertyName("description")]
-    public string Description { get; set; } = string.Empty;
+    // v1.2.9.6: een subcategorie heeft GEEN eigen omschrijving meer. Het veld stond
+    // in apps.json en werd wel gedeserialiseerd, maar CategoryDetailPage bindt
+    // alleen Name voor de groepsheader - de 24 zinnen zijn nooit door iemand gezien.
+    // Weggehaald in plaats van alsnog getoond: de kaarten onder zo'n header dragen
+    // zelf al een omschrijving per app, dus een tweede omschrijvingslaag maakt de
+    // pagina drukker zonder nieuwe informatie. Wil je ze terug, dan horen ze in de
+    // stringtabellen als appSubcategory.<id>.desc en moet check-catalog-keys.py de
+    // verwachte keyset meebewegen (152 -> 176).
 
     [JsonPropertyName("apps")]
     public List<App> Apps { get; set; } = new();

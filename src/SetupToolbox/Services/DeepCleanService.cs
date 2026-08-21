@@ -1983,9 +1983,9 @@ public sealed class DeepCleanService
     public async Task<DeepCleanDeleteResult> DeleteAsync(IReadOnlyList<DeepCleanItem> items, string? restorePointDescription = null)
     {
         if (items.Count == 0)
-            return new DeepCleanDeleteResult(0, 0, 0, new Dictionary<string, (bool, string)>(), Cancelled: false);
+            return new DeepCleanDeleteResult(0, 0, 0, new Dictionary<string, bool>(), Cancelled: false);
 
-        var results = new Dictionary<string, (bool, string)>();
+        var results = new Dictionary<string, bool>();
         // ScheduledTask + FirewallRule + Service altijd via elevated batch —
         // schtasks /Delete, Remove-NetFirewallRule en sc.exe delete hebben anders
         // timing-gevoelige permission checks. Eén UAC voor het hele zooitje is
@@ -2020,7 +2020,7 @@ public sealed class DeepCleanService
                     item.Category == DeepCleanCategory.OrphanedHkcuVendor)
                 {
                     DeleteRegistryKey(item.Path);
-                    results[item.Path] = (true, "Removed registry key");
+                    results[item.Path] = true;
                 }
                 else if (item.Category == DeepCleanCategory.OrphanedMuiCache)
                 {
@@ -2028,30 +2028,30 @@ public sealed class DeepCleanService
                     // uniqueness in dialog/dict, maar de echte key is constant.
                     const string muiKey = @"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
                     DeleteRegistryValue(muiKey, item.RegistryValueName ?? string.Empty);
-                    results[item.Path] = (true, "Removed MUIcache value");
+                    results[item.Path] = true;
                 }
                 else if (item.Category == DeepCleanCategory.OrphanedShortcut)
                 {
                     File.Delete(item.Path);
-                    results[item.Path] = (true, "Deleted shortcut");
+                    results[item.Path] = true;
                     bytesFreed += item.SizeBytes;
                 }
                 else if (item.Category == DeepCleanCategory.OrphanedFolder)
                 {
                     Directory.Delete(item.Path, recursive: true);
-                    results[item.Path] = (true, "Deleted folder");
+                    results[item.Path] = true;
                     bytesFreed += item.SizeBytes;
                 }
                 else
                 {
                     ClearFolderContents(item.Path);
-                    results[item.Path] = (true, "Cleared");
+                    results[item.Path] = true;
                     bytesFreed += item.SizeBytes;
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                results[item.Path] = (false, ex.Message);
+                results[item.Path] = false;
             }
         }
 
@@ -2064,7 +2064,7 @@ public sealed class DeepCleanService
             foreach (var kv in elevatedResult.ResultsByPath)
             {
                 results[kv.Key] = kv.Value;
-                if (kv.Value.ok)
+                if (kv.Value)
                 {
                     var match = elevated.FirstOrDefault(e => e.Path == kv.Key);
                     if (match != null) bytesFreed += match.SizeBytes;
@@ -2072,7 +2072,7 @@ public sealed class DeepCleanService
             }
         }
 
-        var success = results.Count(kv => kv.Value.Item1);
+        var success = results.Count(kv => kv.Value);
         var failed = results.Count - success;
         return new DeepCleanDeleteResult(success, failed, bytesFreed, results, cancelled);
     }
@@ -2278,14 +2278,14 @@ public sealed class DeepCleanService
             WindowStyle = ProcessWindowStyle.Hidden
         };
 
-        var results = new Dictionary<string, (bool, string)>();
+        var results = new Dictionary<string, bool>();
         var cancelled = false;
         try
         {
             using var proc = Process.Start(psi);
             if (proc == null)
             {
-                foreach (var item in items) results[item.Path] = (false, "Could not start elevated process");
+                foreach (var item in items) results[item.Path] = false;
                 return new ElevatedDeleteResult(results, false);
             }
             await proc.WaitForExitAsync();
@@ -2296,7 +2296,7 @@ public sealed class DeepCleanService
             cancelled = true;
             foreach (var item in items)
                 if (!results.ContainsKey(item.Path))
-                    results[item.Path] = (false, "Cancelled — UAC prompt declined");
+                    results[item.Path] = false;
         }
         finally
         {
@@ -2306,12 +2306,12 @@ public sealed class DeepCleanService
         // Items zonder RESULT-line markeren als failed.
         foreach (var item in items)
             if (!results.ContainsKey(item.Path))
-                results[item.Path] = (false, "Did not run (interrupted)");
+                results[item.Path] = false;
 
         return new ElevatedDeleteResult(results, cancelled);
     }
 
-    private static void ParseResults(string logPath, Dictionary<string, (bool, string)> results)
+    private static void ParseResults(string logPath, Dictionary<string, bool> results)
     {
         if (!File.Exists(logPath)) return;
         string[] lines;
@@ -2331,21 +2331,24 @@ public sealed class DeepCleanService
             if (parts.Length < 3) continue;
             var path = parts[1];
             var ok = parts[2] == "OK";
-            var msg = parts.Length >= 4 ? parts[3] : (ok ? "OK" : "Failed");
-            results[path] = (ok, msg);
+            results[path] = ok;
         }
     }
 
     private static string Escape(string s) => s.Replace("'", "''");
 
     private sealed record ElevatedDeleteResult(
-        IReadOnlyDictionary<string, (bool ok, string msg)> ResultsByPath,
+        IReadOnlyDictionary<string, bool> ResultsByPath,
         bool Cancelled);
 }
 
+// v1.2.9.6: was IReadOnlyDictionary<string,(bool,string)>. De message-helft werd
+// nergens gebonden - de UI leest alleen de tellers - dus die droeg een weergavelaag
+// die niets weergaf. Het pad-naar-succes blijft: daar telt SuccessCount op, en het
+// houdt de per-pad-dedup intact.
 public sealed record DeepCleanDeleteResult(
     int SuccessCount,
     int FailedCount,
     long BytesFreed,
-    IReadOnlyDictionary<string, (bool success, string message)> ResultsByPath,
+    IReadOnlyDictionary<string, bool> ResultsByPath,
     bool Cancelled);
