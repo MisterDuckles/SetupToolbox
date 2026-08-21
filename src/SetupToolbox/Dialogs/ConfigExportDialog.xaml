@@ -102,19 +102,38 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
 
-                        <Border Grid.Column="2"
-                                Visibility="{x:Bind InstalledBadgeVisibility}"
-                                Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                                CornerRadius="4"
-                                Padding="8,2"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="{loc:Localize Key=common.installed}"
-                                       Style="{StaticResource CaptionTextBlockStyle}" />
-                        </Border>
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    VerticalAlignment="Center">
+                            <Border Visibility="{x:Bind OutsideCatalogBadgeVisibility}"
+                                    Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                    CornerRadius="4"
+                                    Padding="8,2">
+                                <TextBlock Text="{loc:Localize Key=config.export.outsideCatalog}"
+                                           Style="{StaticResource CaptionTextBlockStyle}" />
+                            </Border>
+                            <Border Visibility="{x:Bind InstalledBadgeVisibility}"
+                                    Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                    CornerRadius="4"
+                                    Padding="8,2">
+                                <TextBlock Text="{loc:Localize Key=common.installed}"
+                                           Style="{StaticResource CaptionTextBlockStyle}" />
+                            </Border>
+                        </StackPanel>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
+
+        <TextBlock Grid.Row="3"
+                   x:Name="NoMatchText"
+                   Visibility="Collapsed"
+                   VerticalAlignment="Top"
+                   Margin="8,8,0,0"
+                   Text="{loc:Localize Key=config.export.noMatch}"
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
         <TextBlock Grid.Row="4"
                    x:Name="CountText"

@@ -18,7 +18,8 @@ namespace SetupToolbox.Services;
 // sub-objecten mét hun eigen versie:
 //
 //   { version, kind, exportedAt,
-//     apps:     { version, exportedAt, appCount, apps: [wingetId, ...] },
+//     apps:     { version, exportedAt, appCount, apps: [wingetId, ...],
+//                 appDetails: [{ wingetId, name, source }] },   // alleen buiten de catalogus
 //     tweaks:   { version, exportedAt, count, tweaks: [{ id, choice? }] },
 //     settings: { version, values: { ... } } }
 //
@@ -77,7 +78,14 @@ public sealed class ConfigBackupService
             {
                 ExportedAt = now,
                 AppCount = content.AppIds.Count,
-                Apps = content.AppIds.ToList()
+                Apps = content.AppIds.ToList(),
+                // Alleen voor apps die NIET in de catalogus staan: daar is de id
+                // alleen niet genoeg om ze bij het importeren terug te bouwen.
+                AppDetails = content.AppDetails.Count == 0
+                    ? null
+                    : content.AppDetails
+                        .Select(d => new AppDetailDto { WingetId = d.WingetId, Name = d.Name, Source = d.Source })
+                        .ToList()
             },
             Tweaks = new TweaksSection
             {
@@ -114,9 +122,10 @@ public sealed class ConfigBackupService
     };
 
     /// <summary>
-    /// Zet de huidige, gedetecteerde tweak-staat om in profiel-entries. Vereist dat
+    /// Vult de selectie-store met de tweaks die op deze pc al aanstaan, zodat de
+    /// checklist op de Tweaks-tab voorgevinkt opent. Vereist dat
     /// <see cref="TweakService.DetectStatesAsync"/> gedraaid heeft — zonder detectie
-    /// staat alles nog op Unknown en levert dit een lege lijst op.
+    /// staat alles nog op Unknown en blijft de store leeg.
     ///
     /// Toggle-tweaks: Enabled én Partial tellen als "aan". Partial meenemen is juist —
     /// op de doelmachine wil je 'm compleet, en StageDelta slaat 'm over als hij daar
@@ -124,24 +133,80 @@ public sealed class ConfigBackupService
     /// (SelectedChoiceIndex >= 0); index -1 betekent dat de gebruiker een waarde heeft
     /// die niet bij onze opties hoort en die is niet reproduceerbaar.
     /// </summary>
-    public static List<ConfigTweakEntry> CaptureTweakState(IEnumerable<Tweak> catalog)
+    public static void PrefillTweakSelection(IEnumerable<Tweak> catalog, TweakPendingService selection)
     {
-        var entries = new List<ConfigTweakEntry>();
-        foreach (var tweak in catalog.OrderBy(t => t.Id, StringComparer.OrdinalIgnoreCase))
+        selection.Clear();
+        foreach (var tweak in catalog)
         {
             if (tweak.IsChoice)
             {
-                if (tweak.SelectedChoiceIndex < 0) continue;
-                entries.Add(new ConfigTweakEntry(
-                    tweak.Id, TweakProfileService.EnglishChoiceLabel(tweak, tweak.SelectedChoiceIndex)));
+                if (tweak.SelectedChoiceIndex >= 0) selection.Set(tweak, tweak.SelectedChoiceIndex);
             }
             else if (tweak.State == TweakState.Enabled || tweak.State == TweakState.Partial)
             {
-                entries.Add(new ConfigTweakEntry(tweak.Id, null));
+                selection.Set(tweak, true);
             }
         }
-        return entries;
     }
+
+    /// <summary>
+    /// Zet de (door de gebruiker bijgestelde) selectie om in profiel-entries. Loopt
+    /// via <see cref="TweakProfileService.EnglishChoiceLabel"/>, dus met dezelfde
+    /// taal-onafhankelijke labels als een los tweak-profiel.
+    /// </summary>
+    public static List<ConfigTweakEntry> FromTweakSelection(
+        IReadOnlyList<KeyValuePair<Tweak, object>> selection) => selection
+        .OrderBy(kv => kv.Key.Id, StringComparer.OrdinalIgnoreCase)
+        .Select(kv => new ConfigTweakEntry(
+            kv.Key.Id,
+            kv.Value is int idx ? TweakProfileService.EnglishChoiceLabel(kv.Key, idx) : null))
+        .ToList();
+
+    /// <summary>
+    /// De geïnstalleerde apps die NIET in de catalogus staan en die je met
+    /// <c>winget install --id</c> daadwerkelijk terug kunt zetten.
+    ///
+    /// Er valt fors wat af, en dat is de bedoeling. Gemeten op een echte machine:
+    /// 128 geïnstalleerd, 21 in de catalogus, 107 erbuiten — waarvan er maar 58
+    /// bruikbaar zijn. De rest zijn <c>MSIX\…</c>- en <c>ARP\…</c>-pakketten, waarvan
+    /// de "id" een package-family-string of een ARP-sleutel is en geen winget-pakket,
+    /// plus kale GUID's. Die aanbieden zou betekenen dat je ze aanvinkt en er op de
+    /// doelmachine niets terugkomt. Dedup op id hoort erbij: eenzelfde pakket staat
+    /// er soms meerdere keren in (drie regels <c>Microsoft.DotNet.SDK.10</c>).
+    /// </summary>
+    public static List<ConfigAppDetail> InstallableNonCatalogApps(
+        IEnumerable<WingetListEntry> installed, ISet<string> catalogIds)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<ConfigAppDetail>();
+        foreach (var entry in installed)
+        {
+            var id = entry.Id?.Trim();
+            if (string.IsNullOrEmpty(id)) continue;
+            if (catalogIds.Contains(id)) continue;
+            if (!IsInstallableId(id)) continue;
+            if (!seen.Add(id)) continue;
+
+            // Bij de locale-fallback in ParseListOutput is Name gelijk aan Id; dan is
+            // de id zelf het beste wat we hebben en tonen we die als naam.
+            var name = string.IsNullOrWhiteSpace(entry.Name) ? id : entry.Name.Trim();
+            var source = string.IsNullOrWhiteSpace(entry.Source) ? DefaultSource : entry.Source.Trim();
+            result.Add(new ConfigAppDetail(id, name, source));
+        }
+        return result;
+    }
+
+    private const string DefaultSource = "winget";
+
+    // Let op de backslash: het prefix is "MSIX\" / "ARP\", niet "MSIX" / "ARP".
+    // Zonder die slash zou een echt pakket als MSIXHero.MSIXHero ook wegvallen.
+    private static bool IsInstallableId(string id) =>
+        !id.StartsWith(@"MSIX\", StringComparison.OrdinalIgnoreCase)
+        && !id.StartsWith(@"ARP\", StringComparison.OrdinalIgnoreCase)
+        && !GuidOnly.IsMatch(id);
+
+    private static readonly System.Text.RegularExpressions.Regex GuidOnly =
+        new(@"^\{[0-9A-Fa-f-]{36}\}$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     // ---- LEZEN ----
 
@@ -187,7 +252,11 @@ public sealed class ConfigBackupService
                         .Where(t => !string.IsNullOrEmpty(t.Id))
                         .Select(t => new ConfigTweakEntry(t.Id, t.Choice))
                         .ToList(),
-                    bundle.Settings?.Values), null);
+                    bundle.Settings?.Values,
+                    (bundle.Apps?.AppDetails ?? new List<AppDetailDto>())
+                        .Where(d => !string.IsNullOrEmpty(d.WingetId))
+                        .Select(d => new ConfigAppDetail(d.WingetId, d.Name, d.Source))
+                        .ToList()), null);
             }
 
             // Vorm 2 — een los my-apps.json: "apps" is een ARRAY van strings.
@@ -201,7 +270,8 @@ public sealed class ConfigBackupService
                 if (ids.Count == 0) return new ConfigBackupReadResult(null, App.Loc.S("io.noAppsInFile"));
 
                 return new ConfigBackupReadResult(new ConfigBackupContent(
-                    ReadExportedAt(root), ids, new List<ConfigTweakEntry>(), null), null);
+                    ReadExportedAt(root), ids, new List<ConfigTweakEntry>(), null,
+                    new List<ConfigAppDetail>()), null);
             }
 
             // Vorm 3 — een los my-tweaks.json: "tweaks" is een ARRAY van objecten.
@@ -222,7 +292,8 @@ public sealed class ConfigBackupService
                 if (entries.Count == 0) return new ConfigBackupReadResult(null, App.Loc.S("io.noTweaksInFile"));
 
                 return new ConfigBackupReadResult(new ConfigBackupContent(
-                    ReadExportedAt(root), new List<string>(), entries, null), null);
+                    ReadExportedAt(root), new List<string>(), entries, null,
+                    new List<ConfigAppDetail>()), null);
             }
 
             return new ConfigBackupReadResult(null, App.Loc.S("io.notAConfigFile"));
@@ -263,13 +334,35 @@ public sealed class ConfigBackupService
             var lookup = SelectionHelper.EnumerateAllApps(db)
                 .GroupBy(a => a.WingetId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var details = content.AppDetails
+                .GroupBy(d => d.WingetId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
             foreach (var id in content.AppIds)
             {
+                // Catalogus eerst. Een app die inmiddels aan apps.json is toegevoegd
+                // landt zo alsnog als gewone catalogus-app, ook al stond 'ie bij het
+                // exporteren nog in appDetails.
                 if (lookup.TryGetValue(id, out AppModel? app))
                 {
                     app.IsSelected = true;
                     result.AppsMatched++;
+                }
+                else if (details.TryGetValue(id, out var detail))
+                {
+                    // Buiten de catalogus: opnieuw opbouwen als synthetische App,
+                    // hetzelfde soort object dat een winget-repo-zoekresultaat
+                    // oplevert. Description expliciet zetten, anders doet het model
+                    // een catalogus-lookup en levert dat een LOC-MISS op.
+                    SelectionHelper.AddExtraSelected(new AppModel
+                    {
+                        Name = detail.Name,
+                        WingetId = detail.WingetId,
+                        Source = string.IsNullOrWhiteSpace(detail.Source) ? DefaultSource : detail.Source,
+                        Description = App.Loc.S("config.extraApp.desc")
+                    });
+                    result.AppsMatched++;
+                    result.AppsExtra++;
                 }
                 else
                 {
@@ -355,10 +448,21 @@ public sealed class ConfigBackupService
     // sub-object los geknipt een geldig my-apps.json is.
     private sealed class AppsSection
     {
-        [JsonPropertyName("version")] public string Version { get; set; } = "1.0";
+        // 1.1 (v1.2.9.1): appDetails erbij. "apps" blijft bewust een platte
+        // id-lijst, dus dit blok geknipt is nog steeds een geldige my-apps.json en
+        // v1.2.9-bestanden blijven leesbaar.
+        [JsonPropertyName("version")] public string Version { get; set; } = "1.1";
         [JsonPropertyName("exportedAt")] public DateTimeOffset ExportedAt { get; set; }
         [JsonPropertyName("appCount")] public int AppCount { get; set; }
         [JsonPropertyName("apps")] public List<string> Apps { get; set; } = new();
+        [JsonPropertyName("appDetails")] public List<AppDetailDto>? AppDetails { get; set; }
+    }
+
+    private sealed class AppDetailDto
+    {
+        [JsonPropertyName("wingetId")] public string WingetId { get; set; } = string.Empty;
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+        [JsonPropertyName("source")] public string Source { get; set; } = DefaultSource;
     }
 
     // Idem voor TweakProfileService.
@@ -434,7 +538,13 @@ public sealed record ConfigBackupContent(
     DateTimeOffset ExportedAt,
     IReadOnlyList<string> AppIds,
     IReadOnlyList<ConfigTweakEntry> Tweaks,
-    ConfigSettingsValues? Settings);
+    ConfigSettingsValues? Settings,
+    IReadOnlyList<ConfigAppDetail> AppDetails);
+
+// Metadata voor een app die niet in apps.json staat. Alleen de id is daar niet
+// genoeg: de importkant moet er een App-object van kunnen bouwen om 'm te tonen
+// en te installeren, en daarvoor zijn een naam en de winget-bron nodig.
+public sealed record ConfigAppDetail(string WingetId, string Name, string Source);
 
 public sealed record ConfigBackupReadResult(ConfigBackupContent? Content, string? Error);
 
@@ -446,6 +556,9 @@ public sealed class ConfigApplyResult
     public bool AppsApplied { get; set; }
     public int AppsMatched { get; set; }
     public int AppsSkipped { get; set; }
+    /// <summary>Deelverzameling van AppsMatched: apps buiten de catalogus die als
+    /// synthetische extra zijn teruggezet (v1.2.9.1).</summary>
+    public int AppsExtra { get; set; }
 
     public bool TweaksApplied { get; set; }
     public int TweaksMatched { get; set; }

@@ -120,8 +120,9 @@ public static class TweakCardFactory
     {
         if (profileMode)
         {
-            // Clean slate: een "— niet in profiel —" sentinel op index 0, daarna
-            // de echte opties. Selectie schrijft naar App.ProfileSelection.
+            // Een "— niet in profiel —" sentinel op index 0, daarna de echte opties.
+            // Beginstand uit App.ProfileSelection: leeg = sentinel (clean slate bij de
+            // profiel-bouwer), gevuld = de opgeslagen index (config-backup, v1.2.9.1).
             var labels = new List<string> { App.Loc.S("tweak.profile.notInProfile") };
             labels.AddRange(tweak.Choices!.Select(c => c.Label));
             var initial = 0;
@@ -171,8 +172,11 @@ public static class TweakCardFactory
     {
         if (profileMode)
         {
-            // Clean slate: altijd 2-state, initieel UIT (negeert tweak.State).
-            // Aangevinkt = opnemen in profiel; schrijft naar App.ProfileSelection.
+            // Altijd 2-state; de beginstand komt uit App.ProfileSelection, niet uit
+            // tweak.State. Bij de profiel-bouwer is die store leeg (EnterTweakProfileMode
+            // wist 'm), dus dan staat alles uit — clean slate. Bij de config-backup
+            // (v1.2.9.1) is 'ie vooraf gevuld met wat er aanstaat, en dan opent dezelfde
+            // checklist voorgevinkt. Aangevinkt = opnemen; schrijft terug naar de store.
             var pcb = new CheckBox
             {
                 VerticalAlignment = VerticalAlignment.Center,

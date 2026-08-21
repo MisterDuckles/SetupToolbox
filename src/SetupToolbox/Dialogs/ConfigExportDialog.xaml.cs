@@ -16,9 +16,11 @@ namespace SetupToolbox.Dialogs;
 // catalogus staat eronder om er extra's bij te vinken. Uitvinken kan dus ook:
 // een app die je hier hebt maar niet mee wilt nemen laat je gewoon leeg.
 //
-// Alleen catalogus-apps. Een winget-id dat niet in apps.json staat heeft aan de
-// importkant nergens een plek om te landen (de import zet IsSelected op een
-// catalogus-app), dus die zouden gegarandeerd als "niet gevonden" terugkomen.
+// Sinds v1.2.9.1 staan er ook apps in die NIET in apps.json zitten: alles wat
+// winget hier geïnstalleerd ziet en wat met `winget install --id` terug te zetten
+// is. Die zijn standaard UIT — het zijn er op een echte machine tientallen, en er
+// zit ruis tussen (runtimes, redistributables). De zoekbalk filtert over alle
+// groepen, dus dat is de manier om er eentje bij te zoeken.
 public sealed partial class ConfigExportDialog : ContentDialog
 {
     private readonly List<ConfigExportAppRow> _all = new();
@@ -27,6 +29,7 @@ public sealed partial class ConfigExportDialog : ContentDialog
     public ConfigExportDialog(
         IEnumerable<AppModel> catalogApps,
         ISet<string> installedIds,
+        IEnumerable<ConfigAppDetail> nonCatalogApps,
         int tweakCount,
         int settingsCount)
     {
@@ -37,14 +40,28 @@ public sealed partial class ConfigExportDialog : ContentDialog
                      .Select(g => g.First()))
         {
             var installed = installedIds.Contains(app.WingetId);
-            var row = new ConfigExportAppRow(app.Name, app.WingetId, installed) { IsSelected = installed };
+            var row = new ConfigExportAppRow(app.Name, app.WingetId, installed, inCatalog: true, source: null)
+            {
+                IsSelected = installed
+            };
             row.PropertyChanged += (_, _) => UpdateCount();
             _all.Add(row);
         }
 
-        // Geïnstalleerd eerst (dat is de voorgevinkte set), daarna alfabetisch.
-        _all.Sort((a, b) => a.IsInstalled != b.IsInstalled
-            ? (a.IsInstalled ? -1 : 1)
+        foreach (var extra in nonCatalogApps)
+        {
+            // Per definitie geïnstalleerd (ze komen uit `winget list`), maar bewust
+            // niet voorgevinkt.
+            var row = new ConfigExportAppRow(extra.Name, extra.WingetId, isInstalled: true,
+                inCatalog: false, source: extra.Source);
+            row.PropertyChanged += (_, _) => UpdateCount();
+            _all.Add(row);
+        }
+
+        // Volgorde: eerst wat voorgevinkt staat (geïnstalleerde catalogus-apps),
+        // dan de rest van wat op deze pc staat, dan de rest van de catalogus.
+        _all.Sort((a, b) => a.SortRank != b.SortRank
+            ? a.SortRank - b.SortRank
             : string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
 
         AppList.ItemsSource = _visible;
@@ -63,6 +80,19 @@ public sealed partial class ConfigExportDialog : ContentDialog
         .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
+    /// <summary>Metadata voor de aangevinkte apps die niet in de catalogus staan —
+    /// zonder naam en bron kan de import ze niet terugbouwen.
+    ///
+    /// Bewust een METHODE en geen property: de XAML-typegenerator loopt de publieke
+    /// properties van elk XAML-type af en probeert er setters voor te genereren, en
+    /// op een record met init-only properties levert dat CS8852 op. Een methode ziet
+    /// 'ie niet, dus blijft ConfigAppDetail gewoon immutable.</summary>
+    public List<ConfigAppDetail> GetSelectedAppDetails() => _all
+        .Where(r => r.IsSelected && !r.InCatalog)
+        .OrderBy(r => r.WingetId, StringComparer.OrdinalIgnoreCase)
+        .Select(r => new ConfigAppDetail(r.WingetId, r.Name, r.Source ?? "winget"))
+        .ToList();
+
     private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
         if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
@@ -74,10 +104,12 @@ public sealed partial class ConfigExportDialog : ContentDialog
         _visible.Clear();
         foreach (var row in _all.Where(r => r.Matches(query)))
             _visible.Add(row);
+        NoMatchText.Visibility = _visible.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // Werkt op wat er ZICHTBAAR is, niet op de hele catalogus — anders zet
-    // "Alles selecteren" tijdens een actief filter stilletjes 108 apps aan.
+    // Werkt op wat er ZICHTBAAR is, niet op de hele lijst — anders zet
+    // "Alles selecteren" tijdens een actief filter stilletjes 160+ apps aan,
+    // inclusief alle runtimes en redistributables.
     private void SelectAll_Click(object sender, RoutedEventArgs e)
     {
         foreach (var row in _visible) row.IsSelected = true;
@@ -103,19 +135,30 @@ public sealed partial class ConfigExportDialog : ContentDialog
 // en de teller onderaan mee moet lopen.
 public sealed class ConfigExportAppRow : INotifyPropertyChanged
 {
-    public ConfigExportAppRow(string name, string wingetId, bool isInstalled)
+    public ConfigExportAppRow(string name, string wingetId, bool isInstalled, bool inCatalog, string? source)
     {
         Name = name;
         WingetId = wingetId;
         IsInstalled = isInstalled;
+        InCatalog = inCatalog;
+        Source = source;
     }
 
     public string Name { get; }
     public string WingetId { get; }
     public bool IsInstalled { get; }
+    public bool InCatalog { get; }
+    public string? Source { get; }
+
+    // 0 = geïnstalleerd én in de catalogus (voorgevinkt), 1 = geïnstalleerd maar
+    // erbuiten, 2 = wel in de catalogus maar niet geïnstalleerd.
+    public int SortRank => InCatalog ? (IsInstalled ? 0 : 2) : 1;
 
     public Visibility InstalledBadgeVisibility =>
         IsInstalled ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility OutsideCatalogBadgeVisibility =>
+        InCatalog ? Visibility.Collapsed : Visibility.Visible;
 
     private bool _isSelected;
     public bool IsSelected

@@ -72,7 +72,7 @@ public sealed partial class TweaksPage : Page
         // navigeren niet weg, dus dit vangt alleen het echt-weg-klikken op.
         if (App.ProfileMode)
         {
-            App.ProfileMode = false;
+            App.ExitTweakModes();
             App.ProfileSelection.Clear();
         }
     }
@@ -272,15 +272,19 @@ public sealed partial class TweaksPage : Page
     private void ApplyModeChrome()
     {
         var profile = App.ProfileMode;
+        var backup = App.ConfigBackupMode;   // draait bovenop profile
 
         // Banner: ook Visibility togglen (niet alleen IsOpen). Een gesloten InfoBar
         // blijft anders Visible-met-0-hoogte → de body-StackPanel (Spacing=16) zou
         // er dan 16px ruimte boven de cards omheen zetten. Collapsed = uit de layout.
-        ProfileBanner.IsOpen = profile;
-        ProfileBanner.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
+        ProfileBanner.IsOpen = profile && !backup;
+        ProfileBanner.Visibility = (profile && !backup) ? Visibility.Visible : Visibility.Collapsed;
+        ConfigBackupBanner.IsOpen = backup;
+        ConfigBackupBanner.Visibility = backup ? Visibility.Visible : Visibility.Collapsed;
         ProfileChecklist.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
         NormalFooter.Visibility = profile ? Visibility.Collapsed : Visibility.Visible;
-        ProfileFooter.Visibility = profile ? Visibility.Visible : Visibility.Collapsed;
+        ProfileFooter.Visibility = (profile && !backup) ? Visibility.Visible : Visibility.Collapsed;
+        ConfigBackupFooter.Visibility = backup ? Visibility.Visible : Visibility.Collapsed;
         // Utility-knoppen zijn niet relevant tijdens profiel-bouw.
         RestartExplorerButton.Visibility = profile ? Visibility.Collapsed : Visibility.Visible;
 
@@ -297,7 +301,7 @@ public sealed partial class TweaksPage : Page
 
     private void ProfileCloseButton_Click(object sender, RoutedEventArgs e)
     {
-        App.ProfileMode = false;
+        App.ExitTweakModes();
         App.ProfileSelection.Clear();
         SearchBox.Text = string.Empty;
         ApplyModeChrome();
@@ -345,7 +349,7 @@ public sealed partial class TweaksPage : Page
         }
 
         // Verlaat profiel-modus en draai de normale apply-flow (backup-prompt + UAC).
-        App.ProfileMode = false;
+        App.ExitTweakModes();
         App.ProfileSelection.Clear();
         SearchBox.Text = string.Empty;
         ApplyModeChrome();
@@ -372,6 +376,80 @@ public sealed partial class TweaksPage : Page
     }
 
     // ---------------------------------------------------------------
+    // CONFIG-BACKUP-MODUS (v1.2.9.1)
+    // ---------------------------------------------------------------
+
+    // Zelfde checklist als de profiel-bouwer, maar voorgevinkt met wat er op deze
+    // pc aanstaat. Hier kies je alleen de tweaks; de apps en het opslaan volgen in
+    // de volgende stap.
+    private void ConfigBackupCancelButton_Click(object sender, RoutedEventArgs e) => LeaveConfigBackupMode();
+
+    private async void ConfigBackupNextButton_Click(object sender, RoutedEventArgs e)
+    {
+        ConfigBackupNextButton.IsEnabled = false;
+        try
+        {
+            var tweaks = ConfigBackupService.FromTweakSelection(App.ProfileSelection.Snapshot());
+            var settings = ConfigBackupService.CaptureSettings(App.Settings);
+
+            var db = await App.Database.GetAppDatabaseAsync();
+            // Geen forceRefresh: SettingsPage heeft bij het starten van deze flow al
+            // een verse winget list gehaald, dus dit komt uit de cache.
+            var installed = await App.Winget.GetInstalledAppsListAsync();
+            var installedIds = await App.Winget.GetInstalledAppIdsAsync();
+            var catalogIds = new HashSet<string>(
+                SelectionHelper.EnumerateAllApps(db).Select(a => a.WingetId),
+                StringComparer.OrdinalIgnoreCase);
+            var extras = ConfigBackupService.InstallableNonCatalogApps(installed, catalogIds);
+
+            var picker = new ConfigExportDialog(
+                SelectionHelper.EnumerateAllApps(db), installedIds, extras, tweaks.Count, settings.Count)
+            {
+                XamlRoot = this.XamlRoot
+            };
+            if (await picker.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var appIds = picker.SelectedAppIds;
+            var appDetails = picker.GetSelectedAppDetails();
+            var file = await FilePickerHelper.PickSaveFileAsync(
+                $"my-config-{DateTime.Now:yyyy-MM-dd}",
+                App.Loc.S("io.fileType.fullConfig"), ".json");
+            if (file == null) return;
+
+            await App.ConfigIO.ExportAsync(file.Path,
+                new ConfigBackupContent(DateTimeOffset.UtcNow, appIds, tweaks, settings, appDetails));
+
+            LeaveConfigBackupMode();
+            ShowResult(InfoBarSeverity.Success,
+                App.Loc.S("config.export.done.title"),
+                App.Loc.S("config.export.done.body",
+                    App.Loc.Plural("common.appCount", appIds.Count),
+                    App.Loc.Plural("common.tweakCount", tweaks.Count),
+                    settings.Count,
+                    file.Name));
+        }
+        catch (Exception ex)
+        {
+            ShowResult(InfoBarSeverity.Error, App.Loc.S("config.export.failed.title"), ex.Message);
+        }
+        finally
+        {
+            ConfigBackupNextButton.IsEnabled = true;
+        }
+    }
+
+    private void LeaveConfigBackupMode()
+    {
+        App.ExitTweakModes();
+        App.ProfileSelection.Clear();
+        SearchBox.Text = string.Empty;
+        ApplyModeChrome();
+        BuildCategoryGrid();
+        UpdateFooter();
+        UpdateRestoreButton();
+    }
+
+    // ---------------------------------------------------------------
     // FOOTER
     // ---------------------------------------------------------------
 
@@ -380,6 +458,16 @@ public sealed partial class TweaksPage : Page
         if (App.ProfileMode)
         {
             var sel = App.ProfileSelection.Count;
+            if (App.ConfigBackupMode)
+            {
+                // Doorgaan mag ook met nul tweaks: de backup bevat dan nog steeds
+                // apps en voorkeuren. Bij het profiel is nul juist zinloos.
+                ConfigBackupSelectedText.Text = sel == 0
+                    ? App.Loc.S("tweaks.backupMode.none")
+                    : App.Loc.Plural("common.tweaksSelected", sel);
+                return;
+            }
+
             ProfileSaveButton.IsEnabled = sel > 0;
             ProfileApplyButton.IsEnabled = sel > 0;
             ProfileSelectedText.Text = sel == 0

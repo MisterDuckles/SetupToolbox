@@ -464,51 +464,33 @@ public sealed partial class SettingsPage : Page
 
     // ── VOLLEDIGE CONFIGURATIE (v1.2.9) ──
 
-    // Eén bestand met app-keuze + tweaks + voorkeuren. De app-lijst gaat eerst door
-    // een keuze-dialog: standaard staat aangevinkt wat er op déze pc geïnstalleerd
-    // is, en daar kun je uit weglaten of extra's bij vinken.
+    // Eén bestand met app-keuze + tweaks + voorkeuren. Het exporteren is sinds
+    // v1.2.9.1 een flow van drie stappen, en die begint hier maar eindigt op de
+    // Tweaks-tab: eerst kies je daar de tweaks (checklist, voorgevinkt met wat er
+    // aanstaat), dan de apps in een dialog, dan het bestand. Reden om de tweaks
+    // niet in de dialog te proppen: bij een backup wil je ook kunnen bijvinken wat
+    // nu úít staat, en dan wil je de omschrijving erbij zien.
+    //
+    // Wat hier gebeurt is dus alleen het dure voorwerk — één winget list en één
+    // registry-walk — plus het vullen van de selectie-store waaruit de checklist
+    // zijn beginstand leest.
     private async void ConfigExportButton_Click(object sender, RoutedEventArgs e)
     {
         SetConfigButtonsEnabled(false);
         try
         {
-            // Een verse winget list, want dit is precies de vraag "wat staat hier nu".
+            // Verse winget list, want dit is precies de vraag "wat staat hier nu".
             // Duurt seconden, vandaar de melding.
             ShowConfigInfo(InfoBarSeverity.Informational,
                 App.Loc.S("config.export.scanning.title"),
                 App.Loc.S("config.export.scanning.body"));
 
-            var db = await App.Database.GetAppDatabaseAsync();
-            var installedIds = await App.Winget.GetInstalledAppIdsAsync(forceRefresh: true);
+            await App.Winget.GetInstalledAppsListAsync(forceRefresh: true);
             try { await App.Tweaks.DetectStatesAsync(); } catch { }
 
-            var tweaks = ConfigBackupService.CaptureTweakState(App.Tweaks.All);
-            var settings = ConfigBackupService.CaptureSettings(App.Settings);
-
-            var picker = new ConfigExportDialog(
-                SelectionHelper.EnumerateAllApps(db), installedIds, tweaks.Count, settings.Count)
-            {
-                XamlRoot = this.XamlRoot
-            };
+            ConfigBackupService.PrefillTweakSelection(App.Tweaks.All, App.ProfileSelection);
             ConfigResultBar.IsOpen = false;
-            if (await picker.ShowAsync() != ContentDialogResult.Primary) return;
-
-            var appIds = picker.SelectedAppIds;
-            var file = await FilePickerHelper.PickSaveFileAsync(
-                $"my-config-{DateTime.Now:yyyy-MM-dd}",
-                App.Loc.S("io.fileType.fullConfig"), ".json");
-            if (file == null) return;
-
-            await App.ConfigIO.ExportAsync(file.Path,
-                new ConfigBackupContent(DateTimeOffset.UtcNow, appIds, tweaks, settings));
-
-            ShowConfigInfo(InfoBarSeverity.Success,
-                App.Loc.S("config.export.done.title"),
-                App.Loc.S("config.export.done.body",
-                    App.Loc.Plural("common.appCount", appIds.Count),
-                    App.Loc.Plural("common.tweakCount", tweaks.Count),
-                    settings.Count,
-                    file.Name));
+            App.Window?.EnterConfigBackupMode();
         }
         catch (Exception ex)
         {
@@ -622,10 +604,16 @@ public sealed partial class SettingsPage : Page
         var lines = new System.Collections.Generic.List<string>();
 
         if (r.AppsApplied)
-            lines.Add(r.AppsSkipped == 0
+        {
+            var appLine = r.AppsSkipped == 0
                 ? App.Loc.S("config.result.apps", App.Loc.Plural("common.appCount", r.AppsMatched))
                 : App.Loc.S("config.result.appsSkipped",
-                    App.Loc.Plural("common.appCount", r.AppsMatched), r.AppsSkipped));
+                    App.Loc.Plural("common.appCount", r.AppsMatched), r.AppsSkipped);
+            // Apps buiten de catalogus staan in een eigen sectie op de Apps-pagina;
+            // zonder deze regel is niet duidelijk waar ze gebleven zijn.
+            if (r.AppsExtra > 0) appLine += App.Loc.S("config.result.appsExtra", r.AppsExtra);
+            lines.Add(appLine);
+        }
 
         if (r.TweaksApplied)
         {

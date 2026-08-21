@@ -64,6 +64,22 @@ public partial class App : Application
     // Leest ook de twee losse formats, zodat één Importeren-knop alles aankan.
     public static ConfigBackupService ConfigIO { get; } = new();
     public static bool ProfileMode { get; set; }
+
+    // Config-backup-modus (v1.2.9.1). Draait BOVENOP ProfileMode: de checklist,
+    // de zoekbalk en de clean-slate cards zijn identiek, alleen de banner en de
+    // footer verschillen. Het verschil in inhoud zit 'm in ProfileSelection, die
+    // hier vooraf gevuld wordt met de tweaks die op deze pc al aanstaan — de
+    // cards lezen hun beginstand toch al uit die store, dus voorgevinkt komt er
+    // gratis uit. Nooit los van ProfileMode zetten.
+    public static bool ConfigBackupMode { get; set; }
+
+    /// <summary>Verlaat beide tweak-selectiemodi. Altijd samen, anders blijft de
+    /// Tweaks-tab in een halve modus hangen.</summary>
+    public static void ExitTweakModes()
+    {
+        ProfileMode = false;
+        ConfigBackupMode = false;
+    }
     // Self-update (v0.10.1): GitHub release-check + installer-download/-launch.
     public static GitHubService GitHub { get; } = new();
 

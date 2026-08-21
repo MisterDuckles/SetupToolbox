@@ -1,6 +1,6 @@
 # SetupToolbox — Roadmap
 
-Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.9** (rebrand: heette voorheen *WingetAppDeployer*).
+Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debloat, tweaks en deep clean. **v1.2.9.1** (rebrand: heette voorheen *WingetAppDeployer*).
 
 > WPF-historie tot en met v1.2.1 is gearchiveerd onder git tag `wpf-final-v1.2.1`. Repo is sinds v0.5.9 WinUI-only. De WinUI-lijn liep v0.5.x → v0.10.x en is bij de rebrand naar **Setup Toolbox** op **v1.0** gezet.
 >
@@ -16,7 +16,7 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 > **Route naar de volgende release, vastgelegd op 2026-08-20 (user).** Drie items achter elkaar — **v1.2.8 → v1.2.9 → v1.2.10** — en zodra die binnen zijn wordt er een **milestone-release** gecut. De website schuift daarachteraan, want die trekt versie en downloadlink live uit de GitHub-API en heeft die Release dus nodig. Elk van de drie in een **eigen chat**: de context van de vertaalreeks is niet meer nodig en NEXT-STEPS.md is de overdracht.
 >
-> **Stand 2026-08-20: v1.2.8, v1.2.8.1 én v1.2.9 zijn af.** v1.2.8 is door user getest (install, uninstall, geweigerde UAC, reeds-geïnstalleerd); die test leverde v1.2.8.1 op omdat winget's eigen stdout nog Engels op de install-kaart stond. v1.2.9 (config-backup) is gebouwd en op de checkers geverifieerd; de round-trip zelf staat nog bij user open — zie de noot in die sectie. v1.2.8.1 zelf is op verzoek van user **niet meer visueel nagelopen** — zie de noot in die sectie. **Nog open aan verificatie: de export/import-round-trip van v1.2.9.** Volgende aan de beurt: **v1.2.10**, in een eigen chat.
+> **Stand 2026-08-20: v1.2.8, v1.2.8.1 én v1.2.9 zijn af.** v1.2.8 is door user getest (install, uninstall, geweigerde UAC, reeds-geïnstalleerd); die test leverde v1.2.8.1 op omdat winget's eigen stdout nog Engels op de install-kaart stond. v1.2.9 (config-backup) is gebouwd en gecommit; de test daarvan leverde **v1.2.9.1** op — tweaks waren niet aan te vinken en apps buiten de catalogus konden niet mee. De round-trip staat nog bij user open — zie de noot in die sectie. v1.2.8.1 zelf is op verzoek van user **niet meer visueel nagelopen** — zie de noot in die sectie. **Nog open aan verificatie: de export/import-round-trip van v1.2.9 / v1.2.9.1.** Volgende aan de beurt: **v1.2.10**, in een eigen chat.
 
 ### v1.2.10 — "Wat is er nieuw"-melding na een update
 
@@ -65,7 +65,9 @@ Boven komen tijdens het bouwen van de config-backup, bewust apart gehouden omdat
 
 - **Er staat nog een hardcoded Nederlandse alinea in de UI, en geen enkele scanner-pass ziet 'm.** `Dialogs/BackupPromptDialog.xaml:20` heeft zijn uitlegtekst als **inline XAML-inhoud** staan (`<TextBlock>tekst</TextBlock>`) in plaats van als `Text="..."`-attribuut. Pass 1 kijkt alleen naar tekst-*attributen*, dus dit is de vierde vorm die structureel buiten beeld blijft — na geïnterpoleerde strings (v1.2.6), switch-armen en lokale variabelen (v1.2.7) en de kapotte `Services/`-pass (v1.2.8). De alinea is zichtbaar bij **elke** Tweaks-Apply met `BackupBeforeApply = Ask`, dus in de Engelse UI staat er gewoon Nederlands. Het is bewust **niet** in v1.2.9 meegenomen: het is vertaalwerk in een patch over config-backup, en het vraagt een eigen keuze omdat er een `<Run FontWeight="SemiBold">` middenin staat — dat wordt dus óf drie keys (voor, vet, na), óf één key zonder het vet. Neem bij het oppakken meteen pass 1 mee: die moet inline-inhoud gaan zien, anders vindt de volgende ronde ‘m weer niet.
 
-- **Apps buiten de catalogus gaan niet mee in de config-backup.** De export lijst alleen de 108 catalogus-apps; een winget-id dat niet in `apps.json` staat heeft aan de importkant nergens een plek om te landen, want de import zet `IsSelected` op een catalogus-app. Voor "verhuis mijn pc" is dat een echte beperking: de meeste geïnstalleerde apps van een power-user staan niet in de curated lijst. Er is wel een aanknopingspunt — `SelectionHelper.ExtraSelectedApps` bestaat al voor synthetische apps uit winget-repo-zoekresultaten, dus een bundel zou `{ wingetId, name, source }` kunnen bewaren en die bij import als extra’s terugzetten. Eigen patch waard; het raakt de install-flow en niet alleen het bestandsformaat.
+- ~~**Apps buiten de catalogus gaan niet mee in de config-backup.**~~ — **opgelost in v1.2.9.1.** De verwachting hieronder klopte grotendeels, met één correctie: het bleken er op een echte machine niet "de meeste" maar precies **58 van de 107** bruikbaar; de rest zijn MSIX/ARP-pakketten waarvan de id geen winget-pakket is. Oorspronkelijke tekst: de export lijst alleen de 108 catalogus-apps; een winget-id dat niet in `apps.json` staat heeft aan de importkant nergens een plek om te landen, want de import zet `IsSelected` op een catalogus-app. Voor "verhuis mijn pc" is dat een echte beperking: de meeste geïnstalleerde apps van een power-user staan niet in de curated lijst. Er is wel een aanknopingspunt — `SelectionHelper.ExtraSelectedApps` bestaat al voor synthetische apps uit winget-repo-zoekresultaten, dus een bundel zou `{ wingetId, name, source }` kunnen bewaren en die bij import als extra’s terugzetten. Eigen patch waard; het raakt de install-flow en niet alleen het bestandsformaat.
+
+- **De export-dialog zoekt alleen in wat er al staat, niet in de winget-repo.** De zoekbalk filtert de lijst: de 108 catalogus-apps plus de geïnstalleerde apps daarbuiten. Een app die je **niet** hebt en die **niet** in de catalogus staat, kun je dus niet aan een backup toevoegen — daarvoor zou de dialog een echte `winget search` moeten doen, zoals de Apps-pagina al doet (`ScheduleWingetSearch`, 300ms debounce + epoch-check). Zo gelezen bij het vaststellen van de scope van v1.2.9.1; als dat toch de bedoeling was, is dit het openstaande stuk. Het formaat is er al op voorbereid: `appDetails` draagt naam en bron, dus een zoekresultaat past er zonder wijziging in.
 
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.7
 
@@ -118,6 +120,73 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.9.1 — Tweaks zelf aanvinken bij het exporteren + apps buiten de catalogus
+
+**Gevonden door user, direct na v1.2.9.** Twee gaten in de export: je kon bij de apps wel aanvinken maar bij de tweaks niets — die gingen als blok mee — en apps die niet in `apps.json` staan konden helemaal niet mee. De stringtabellen gaan van 1325 naar **1335 keys**.
+
+#### Vier beslissingen (user, 2026-08-21)
+
+1. **De tweaks kies je op de Tweaks-tab**, niet in de export-dialog. Zelfde scherm als de profiel-bouwer, dus met omschrijving en use-case per tweak — en dat is precies waarom het niet in een ContentDialog past: bij een backup wil je ook kunnen **bij**vinken wat nu úit staat, en dan moet je kunnen lezen waar het over gaat.
+2. **Apps buiten de catalogus moeten mee kunnen**, met een zoekbalk om ze te vinden.
+3. **Geïmporteerde extra-apps krijgen een eigen sectie op de Apps-pagina.**
+4. **`apps` blijft een platte id-lijst**, met een apart `appDetails` ernaast.
+
+#### De prefill kwam gratis — en het commentaar loog
+
+De verwachting was dat `TweakCardFactory` een voorselectie-pad nodig had, want in profiel-modus staat er letterlijk *"Clean slate: altijd 2-state, initieel UIT (negeert `tweak.State`)"*. Dat commentaar klopt niet: de checkbox leest zijn beginstand al uit `App.ProfileSelection.Contains(tweak)` en de ComboBox uit `ProfileSelection.TryGet(...)`. Hij staat uit omdat `EnterTweakProfileMode` de store **leegt**, niet omdat hij de state negeert. Gevolg: de store vóór het navigeren vullen is genoeg en `TweakCardFactory` is **ongewijzigd** gebleven. Het commentaar is wel bijgewerkt.
+
+Daarom is de backup-modus ook geen derde modus geworden maar een **vlag bovenop** `ProfileMode`: `App.ConfigBackupMode`. De checklist, de zoekbalk en de cards zijn identiek; alleen de banner en de footer verschillen. Nieuwe `App.ExitTweakModes()` zet ze altijd samen uit — los zou de tab in een halve modus blijven hangen. En omdat `OnNavigatedFrom` bij `ProfileMode` al opruimt, annuleert wegklikken van de Tweaks-tab een backup-in-aanbouw vanzelf.
+
+#### De export is nu drie stappen
+
+Settings → **Tweaks-tab** (checklist, voorgevinkt) → **apps-dialog** → opslaan-venster, met de uitkomst in de InfoBar op de Tweaks-pagina. In Settings gebeurt alleen nog het dure voorwerk: één verse `winget list` en één registry-walk, met de melding erbij. De app-dialog haalt daarna uit de **cache**, dus die tweede stap is instant.
+
+#### Wat er van `winget list` overblijft — gemeten, niet geschat
+
+Op de machine van user: **128** geïnstalleerde pakketten, waarvan **21** in de catalogus en **107** erbuiten. Van die 107 is maar **58** bruikbaar:
+
+| | Aantal |
+| --- | --- |
+| Bruikbaar (`winget`-bron) | 56 |
+| Bruikbaar (`msstore`-bron) | 2 |
+| `MSIX\` / `ARP\`-pakket — id is een package-family-string, geen winget-pakket | 49 |
+
+Die 49 worden weggefilterd: aanvinken zou betekenen dat er op de doelmachine niets terugkomt. Er wordt ook op id **gededupliceerd** — `Microsoft.DotNet.SDK.10` staat er drie keer in en `Microsoft.DotNet.Native.Runtime` twee keer.
+
+> **Let op de backslash in het filter.** Het prefix is `MSIX\` en `ARP\`, niet `MSIX` en `ARP`. Zonder die slash zou een echt pakket als `MSIXHero.MSIXHero` ook wegvallen.
+
+Ze staan **standaard uit** en in een eigen sorteergroep onder de catalogus-apps, met een caution-badge *Buiten de catalogus*. Reden: ook in die 58 zit ruis (`Microsoft.AppInstaller`, `Microsoft.DotNet.Native.Runtime`, `Microsoft.GameInput`). *Alles selecteren* werkt daarom op wat er **zichtbaar** is, niet op de hele lijst — anders zet één klik 160+ apps aan.
+
+#### Formaat: `apps` blijft plat
+
+```
+apps: { version: "1.1", exportedAt, appCount,
+        apps: [wingetId, ...],
+        appDetails: [{ wingetId, name, source }] }   // alleen buiten de catalogus
+```
+
+De sub-versie gaat naar `1.1` — precies waarvoor die aparte sub-versienummers in de v1.2.9-beslissing bedoeld waren. `apps` blijft de volledige platte id-lijst, dus dat blok geknipt is nog steeds een geldige `my-apps.json` en v1.2.9-bestanden blijven leesbaar. Bij het importeren wint de **catalogus**: een app die inmiddels aan `apps.json` is toegevoegd landt als gewone catalogus-app, ook al stond ‘ie bij het exporteren nog in `appDetails`.
+
+#### De onzichtbare selectie op de Apps-pagina
+
+`SelectionHelper.ExtraSelectedApps` bestond al voor winget-zoekresultaten, maar werd **alleen binnen de zoekresultaten gerenderd**. Geïmporteerde extra-apps zouden dus geselecteerd zijn en nergens te zien: de footer telt ze mee, je vindt ze niet, en uitvinken kan alleen door ze stuk voor stuk op te zoeken. Nieuwe sectie **"Apps buiten de catalogus"** op de Apps-pagina, zichtbaar in blader-modus zodra er extra’s zijn. Uitvinken laat de kaart stáán zodat je ‘m weer aan kunt zetten; hij verdwijnt bij *Alles wissen*. De `Description` van zo’n app wordt expliciet gezet — zonder dat doet het model een catalogus-lookup en levert dat een `LOC-MISS` op.
+
+#### Valkuil die de build brak: CS8852 uit de XAML-typegenerator
+
+`ConfigAppDetail` is een positional `record`, dus init-only. Zodra die als **publieke property** op een XAML-type staat (`ConfigExportDialog.SelectedAppDetails`), genereert `XamlTypeInfo.g.cs` er setters voor → **`error CS8852`**, drie keer, in gegenereerde code die je niet zelf hebt geschreven. Opgelost door er een **methode** van te maken (`GetSelectedAppDetails()`): de generator loopt alleen properties af, dus het record blijft immutable. Goed om te weten voor de volgende keer dat een record de dialog-API in wil — `ConfigImportOptions` ontsnapt eraan omdat die alleen `bool`s draagt.
+
+#### 10 nieuwe keys
+
+`tweaks.backupMode.*` (4), `config.export.outsideCatalog` / `.noMatch` (2), `apps.extraApps` + `.desc` (2), `config.result.appsExtra` en `config.extraApp.desc`. Twee bestaande keys hebben een nieuwe tekst gekregen in plaats van een nieuwe key ernaast: `config.export.intro` (noemt nu de apps buiten de catalogus) en `config.export.tweaksIncluded` (telt de **gekozen** tweaks in plaats van de actieve). 1325 → **1335**.
+
+> **Aangetoond (2026-08-21):**
+> - Build: **0 errors, 0 warnings** op `1.2.9.1` — na de CS8852-fix hierboven.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0**.
+> - `check-catalog-keys.py`: **1335 = 1335**, geen wezen, geen lege waardes. De teller "gecontroleerd op aanroep" gaat van 606 naar **616** — exact +10, dus elke nieuwe key wordt aangeroepen en `config.export.intro` is niet stilletjes wees geworden door de hernoeming die ik eerst had.
+> - De niet-catalogus-filtering is op **echte** `winget list`-output gedraaid, niet op een aanname: 128 / 21 / 107 / 58, zie de tabel hierboven.
+>
+> **Niet getest — zelfde gat als v1.2.9:** de flow is niet doorlopen. Onbevestigd blijven: (1) of de checklist op de Tweaks-tab daadwerkelijk voorgevinkt opent, (2) of de footer en de banner in backup-modus goed wisselen en *Annuleren* netjes terugvalt op de categorie-grid, (3) of de apps buiten de catalogus met hun badge in de dialog verschijnen en doorzoekbaar zijn, (4) of een geïmporteerde extra-app in de nieuwe sectie op de Apps-pagina landt.
 
 ### v1.2.9 — Eén-klik volledige config-backup (apps + tweaks + settings)
 

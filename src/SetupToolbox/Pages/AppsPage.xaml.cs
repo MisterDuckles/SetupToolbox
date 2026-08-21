@@ -146,6 +146,8 @@ public sealed partial class AppsPage : Page
     {
         SelectionHelper.ClearSelection(_db);
         UpdateSelectionFooter();
+        // ClearSelection leegt ook ExtraSelectedApps, dus de sectie moet weg.
+        RefreshExtraAppsSection(searching: !string.IsNullOrWhiteSpace(SearchBox.Text));
     }
 
     private async void CategoryCard_Click(object sender, RoutedEventArgs e)
@@ -242,6 +244,25 @@ public sealed partial class AppsPage : Page
         UpdateSelectionFooter();
     }
 
+    // Apps buiten de catalogus die via een config-import zijn binnengekomen
+    // (v1.2.9.1). Uitvinken laat de kaart staan zodat je 'm weer aan kunt zetten —
+    // hij verdwijnt pas bij "Alles wissen" of als je de app afsluit.
+    private void ExtraCard_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not AppModel app) return;
+        app.IsSelected = !app.IsSelected;
+        UpdateSelectionFooter();
+    }
+
+    // Alleen in blader-modus; tijdens het zoeken neemt de winget-sectie het over.
+    private void RefreshExtraAppsSection(bool searching)
+    {
+        var extras = SelectionHelper.ExtraSelectedApps;
+        var show = !searching && extras.Count > 0;
+        ExtraAppsSection.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        ExtraAppsList.ItemsSource = show ? extras.ToList() : null;
+    }
+
     private void WingetCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
         if (sender is not FrameworkElement fe || fe.Tag is not AppModel app) return;
@@ -293,6 +314,7 @@ public sealed partial class AppsPage : Page
             CategoryList.Visibility = Visibility.Visible;
             CatalogResultsSection.Visibility = Visibility.Collapsed;
             NoResultsText.Visibility = Visibility.Collapsed;
+            RefreshExtraAppsSection(searching: false);
             return;
         }
 
@@ -301,6 +323,7 @@ public sealed partial class AppsPage : Page
         // zoeken niks toe — user wil de app zelf direct kunnen aanvinken.
         CategoryList.Visibility = Visibility.Collapsed;
         CatalogResultsSection.Visibility = Visibility.Visible;
+        RefreshExtraAppsSection(searching: true);
 
         // Fuzzy score per app; match op score + sort descending zodat de meest
         // relevante resultaten bovenaan staan. Naam weegt het zwaarst (meest

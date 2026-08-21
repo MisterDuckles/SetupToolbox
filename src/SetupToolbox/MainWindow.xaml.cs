@@ -163,7 +163,20 @@ public sealed partial class MainWindow : Window
     public void EnterTweakProfileMode()
     {
         App.ProfileMode = true;
+        App.ConfigBackupMode = false;
         App.ProfileSelection.Clear();
+        App.TweakPending.Clear();
+        SelectTweaksNav();
+    }
+
+    // Config-backup (v1.2.9.1): dezelfde checklist als de profiel-bouwer, maar
+    // VOORGEVINKT met wat er op deze pc al aanstaat. De caller vult
+    // App.ProfileSelection (die heeft de gedetecteerde states nodig); de cards
+    // lezen hun beginstand uit diezelfde store, dus hier hoeft verder niets.
+    public void EnterConfigBackupMode()
+    {
+        App.ProfileMode = true;
+        App.ConfigBackupMode = true;
         App.TweakPending.Clear();
         SelectTweaksNav();
     }
@@ -172,7 +185,7 @@ public sealed partial class MainWindow : Window
     // modus) zodat de gebruiker de klaargezette pending changes ziet + Apply kan.
     public void NavigateToTweaks()
     {
-        App.ProfileMode = false;
+        App.ExitTweakModes();
         SelectTweaksNav();
     }
 

@@ -255,6 +255,61 @@
                         </ItemsRepeater>
                     </StackPanel>
 
+                    <!-- Apps buiten de catalogus die via een config-import zijn
+                         binnengekomen (v1.2.9.1). Zonder deze sectie zijn ze wel
+                         geselecteerd maar nergens te zien: ExtraSelectedApps werd
+                         alleen binnen de winget-zoekresultaten gerenderd, dus de
+                         footer telde apps die je niet kon vinden of uitvinken. -->
+                    <StackPanel x:Name="ExtraAppsSection"
+                                Visibility="Collapsed"
+                                Spacing="12">
+                        <TextBlock Text="{loc:Localize Key=apps.extraApps}"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock Text="{loc:Localize Key=apps.extraApps.desc}"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+
+                        <ItemsRepeater x:Name="ExtraAppsList">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Spacing="4" />
+                            </ItemsRepeater.Layout>
+
+                            <ItemsRepeater.ItemTemplate>
+                                <DataTemplate x:DataType="models:App">
+                                    <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                          BorderThickness="1"
+                                          CornerRadius="4"
+                                          Padding="16,12"
+                                          Tag="{x:Bind}"
+                                          Tapped="ExtraCard_Tapped"
+                                          PointerEntered="AppCard_PointerEntered"
+                                          PointerExited="AppCard_PointerExited">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{x:Bind Name}"
+                                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock Text="{x:Bind WingetId}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                        </StackPanel>
+
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{x:Bind IsSelected, Mode=OneWay}"
+                                                  VerticalAlignment="Center"
+                                                  MinWidth="0"
+                                                  IsHitTestVisible="False" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </StackPanel>
+
                     <!-- Winget repository results — zichtbaar zodra user iets
                          typt in de search box. Laat apps zien die niet in onze
                          gecureerde apps.json staan. -->
