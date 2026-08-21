@@ -70,13 +70,13 @@ try {{
         try
         {
             using var proc = Process.Start(psi);
-            if (proc == null) return new RestorePointResult(false, "Kon elevated process niet starten.");
+            if (proc == null) return new RestorePointResult(false, App.Loc.S("restorePoint.err.processStart"));
             await proc.WaitForExitAsync();
 
             if (File.Exists(logPath))
             {
                 var content = await File.ReadAllTextAsync(logPath);
-                if (content.Contains("RESULT|OK")) return new RestorePointResult(true, "Restore point aangemaakt.");
+                if (content.Contains("RESULT|OK")) return new RestorePointResult(true, App.Loc.S("restorePoint.created"));
                 var failIdx = content.IndexOf("RESULT|FAIL|", StringComparison.Ordinal);
                 if (failIdx >= 0)
                 {
@@ -84,11 +84,11 @@ try {{
                     return new RestorePointResult(false, reason);
                 }
             }
-            return new RestorePointResult(false, "Geen output van Checkpoint-Computer.");
+            return new RestorePointResult(false, App.Loc.S("restorePoint.err.noOutput"));
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            return new RestorePointResult(false, "UAC geweigerd.");
+            return new RestorePointResult(false, App.Loc.S("restorePoint.err.uacDenied"));
         }
         catch (Exception ex)
         {
@@ -256,6 +256,10 @@ try {{
     private static string Escape(string s) => s.Replace("'", "''");
 }
 
+// v1.2.9.4: .Message werd tot deze versie door NIEMAND gelezen - DebloatPage deed
+// `_ = await App.RestorePoint.CreateAsync(...)`. Nu leest ShowRestorePointResult
+// 'm, dus de vier zinnen hierboven zijn vertaald en uit de ALLOW-lijst van
+// scan-untranslated.py gehaald.
 public sealed record RestorePointResult(bool Success, string Message);
 
 // canCreate=false betekent: rate-limited of System Protection uit. Hours

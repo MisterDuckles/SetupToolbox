@@ -192,13 +192,6 @@ ALLOW = {
     'Cannot open key: {entry.Path}': ('SnapshotService',),
     'Invalid choice index': ('TweakService',),
 
-    # (c) RestorePointService.CreateAsync geeft een RestorePointResult terug
-    # waarvan .Message door NIEMAND gelezen wordt — DebloatPage doet
-    # `_ = await App.RestorePoint.CreateAsync(...)`. Dode strings, dus niet
-    # vertaald. Staat als bevinding in NEXT-STEPS.md.
-    'Kon elevated process niet starten.': ('RestorePointService',),
-    'Restore point aangemaakt.': ('RestorePointService',),
-    'UAC geweigerd.': ('RestorePointService',),
 
     # (d) Windows' eigen namen: mapnamen uit de protected-list en registry-
     # value-namen waarop gematcht wordt. Zelfde identifier-regel als v1.2.7.

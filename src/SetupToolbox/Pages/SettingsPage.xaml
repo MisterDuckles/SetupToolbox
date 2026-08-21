@@ -358,13 +358,6 @@
                                 <TextBlock Text="{loc:Localize Key=common.export}" />
                             </StackPanel>
                         </Button>
-                        <Button x:Name="ImportButton"
-                                Click="ImportButton_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                                <TextBlock Text="{loc:Localize Key=common.import}" />
-                            </StackPanel>
-                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>

@@ -351,27 +351,13 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private async void ImportButton_Click(object sender, RoutedEventArgs e)
-    {
-        var file = await FilePickerHelper.PickOpenFileAsync(".json");
-        if (file == null) return;
-
-        var db = await App.Database.GetAppDatabaseAsync();
-        var result = await App.SelectionIO.ImportAsync(file.Path, db, clearFirst: true);
-
-        if (result.Error != null)
-        {
-            ShowSelectionInfo(InfoBarSeverity.Error, App.Loc.S("settings.selection.importFailed.title"), result.Error);
-            return;
-        }
-
-        var severity = result.Skipped > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
-        var matched = App.Loc.Plural("common.appCount", result.Matched);
-        var msg = result.Skipped == 0
-            ? App.Loc.S("settings.selection.imported.body", matched)
-            : App.Loc.S("settings.selection.imported.bodySkipped", matched, result.Skipped);
-        ShowSelectionInfo(severity, App.Loc.S("settings.selection.imported.title"), msg);
-    }
+    // v1.2.9.4: de losse Importeren-knop is weg. Die riep ImportAsync(clearFirst:
+    // true) aan zonder een enkele bevestiging: een misklik plus een bestand kiezen
+    // en de selectie waar je een kwartier aan gewerkt had was weg, zonder undo. Het
+    // was de enige destructieve knop in de app zonder confirm. ConfigIO.ReadAsync
+    // herkent een los my-apps.json sinds v1.2.9 al als "Vorm 2", dus de
+    // Importeren-knop bij Volledige configuratie hieronder doet exact hetzelfde -
+    // met voorbeeld-dialog en met de overschrijf-waarschuwing.
 
     private void ShowSelectionInfo(InfoBarSeverity severity, string title, string message)
     {

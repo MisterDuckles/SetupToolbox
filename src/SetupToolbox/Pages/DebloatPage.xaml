@@ -163,6 +163,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -209,7 +210,20 @@
                  HorizontalAlignment="Left"
                  Margin="0,0,0,12" />
 
-        <ScrollView Grid.Row="3"
+        <!-- Uitkomst van het Windows-herstelpunt vóór de batch. Bewust een EIGEN
+             bar en niet CleanupResultBar: die wordt ná afloop door de leftover-
+             scan overschreven, en dan zou juist de waarschuwing over een MISLUKT
+             herstelpunt verdwijnen - precies het geval waarvoor deze bar bestaat. -->
+        <InfoBar x:Name="RestorePointResultBar"
+                 Grid.Row="3"
+                 Severity="Success"
+                 IsOpen="False"
+                 IsClosable="True"
+                 MaxWidth="720"
+                 HorizontalAlignment="Left"
+                 Margin="0,0,0,12" />
+
+        <ScrollView Grid.Row="4"
                     VerticalScrollBarVisibility="Auto"
                     Padding="0,0,14,12"
                     ScrollAnimationStarting="ScrollView_ScrollAnimationStarting">
@@ -444,7 +458,7 @@
              is (anders blijft de count-tekst leeg en zien we een dunne strip
              met enkel de knoppen). Border-top scheidt 'm visueel van de
              scrollende content erboven. -->
-        <Border Grid.Row="4"
+        <Border Grid.Row="5"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="0,1,0,0"
                 Padding="0,12,14,0"

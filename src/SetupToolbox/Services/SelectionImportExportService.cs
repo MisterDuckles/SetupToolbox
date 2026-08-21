@@ -42,54 +42,10 @@ public sealed class SelectionImportExportService
         await File.WriteAllTextAsync(filePath, json);
     }
 
-    // Leest een my-apps.json en zet IsSelected=true op elke matching app in
-    // de catalog. Apps die niet matchen worden geteld als "skipped" zodat
-    // user weet dat een paar IDs niet meer in de huidige catalog staan
-    // (bv. iemand die een file van een nieuwere versie importeert).
-    public async Task<SelectionImportResult> ImportAsync(string filePath, AppDatabase? db, bool clearFirst = true)
-    {
-        if (!File.Exists(filePath))
-            return new SelectionImportResult(0, 0, App.Loc.S("io.fileNotFound"));
-
-        SelectionExportPayload? payload;
-        try
-        {
-            var json = await File.ReadAllTextAsync(filePath);
-            payload = JsonSerializer.Deserialize<SelectionExportPayload>(json, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            return new SelectionImportResult(0, 0, App.Loc.S("io.jsonReadFailed", ex.Message));
-        }
-
-        if (payload?.Apps == null || payload.Apps.Count == 0)
-            return new SelectionImportResult(0, 0, App.Loc.S("io.noAppsInFile"));
-
-        if (clearFirst) SelectionHelper.ClearSelection(db);
-
-        // Build lookup (case-insensitive) zodat exports met andere case nog matchen.
-        var catalogLookup = SelectionHelper.EnumerateAllApps(db)
-            .GroupBy(a => a.WingetId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-        var matched = 0;
-        var skipped = new List<string>();
-        foreach (var wingetId in payload.Apps)
-        {
-            if (catalogLookup.TryGetValue(wingetId, out var app))
-            {
-                app.IsSelected = true;
-                matched++;
-            }
-            else
-            {
-                skipped.Add(wingetId);
-            }
-        }
-
-        return new SelectionImportResult(matched, skipped.Count, null, skipped);
-    }
-
+    // ImportAsync is in v1.2.9.4 verwijderd samen met de losse Importeren-knop:
+    // het lezen loopt nu volledig via ConfigBackupService.ReadAsync, die dit
+    // formaat al herkent en er een voorbeeld-dialog omheen zet. ExportAsync
+    // hierboven blijft wel - die schrijft nog steeds een losse my-apps.json.
     private sealed class SelectionExportPayload
     {
         [JsonPropertyName("version")]
@@ -105,9 +61,3 @@ public sealed class SelectionImportExportService
         public List<string> Apps { get; set; } = new();
     }
 }
-
-public sealed record SelectionImportResult(
-    int Matched,
-    int Skipped,
-    string? Error = null,
-    IReadOnlyList<string>? SkippedIds = null);

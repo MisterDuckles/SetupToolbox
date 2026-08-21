@@ -569,14 +569,23 @@ public sealed partial class DebloatPage : Page
             // maken. Extra UAC-prompt, niet ideaal maar acceptabel als 'normal'
             // safety-net flow. MixedSourceUninstaller threading is voor latere
             // iteratie.
+            var proceed = true;
             if (rpDescription != null)
             {
-                _ = await App.RestorePoint.CreateAsync(rpDescription);
+                var rp = await App.RestorePoint.CreateAsync(rpDescription);
                 rpDescription = null;
+                ShowRestorePointResult(rp);
+                // Mislukt het herstelpunt, dan valt het hele vangnet weg. Doorgaan
+                // mag, maar niet zonder dat je het gezien hebt.
+                if (!rp.Success) proceed = await ConfirmWithoutRestorePointAsync();
             }
-            var appsDialog = new AllAppsUninstallDialog(appsSelected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
-            await appsDialog.ShowAsync();
-            leftoverRefs.AddRange(appsDialog.SuccessfulItems.Select(BuildAppRef));
+
+            if (proceed)
+            {
+                var appsDialog = new AllAppsUninstallDialog(appsSelected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
+                await appsDialog.ShowAsync();
+                leftoverRefs.AddRange(appsDialog.SuccessfulItems.Select(BuildAppRef));
+            }
         }
 
         // Reload beide secties — een Store-app uninstall kan zowel de bloatware-
@@ -598,6 +607,47 @@ public sealed partial class DebloatPage : Page
     // PackageFullName ("Microsoft.MicrosoftSolitaireCollection" uit "Microsoft.MicrosoftSolitaireCollection_4.16.._x64..").
     // Voor Winget en Web hebben we geen PackageName — scanner valt terug op
     // DisplayName + Publisher matching.
+
+    // Het herstelpunt is het veiligheidsnet van deze batch. Tot v1.2.9.4 werd het
+    // resultaat weggegooid (`_ = await ...`), dus een MISLUKT herstelpunt werd
+    // nergens gemeld - je merkte het pas in de Systeemherstel-wizard, op het moment
+    // dat je 'm nodig had. Succes wordt ook gemeld: anders is niet te zien DAT het
+    // gebeurd is.
+    private void ShowRestorePointResult(RestorePointResult rp)
+    {
+        RestorePointResultBar.Severity = rp.Success
+            ? InfoBarSeverity.Success
+            : InfoBarSeverity.Warning;
+        RestorePointResultBar.Title = App.Loc.S(rp.Success
+            ? "debloat.restorePoint.ok.title"
+            : "debloat.restorePoint.failed.title");
+        RestorePointResultBar.Message = rp.Success
+            ? App.Loc.S("debloat.restorePoint.ok.body")
+            : App.Loc.S("debloat.restorePoint.failed.body", rp.Message);
+        RestorePointResultBar.IsOpen = true;
+    }
+
+    // DefaultButton bewust op Close: op een veiligheidsvraag hoort Enter te
+    // annuleren, niet door te drukken. Via DialogService omdat WinUI per thread
+    // maar een ContentDialog open laat en de ge-eleveerde PowerShell er net een had.
+    private async Task<bool> ConfirmWithoutRestorePointAsync()
+    {
+        var dialog = new ContentDialog
+        {
+            XamlRoot = this.XamlRoot,
+            Title = App.Loc.S("debloat.restorePoint.confirm.title"),
+            Content = new TextBlock
+            {
+                Text = App.Loc.S("debloat.restorePoint.confirm.body"),
+                TextWrapping = TextWrapping.Wrap
+            },
+            PrimaryButtonText = App.Loc.S("debloat.restorePoint.confirm.continue"),
+            CloseButtonText = App.Loc.S("common.cancel"),
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        return await DialogService.ShowAsync(dialog) == ContentDialogResult.Primary;
+    }
     private static UninstalledAppRef BuildAppRef(InstalledAppEntry entry)
     {
         string? packageName = null;
