@@ -259,6 +259,8 @@
   "dialog.backup.title": "Backup maken voor Apply?",
   "dialog.backup.withBackup": "Apply met backup",
   "dialog.backup.withoutBackup": "Apply zonder backup",
+  "dialog.backup.explain.before": "We kunnen een snapshot maken van de huidige registry-waardes voor de tweaks die je zo gaat toepassen. Als er later iets niet bevalt, klik je op",
+  "dialog.backup.explain.after": "bovenaan de Tweaks-tab om alles terug te zetten zoals 't was.",
   "dialog.backup.nameLabel": "Naam voor deze snapshot (optioneel)",
   "dialog.backup.namePlaceholder": "Bijv. 'Voor Bing search uit'",
   "dialog.backup.dontAsk": "Vraag dit niet meer en maak voortaan altijd een backup",

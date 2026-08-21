@@ -15,9 +15,22 @@
     CornerRadius="8">
 
     <StackPanel Spacing="14" MinWidth="420">
+        <!-- Drie Runs in plaats van een Text-attribuut, want de knopnaam midden in
+             de zin hoort vet te blijven: het is een letterlijke knop. Die naam komt
+             uit DEZELFDE key als de knop zelf (tweaks.restoreSnapshot), zodat de
+             twee niet uit elkaar kunnen lopen bij een hernoeming.
+
+             Deze alinea stond tot v1.2.9.5 als inline XAML-INHOUD hardcoded in het
+             Nederlands, en geen enkele scanner-pass zag 'm: pass 1 keek alleen naar
+             tekst-ATTRIBUTEN. In de Engelse UI stond hier dus gewoon Nederlands, bij
+             elke Tweaks-Apply met BackupBeforeApply = Ask. Pass 1b in
+             scan-untranslated.py is in dezelfde patch toegevoegd en ziet deze vorm
+             nu wel. -->
         <TextBlock TextWrapping="Wrap"
                    Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-            We kunnen een snapshot maken van de huidige registry-waardes voor de tweaks die je zo gaat applyen. Als er later iets niet bevalt, klik je op <Run FontWeight="SemiBold">Vorige staat herstellen</Run> bovenaan de Tweaks tab om alles terug te zetten zoals 't was.
+            <Run Text="{loc:Localize Key=dialog.backup.explain.before}" />
+            <Run FontWeight="SemiBold" Text="{loc:Localize Key=tweaks.restoreSnapshot}" />
+            <Run Text="{loc:Localize Key=dialog.backup.explain.after}" />
         </TextBlock>
 
         <StackPanel Spacing="4">

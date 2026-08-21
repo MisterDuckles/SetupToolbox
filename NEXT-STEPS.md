@@ -72,7 +72,7 @@ Boven komen tijdens het bouwen van de config-backup, bewust apart gehouden omdat
 
 - ~~**De losse app-import wist je huidige selectie zonder te vragen.**~~ — **opgelost in v1.2.9.4**, en anders dan hier geschetst: niet door er een bevestiging omheen te zetten maar door de knop wég te halen. De bundel-import herkent een los `my-apps.json` sinds v1.2.9 al als *Vorm 2*, dus de twee knoppen deden hetzelfde — één met voorbeeld-dialog en overschrijf-waarschuwing, één zonder. Oorspronkelijke tekst: `SettingsPage.ImportButton_Click` roept `ImportAsync(..., clearFirst: true)` aan en er zit geen bevestiging tussen: één misklik op *Importeren* + een bestand kiezen en de selectie waar je net een kwartier aan gewerkt hebt is weg, zonder undo. Bestaat sinds v0.7.4 en is nooit gemeld, maar het is de enige destructieve knop in de app zonder confirm. Krijgt de bundel-import een voorbeeld-dialog (zie de v1.2.9-beslissing over selectief importeren), dan staat die inconsistentie er straks naast: de ene import vraagt wel, de andere niet. Twee uitwegen: dezelfde voorbeeld-dialog ook voor de losse import, of `clearFirst` naar een keuze in die dialog tillen.
 
-- **Er staat nog een hardcoded Nederlandse alinea in de UI, en geen enkele scanner-pass ziet 'm.** `Dialogs/BackupPromptDialog.xaml:20` heeft zijn uitlegtekst als **inline XAML-inhoud** staan (`<TextBlock>tekst</TextBlock>`) in plaats van als `Text="..."`-attribuut. Pass 1 kijkt alleen naar tekst-*attributen*, dus dit is de vierde vorm die structureel buiten beeld blijft — na geïnterpoleerde strings (v1.2.6), switch-armen en lokale variabelen (v1.2.7) en de kapotte `Services/`-pass (v1.2.8). De alinea is zichtbaar bij **elke** Tweaks-Apply met `BackupBeforeApply = Ask`, dus in de Engelse UI staat er gewoon Nederlands. Het is bewust **niet** in v1.2.9 meegenomen: het is vertaalwerk in een patch over config-backup, en het vraagt een eigen keuze omdat er een `<Run FontWeight="SemiBold">` middenin staat — dat wordt dus óf drie keys (voor, vet, na), óf één key zonder het vet. Neem bij het oppakken meteen pass 1 mee: die moet inline-inhoud gaan zien, anders vindt de volgende ronde ‘m weer niet.
+- ~~**Er staat nog een hardcoded Nederlandse alinea in de UI, en geen enkele scanner-pass ziet 'm.**~~ — **opgelost in v1.2.9.5**, samen met de scanner-pass die ’m had moeten vinden. Het werden **twee** keys in plaats van drie: de vette knopnaam bestond al als `tweaks.restoreSnapshot`. Oorspronkelijke tekst: `Dialogs/BackupPromptDialog.xaml:20` heeft zijn uitlegtekst als **inline XAML-inhoud** staan (`<TextBlock>tekst</TextBlock>`) in plaats van als `Text="..."`-attribuut. Pass 1 kijkt alleen naar tekst-*attributen*, dus dit is de vierde vorm die structureel buiten beeld blijft — na geïnterpoleerde strings (v1.2.6), switch-armen en lokale variabelen (v1.2.7) en de kapotte `Services/`-pass (v1.2.8). De alinea is zichtbaar bij **elke** Tweaks-Apply met `BackupBeforeApply = Ask`, dus in de Engelse UI staat er gewoon Nederlands. Het is bewust **niet** in v1.2.9 meegenomen: het is vertaalwerk in een patch over config-backup, en het vraagt een eigen keuze omdat er een `<Run FontWeight="SemiBold">` middenin staat — dat wordt dus óf drie keys (voor, vet, na), óf één key zonder het vet. Neem bij het oppakken meteen pass 1 mee: die moet inline-inhoud gaan zien, anders vindt de volgende ronde ‘m weer niet.
 
 - ~~**Apps buiten de catalogus gaan niet mee in de config-backup.**~~ — **opgelost in v1.2.9.1.** De verwachting hieronder klopte grotendeels, met één correctie: het bleken er op een echte machine niet "de meeste" maar precies **58 van de 107** bruikbaar; de rest zijn MSIX/ARP-pakketten waarvan de id geen winget-pakket is. Oorspronkelijke tekst: de export lijst alleen de 108 catalogus-apps; een winget-id dat niet in `apps.json` staat heeft aan de importkant nergens een plek om te landen, want de import zet `IsSelected` op een catalogus-app. Voor "verhuis mijn pc" is dat een echte beperking: de meeste geïnstalleerde apps van een power-user staan niet in de curated lijst. Er is wel een aanknopingspunt — `SelectionHelper.ExtraSelectedApps` bestaat al voor synthetische apps uit winget-repo-zoekresultaten, dus een bundel zou `{ wingetId, name, source }` kunnen bewaren en die bij import als extra’s terugzetten. Eigen patch waard; het raakt de install-flow en niet alleen het bestandsformaat.
 
@@ -129,6 +129,41 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.9.5 — Het vertaalrestje dat vier fases lang onzichtbaar bleef
+
+Één alinea, en de scanner-pass die ‘m had moeten vinden. De stringtabellen gaan van 1345 naar **1347 keys**.
+
+#### De alinea
+
+`Dialogs/BackupPromptDialog.xaml:20` had zijn uitlegtekst als **inline XAML-inhoud** staan (`<TextBlock>tekst</TextBlock>`) in plaats van als `Text="…"`-attribuut. Zichtbaar bij **elke** Tweaks-Apply met `BackupBeforeApply = Ask`, dus in de Engelse UI stond daar gewoon Nederlands.
+
+Gekozen voor de variant mét het vet, want dat vet doet hier werk: het is de letterlijke naam van een knop. En dat pakte goedkoper uit dan gedacht — **de vette tekst bestond al als key**: `tweaks.restoreSnapshot` (*"Vorige staat herstellen"* / *"Restore previous state"*), de key van de knop zelf. Het werden dus **twee** nieuwe keys in plaats van drie, en de zin blijft automatisch synchroon met de echte knop als die ooit hernoemd wordt.
+
+```xml
+<Run Text="{loc:Localize Key=dialog.backup.explain.before}" />
+<Run FontWeight="SemiBold" Text="{loc:Localize Key=tweaks.restoreSnapshot}" />
+<Run Text="{loc:Localize Key=dialog.backup.explain.after}" />
+```
+
+Dit was het enige `<Run>` in de hele XAML-boom.
+
+#### Pass 1b: de scanner leert inline-inhoud zien
+
+Pass 1 keek alleen naar tekst-**attributen**. Inline **inhoud** viel daar per constructie buiten, en dat is de vierde blinde vlek op rij — na geïnterpoleerde strings (v1.2.6), switch-armen en lokale variabelen (v1.2.7) en de kapotte `Services/`-pass (v1.2.8).
+
+De nieuwe pass meldt **elke** tekst-node met een letter erin. Dat is grover dan pass 1, maar hier mág het grof: XAML-inhoud die géén tekst is bestaat uit **elementen**, en daartussen staat alleen witruimte. Commentaar wordt geblankt in plaats van verwijderd zodat de regelnummers blijven kloppen; markup-extensies als inhoud (`<TextBlock>{Binding X}</TextBlock>`) vallen weg op de bestaande `skip()`.
+
+> **Bewezen in plaats van aangenomen.** Een pass die 0 meldt kan ook gewoon stuk zijn, dus is ‘ie op een wegwerp-XAML met bekende inhoud gedraaid. Uitkomst: hij vindt de losse zin, hij vindt **alle drie** de fragmenten rond een `<Run>` los van elkaar, hij slaat een volzin in XAML-commentaar over en hij slaat `{Binding …}` over — met de juiste regelnummers. Op de echte boom: 0, want de alinea hierboven is gefixt. Het wegwerp-bestand is daarna verwijderd.
+
+De kop van pass 1 heet nu *"XAML literals in tekst-attributen en -inhoud"* en de docstring spreekt van vijf passes.
+
+> **Aangetoond (2026-08-21):**
+> - Build: **0 errors, 0 warnings** op `1.2.9.5`.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0 / 0** over vijf passes, plus de wegwerp-test hierboven.
+> - `check-catalog-keys.py`: **1347 = 1347**, "gecontroleerd op aanroep" 626 → **628** — exact +2.
+>
+> **Nog te verifiëren door user:** of de spatie vóór en ná het vet er goed uitziet. XAML collapst de witruimte tússen twee `<Run>`-elementen normaal tot één spatie, maar dat is de plek waar deze constructie fout kan gaan — zie je *"klik jeVorige staat"* dan moet er een spatie in de key zelf. Zichtbaar via Tweaks → Toepassen met *Backup vooraf* op *Vragen*.
 
 ### v1.2.9.4 — Het veiligheidsnet rond destructieve acties
 

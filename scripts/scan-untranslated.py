@@ -7,9 +7,11 @@ je met de hand niet ziet. Draai dit voor en na een vertaalfase.
 
     py scripts/scan-untranslated.py
 
-Vier passes:
+Vijf passes:
   XAML  tekst-dragende attributen met een letterlijke waarde in plaats van een
         markup-extension ({loc:Localize ...}) of een binding.
+  XAML  inline INHOUD tussen de tags (<TextBlock>tekst</TextBlock>, <Run>, <Bold>).
+                                                     [blinde vlek 4, v1.2.9.5]
   C#    string-literals die aan .Text / .Content / .Title / .Message /
         *ButtonText / .Header worden toegekend, plus named arguments die naar de
         UI stromen (body:, title:, confirmText: ...).
@@ -297,6 +299,48 @@ for path in walk('.xaml'):
                 rel = os.path.relpath(path, ROOT)
                 if not skip(v, rel, xaml=True):
                     xaml_hits.append((rel, i, attr, v))
+
+# --- Pass 1b: XAML-INHOUD -----------------------------------------------------
+# Pass 1 hierboven kijkt alleen naar tekst-ATTRIBUTEN. De vierde vorm die daar
+# structureel buiten viel is inline INHOUD:
+#
+#     <TextBlock>We kunnen een snapshot maken ... <Run FontWeight="SemiBold">...
+#
+# Die stond vier vertaalfases lang onopgemerkt in BackupPromptDialog en was in de
+# Engelse UI gewoon Nederlands. Na de blinde vlekken van v1.2.6 (geinterpoleerde
+# strings), v1.2.7 (switch-armen en lokale variabelen) en v1.2.8 (de kapotte
+# Services/-pass) is dit de vierde.
+#
+# Elke tekst-node met een letter erin is verdacht. Dat is grover dan pass 1, maar
+# hier MAG het grof: XAML-inhoud die geen tekst is bestaat uit ELEMENTEN, en
+# daartussen staat alleen witruimte. Nagerekend over de hele boom: nul valse
+# positieven.
+#
+# Wat er per constructie niet uitkomt:
+#   <StackPanel>\n  <TextBlock .../>   tussen de tags staat alleen witruimte
+#   <TextBlock>{Binding X}</TextBlock>  markup-extension, skip() vangt de {
+#   glyphs, cijfers, interpunctie       dezelfde skip() als pass 1
+# Wat er WEL uitkomt en dat ook hoort: <Run>, <Bold>, <Italic>, <Hyperlink>,
+# <Paragraph> - tekstfragmenten, ook als ze in een grotere zin zitten. Duikt er
+# ooit een <x:String> of een <Setter>waarde</Setter> op, dan hoort die in ALLOW
+# met reden, niet in een uitzondering hier.
+#
+# Commentaar wordt geBLANKT en niet verwijderd, zodat de regelnummers kloppen.
+XAML_COMMENT = re.compile(r'<!--.*?-->', re.S)
+XAML_INLINE = re.compile(r'>([^<>]*)<', re.S)
+
+for path in walk('.xaml'):
+    rel = os.path.relpath(path, ROOT)
+    text = XAML_COMMENT.sub(lambda m: re.sub(r'[^\n]', ' ', m.group(0)),
+                            open(path, encoding='utf-8').read())
+    for m in XAML_INLINE.finditer(text):
+        raw = m.group(1)
+        v = ' '.join(raw.split())
+        if not v or skip(v, rel, xaml=True):
+            continue
+        # Regelnummer van het eerste ECHTE teken, niet van de '>' ervoor.
+        pos = m.start(1) + (len(raw) - len(raw.lstrip()))
+        xaml_hits.append((rel, text.count('\n', 0, pos) + 1, 'inline', v))
 
 # De C#-pass werkt op STATEMENTS, niet op regels. Een regel-gebaseerde pass mist
 # twee vormen die allebei echt in de app stonden (v1.2.6-les):
@@ -598,7 +642,7 @@ for path in walk('.cs'):
 seen = {(f, i) for f, i, _ in arm_hits}
 sentence_hits = [h for h in sentence_hits if (h[0], h[1]) not in seen]
 
-print('=== XAML literals in tekst-attributen: %d ===' % len(xaml_hits))
+print('=== XAML literals in tekst-attributen en -inhoud: %d ===' % len(xaml_hits))
 for f, i, a, v in xaml_hits:
     print('  %s:%d  %s="%s"' % (f, i, a, v[:110]))
 

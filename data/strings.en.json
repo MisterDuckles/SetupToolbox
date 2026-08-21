@@ -259,6 +259,8 @@
   "dialog.backup.title": "Create a backup before Apply?",
   "dialog.backup.withBackup": "Apply with backup",
   "dialog.backup.withoutBackup": "Apply without backup",
+  "dialog.backup.explain.before": "We can take a snapshot of the current registry values for the tweaks you are about to apply. If something turns out wrong later, click",
+  "dialog.backup.explain.after": "at the top of the Tweaks tab to put everything back the way it was.",
   "dialog.backup.nameLabel": "Name for this snapshot (optional)",
   "dialog.backup.namePlaceholder": "E.g. 'Before turning off Bing search'",
   "dialog.backup.dontAsk": "Don't ask again and always create a backup from now on",
