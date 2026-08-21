@@ -16,7 +16,16 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 > **Route naar de volgende release, vastgelegd op 2026-08-20 (user).** Drie items achter elkaar — **v1.2.8 → v1.2.9 → v1.2.10** — en zodra die binnen zijn wordt er een **milestone-release** gecut. De website schuift daarachteraan, want die trekt versie en downloadlink live uit de GitHub-API en heeft die Release dus nodig. Elk van de drie in een **eigen chat**: de context van de vertaalreeks is niet meer nodig en NEXT-STEPS.md is de overdracht.
 >
-> **Stand 2026-08-20: v1.2.8, v1.2.8.1 én v1.2.9 zijn af.** v1.2.8 is door user getest (install, uninstall, geweigerde UAC, reeds-geïnstalleerd); die test leverde v1.2.8.1 op omdat winget's eigen stdout nog Engels op de install-kaart stond. v1.2.9 (config-backup) is gebouwd en gecommit; de test daarvan leverde **v1.2.9.1** op — tweaks waren niet aan te vinken en apps buiten de catalogus konden niet mee. De round-trip staat nog bij user open — zie de noot in die sectie. v1.2.8.1 zelf is op verzoek van user **niet meer visueel nagelopen** — zie de noot in die sectie. **Nog open aan verificatie: de export/import-round-trip van v1.2.9 / v1.2.9.1.** Volgende aan de beurt: **v1.2.10**, in een eigen chat.
+> **Stand 2026-08-20: v1.2.8, v1.2.8.1 én v1.2.9 zijn af.** v1.2.8 is door user getest (install, uninstall, geweigerde UAC, reeds-geïnstalleerd); die test leverde v1.2.8.1 op omdat winget's eigen stdout nog Engels op de install-kaart stond. v1.2.9 (config-backup) is gebouwd en gecommit; de test daarvan leverde **v1.2.9.1** op — tweaks waren niet aan te vinken en apps buiten de catalogus konden niet mee. De round-trip staat nog bij user open — zie de noot in die sectie. v1.2.8.1 zelf is op verzoek van user **niet meer visueel nagelopen** — zie de noot in die sectie. **Stand 2026-08-21 na de test van user: de export-flow WÉRKT** — tweaks kiezen, apps kiezen en het bestand wegschrijven zijn gedaan en bevestigd. Er kwamen twee dingen uit die test, plus één bevestigde wens; die zijn samen **v1.2.9.2** geworden en staan hieronder als eigen item. Daarna pas **v1.2.10**. Elk in een eigen chat. **Nog niet getest: de IMPORT-kant** van v1.2.9 / v1.2.9.1.
+
+> **Sessieplan 2026-08-21 (tweede sessie, user).** Afgeweken van "elk item in een eigen chat": user vraagt om **alle openstaande items in één sessie parallel op te pakken, alles behalve de release**. Vijf onderzoeksagents zijn tegelijk op de deelvragen gezet; de implementatie en de builds blijven serieel, en **elke versie houdt zijn eigen commit** — er wordt niets gebundeld.
+>
+> Twee scope-besluiten van user in deze sessie:
+>
+> 1. **De website (v1.3.1) gaat mee, in de volle scope** — uiterlijk professionaliseren én de inhoud synchroon brengen. Daarmee schuift 'ie **vóór** de release in plaats van erachter. De reden waarom 'ie er ooit achter gezet is vervalt namelijk: versie en downloadlink komen live uit de GitHub-API en lopen dus vanzelf mee zodra v1.3.0 gepubliceerd wordt. Het nummer *v1.3.1* is misleidend geworden; de website krijgt een **eigen commit zónder app-versiebump**, want het raakt de exe niet.
+> 2. **Het kleine onderhoud wordt gegroepeerd per thema**, niet negen losse patches en ook niet één verzamelcommit. Indeling hieronder.
+>
+> **De versie-indeling van deze sessie:** v1.2.9.2 (export-dialog: layout + teller + winget-search) · v1.2.9.3 (zichtbare UI-defecten) · v1.2.9.4 (veiligheidsnet: herstelpunt-uitkomst + bevestiging vóór de destructieve losse import) · v1.2.9.5 (vertaalrestje `BackupPromptDialog` + scanner pass 1 leert inline-XAML zien) · v1.2.9.6 (opruimen: dode weergave-strings, subcategorie-descriptions, `CONTRIBUTING.md`) · v1.2.10 (wat-is-er-nieuw-melding) · website (eigen commit). **v1.3.0 blijft expliciet buiten deze sessie** — die cut doet user zelf.
 
 ### v1.2.10 — "Wat is er nieuw"-melding na een update
 
@@ -67,7 +76,7 @@ Boven komen tijdens het bouwen van de config-backup, bewust apart gehouden omdat
 
 - ~~**Apps buiten de catalogus gaan niet mee in de config-backup.**~~ — **opgelost in v1.2.9.1.** De verwachting hieronder klopte grotendeels, met één correctie: het bleken er op een echte machine niet "de meeste" maar precies **58 van de 107** bruikbaar; de rest zijn MSIX/ARP-pakketten waarvan de id geen winget-pakket is. Oorspronkelijke tekst: de export lijst alleen de 108 catalogus-apps; een winget-id dat niet in `apps.json` staat heeft aan de importkant nergens een plek om te landen, want de import zet `IsSelected` op een catalogus-app. Voor "verhuis mijn pc" is dat een echte beperking: de meeste geïnstalleerde apps van een power-user staan niet in de curated lijst. Er is wel een aanknopingspunt — `SelectionHelper.ExtraSelectedApps` bestaat al voor synthetische apps uit winget-repo-zoekresultaten, dus een bundel zou `{ wingetId, name, source }` kunnen bewaren en die bij import als extra’s terugzetten. Eigen patch waard; het raakt de install-flow en niet alleen het bestandsformaat.
 
-- **De export-dialog zoekt alleen in wat er al staat, niet in de winget-repo.** De zoekbalk filtert de lijst: de 108 catalogus-apps plus de geïnstalleerde apps daarbuiten. Een app die je **niet** hebt en die **niet** in de catalogus staat, kun je dus niet aan een backup toevoegen — daarvoor zou de dialog een echte `winget search` moeten doen, zoals de Apps-pagina al doet (`ScheduleWingetSearch`, 300ms debounce + epoch-check). Zo gelezen bij het vaststellen van de scope van v1.2.9.1; als dat toch de bedoeling was, is dit het openstaande stuk. Het formaat is er al op voorbereid: `appDetails` draagt naam en bron, dus een zoekresultaat past er zonder wijziging in.
+- ~~**De export-dialog zoekt alleen in wat er al staat, niet in de winget-repo.**~~ — **bevestigd gewenst door user (2026-08-21) en verplaatst naar v1.2.9.2 onder *Open*.** Oorspronkelijke tekst: De zoekbalk filtert de lijst: de 108 catalogus-apps plus de geïnstalleerde apps daarbuiten. Een app die je **niet** hebt en die **niet** in de catalogus staat, kun je dus niet aan een backup toevoegen — daarvoor zou de dialog een echte `winget search` moeten doen, zoals de Apps-pagina al doet (`ScheduleWingetSearch`, 300ms debounce + epoch-check). Zo gelezen bij het vaststellen van de scope van v1.2.9.1; als dat toch de bedoeling was, is dit het openstaande stuk. Het formaat is er al op voorbereid: `appDetails` draagt naam en bron, dus een zoekresultaat past er zonder wijziging in.
 
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.7
 
@@ -120,6 +129,81 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v1.2.9.2 — Export-dialog: afgeknipte layout, verkeerde teller, en zoeken in de winget-repo
+
+Drie punten uit de eerste echte export-run van user (2026-08-21). De export zelf werkte al; dit waren de restjes eromheen. De stringtabellen gaan van 1335 naar **1338 keys**.
+
+#### 1. De dialog viel van het scherm — en de eerder uitgewerkte fix klopte maar half
+
+De diagnose noemde drie oorzaken. Nagerekend tegen de werkelijke markup blijkt er **één** van te kloppen, en waren twee van de drie voorgestelde ingrepen no-ops:
+
+- `MinWidth="0"` op de naam-`StackPanel` doet niets — `FrameworkElement.MinWidth` staat standaard al op `0`. (Op de `CheckBox` is het wél zinvol, want de CheckBox-*style* zet 120, en daar stond het al.)
+- `ScrollViewer.HorizontalScrollMode="Disabled"` op de `ListView` is al de default van die style.
+- Ook `MinWidth="0"` op de `AutoSuggestBox` haalt de echte ondergrens niet weg: die komt uit `TextControlThemeMinWidth` (64px) in het template, niet van de buitenkant.
+
+De echte rekensom: `ContentDialogMaxWidth` = **548** → na de dialogpadding **~500px** inhoud, terwijl het root-grid **`MinWidth="520"`** eiste. De `ContentScrollViewer` in het ContentDialog-template scrollt niet horizontaal, dus de grid werd op 520 gelayout en op 500 **afgeknipt**. Precies die ~20px zijn de rechterbadge en de laatste letter van *Selectie opheffen*. Eén oorzaak, twee symptomen — exact wat de screenshot laat zien.
+
+Gefixt met **`ContentDialogMinWidth` 680 + `ContentDialogMaxWidth` 720** in `ContentDialog.Resources`, en de grid-`MinWidth` er helemáál uit. Bewust 680/720 en niet de eerder geschetste 760: dat is letterlijk de schrijfwijze van `InstallDialog`, `AllAppsUninstallDialog` en `BloatwareUninstallDialog`, dus de lijst-dialogs in de app zijn nu even breed. En bewust **één** breedtebron in plaats van twee — twee die elkaar tegenspreken was nou juist de bug. De vijf zuster-dialogs zetten **allebei** de keys; alleen `MaxWidth` laat de breedte alsnog door de inhoud bepalen, en die krimpt zodra je `TextWrapping` toevoegt.
+
+De twee selectie-knoppen zijn wel verhuisd naar de onderste rij naast de teller (in het Nederlands zijn ze samen ~300px en zetten ze dus de ondergrens voor de hele dialog), en de twee samenvattingsregels, de teller en de leeg-tekst hebben `TextWrapping="Wrap"` gekregen. Botsing met de `PrimaryButton`/`CloseButton` is er niet: die leven in de `CommandSpace` van het template, in een eigen rij onder de content.
+
+#### 2. De 39 versus de 58 — er was geen bug
+
+De teller zei *"21 apps geselecteerd van 147 in de catalogus"* terwijl de catalogus er 108 heeft. 147 − 108 = **39** apps buiten de catalogus, terwijl de meting van v1.2.9.1 er **58** bruikbaar telde. Dat gat van 19 stond als onverklaard genoteerd, met `WingetService.ParseListOutput` als hoofdverdachte.
+
+**Uitgezocht op de echte `winget list`-output van deze machine, en de verdenking is onterecht.** Beide getallen kloppen; ze tellen iets anders:
+
+| stap | aantal |
+| --- | --- |
+| datarijen | 128 |
+| gedropt op `line.Length < versionPos` | **0** |
+| gedropt op lege naam/id | **0** |
+| gedropt op `!isWingetId && !isStoreId` | **0** |
+| gedropt op `MSIX\` / `ARP\` in de id | 49 |
+| `ParseListOutput` levert | 79 |
+| daarvan in de catalogus | 21 |
+| **rijen** buiten de catalogus | **58** |
+| **unieke id's** na dedup | **39** |
+
+**58 is een rij-telling vóór dedup, 39 een id-telling erna.** Het verschil van 19 zijn dubbel geïnstalleerde runtimes: `Microsoft.WindowsAppRuntime.1.8` staat er zes keer in, `.2` vijf keer, `Microsoft.DotNet.SDK.10` drie keer, `Microsoft.UI.Xaml.2.8` drie keer, en nog zes pakketten twee keer — samen exact 19 extra kopieën. De v1.2.9.1-notitie noemde er maar twee van, en dáárdoor leek het onverklaard.
+
+Een tolerante tweede parser (zelfde kolomposities, léngte-check eruit, rijen rechts opgevuld) levert **exact dezelfde 79 / 58 / 39**. De vier andere hypothesen zijn ook uitgesloten: nul rijen met een teken boven U+007E (geen kolomverschuiving door dubbele-breedte tekens), de `Available`-kolom wordt correct afgekapt, er zijn precies 21 catalogus-matches, en de machine is sinds de meting niet veranderd (128 rijen toen én nu, 49 `MSIX\`/`ARP\` toen én nu).
+
+> **Er ontbreekt dus geen enkele app in de backup.** De 19 weggevallen rijen zijn duplicaten van id's die al in de lijst staan, en een backup bewaart alleen de winget-id zonder versie — `winget install --id Microsoft.WindowsAppRuntime.1.8` kun je maar één keer zetten.
+
+Wat er wél fout stond is alleen de tekst: *"in de catalogus"* sprak de badge tegen die op 39 van die rijen staat. `config.export.appsSelected` is nu *"{0} geselecteerd van {1} in de lijst."* — waarde aangepast, key blijft staan, dus geen wees.
+
+**Wel meegenomen: `ParseListOutput` is verhard.** De lengte-gate gooide de regel weg; hij vult nu rechts op tot de headerbreedte. Vandaag verandert dat niets (winget padt elke rij tot de volle tabelbreedte), maar zodra winget dat niet meer doet zou elke rij met een lege laatste kolom **stil** verdwijnen — en dan ontbreken er wél apps in de backup. `ParseUpgradeTables` profiteert er direct van, want die knipt per header-blok en daar zijn smalle tabellen wel realistisch.
+
+#### 3. Zoeken in de winget-repo — een eigen sectie onder de lijst
+
+**Keuze van user (2026-08-21): een aparte sectie eronder**, niet een derde sorteergroep in dezelfde lijst. Alleen zichtbaar tijdens het zoeken, zoals de Apps-pagina het doet.
+
+Het debounce-patroon is letterlijk overgenomen van `AppsPage.ScheduleWingetSearch`: 300ms via een `DispatcherQueueTimer`, plus een epoch-check zodat een trage oudere zoekopdracht de resultaten van een nieuwere niet overschrijft. Ook de bewuste asymmetrie is meegenomen — bij een epoch-mismatch wordt de spinner **niet** verborgen, want er is dan een nieuwere zoekopdracht onderweg die dat zelf doet.
+
+Vier dingen die niet vanzelf goed gingen:
+
+- **Een aangevinkt zoekresultaat verhuist naar de hoofdlijst.** Dat moét: `SelectedAppIds` en `GetSelectedAppDetails()` lezen uitsluitend `_all`, dus een vinkje op een rij die daar niet in zit zou zónder waarschuwing uit de export vallen zodra je de zoekterm wist. Uitvinken laat 'm daarna staan — net als de extra-kaarten op AppsPage — want anders maakt één misklik je hele zoekopdracht ongedaan.
+- **De moniker-val.** Winget matcht ook op moniker en tag: zoek *"vscode"* en je krijgt `Microsoft.VisualStudioCode` terug, die in de catalogus staat en dus weggededupt wordt — terwijl `Matches()` 'm in de hoofdlijst óók niet toont, want noch de naam noch de id bevat "vscode". Je zou dan **niets** zien terwijl de app er gewoon staat. Opgelost met een `_repoKnownHits`-set van weggedupte id's waar `ApplyFilter` op doorlaat.
+- **De hoofdlijst krimpt** van 280 naar 160px zodra de repo-sectie verschijnt. Zonder dat groeit de dialog met ~190px en valt 'ie van een 768px-hoog scherm — precies de bug uit punt 1, dan opnieuw.
+- **Een `ContentDialog` met een levend proces erin** is nieuw in deze app; de winget-zoekactie draaide tot nu toe altijd op een Page. De timer hangt niet aan de levensduur van de dialog, dus een `Closed`-handler zet `_closed`, bumpt de epoch en stopt de timer. Zonder dat start er een `winget.exe` voor een venster dat niemand meer ziet, en `RunWingetCommandAsync` heeft geen timeout. Schrijven naar de `ObservableCollection` ná het sluiten is overigens géén crash — de continuation hervat op de UI-thread — maar het is wel verspilling.
+
+*Alles selecteren* werkt bewust **niet** op de repo-sectie. Die staat vol met wat winget op je zoekterm teruggeeft, en één klik zou daar twintig pakketten van in je backup zetten; uit de repo pak je er gericht een of twee. Op de hoofdlijst blijft de bestaande regel gelden: wat **zichtbaar** is.
+
+Het bestandsformaat is ongewijzigd — `appDetails` droeg al `wingetId` + `name` + `source`, dus een zoekresultaat past er zonder sub-versiebump in.
+
+#### 3 nieuwe keys
+
+`config.export.repoResults`, `.repoBadge` en `.noRepoMatch`. Drie bestaande keys kregen een nieuwe **waarde** zonder hernoeming (dus geen wezen): `config.export.intro`, `.searchPlaceholder` en `.appsSelected`. 1335 → **1338**.
+
+> **Aangetoond (2026-08-21):**
+> - Build: **0 errors, 0 warnings** op `1.2.9.2`.
+> - `scan-untranslated.py`: **0 / 0 / 0 / 0**.
+> - `check-catalog-keys.py`: **1338 = 1338**, geen wezen, geen lege waardes. De teller "gecontroleerd op aanroep" gaat van 616 naar **619** — exact +3, dus elke nieuwe key wordt aangeroepen en geen van de drie hernoemde is stilletjes wees geworden.
+> - Het 39-vs-58-verschil is op **echte** `winget list`-output nagerekend, niet beredeneerd — zie de tabel hierboven.
+>
+> **Nog te verifiëren door user:** of de dialog nu volledig binnen beeld valt, en of de repo-sectie verschijnt, vindt en het aangevinkte resultaat naar de hoofdlijst tilt.
 
 ### v1.2.9.1 — Tweaks zelf aanvinken bij het exporteren + apps buiten de catalogus
 

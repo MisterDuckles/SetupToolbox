@@ -15,6 +15,19 @@
     CornerRadius="8">
 
     <ContentDialog.Resources>
+        <!-- v1.2.9.2: zonder deze twee klemt WinUI elke ContentDialog op 548px (de
+             default van ContentDialogMaxWidth). Na de dialogpadding blijft daar
+             ~500px inhoud van over, terwijl het root-grid hieronder MinWidth="520"
+             eiste - en de ContentScrollViewer in het template scrollt niet
+             horizontaal. Alles rechts van ~500px werd dus afgeknipt: de rechterbadge
+             liep door de rand en van "Selectie opheffen" bleef "Selectie opheffe"
+             over. Die MinWidth is weg; de breedte komt nu uit deze twee keys en
+             nergens anders, want twee concurrerende breedtebronnen waren nou juist
+             de bug. Dezelfde waardes als InstallDialog en de twee uninstall-dialogs,
+             zodat de lijst-dialogs in de app even breed zijn. -->
+        <x:Double x:Key="ContentDialogMinWidth">680</x:Double>
+        <x:Double x:Key="ContentDialogMaxWidth">720</x:Double>
+
         <!-- Zonder Stretch krimpt de rij tot de breedte van zijn inhoud en staat
              de "Installed"-badge midden in de dialog in plaats van rechts. -->
         <Style x:Key="ConfigExportRowStyle" TargetType="ListViewItem">
@@ -22,14 +35,66 @@
             <Setter Property="Padding" Value="8,0" />
             <Setter Property="MinHeight" Value="0" />
         </Style>
+
+        <!-- Een template voor beide lijsten: de hoofdlijst en de zoekresultaten uit
+             de winget-repo tonen exact dezelfde rij. -->
+        <DataTemplate x:Key="ConfigExportRowTemplate" x:DataType="dialogs:ConfigExportAppRow">
+            <Grid ColumnSpacing="10" Padding="0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <CheckBox Grid.Column="0"
+                          MinWidth="0"
+                          IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{x:Bind WingetId}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center">
+                    <Border Visibility="{x:Bind RepoBadgeVisibility}"
+                            Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
+                            CornerRadius="4"
+                            Padding="8,2">
+                        <TextBlock Text="{loc:Localize Key=config.export.repoBadge}"
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                    </Border>
+                    <Border Visibility="{x:Bind OutsideCatalogBadgeVisibility}"
+                            Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                            CornerRadius="4"
+                            Padding="8,2">
+                        <TextBlock Text="{loc:Localize Key=config.export.outsideCatalog}"
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                    </Border>
+                    <Border Visibility="{x:Bind InstalledBadgeVisibility}"
+                            Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                            CornerRadius="4"
+                            Padding="8,2">
+                        <TextBlock Text="{loc:Localize Key=common.installed}"
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
     </ContentDialog.Resources>
 
-    <Grid MinWidth="520" RowSpacing="12">
+    <Grid RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -49,16 +114,22 @@
                 Padding="12,10">
             <StackPanel Spacing="4">
                 <TextBlock x:Name="TweakSummaryText"
+                           TextWrapping="Wrap"
                            Style="{StaticResource CaptionTextBlockStyle}" />
                 <TextBlock x:Name="SettingsSummaryText"
+                           TextWrapping="Wrap"
                            Style="{StaticResource CaptionTextBlockStyle}" />
             </StackPanel>
         </Border>
 
+        <!-- De twee selectie-knoppen stonden hier en zetten daarmee de ondergrens
+             voor de hele dialog: in het Nederlands zijn ze samen ~300px. Ze staan
+             nu onderaan naast de teller, waar ze geen breedte kosten die er niet
+             al is. De zoekbalk pakt de volle rij; ernaast alleen de spinner van
+             de winget-repo-zoekactie. -->
         <Grid Grid.Row="2" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
@@ -68,6 +139,70 @@
                             PlaceholderText="{loc:Localize Key=config.export.searchPlaceholder}"
                             TextChanged="SearchBox_TextChanged" />
 
+            <ProgressRing Grid.Column="1"
+                          x:Name="RepoRing"
+                          Width="18" Height="18"
+                          IsActive="True"
+                          VerticalAlignment="Center"
+                          Visibility="Collapsed" />
+        </Grid>
+
+        <ListView x:Name="AppList"
+                  Grid.Row="3"
+                  Height="280"
+                  SelectionMode="None"
+                  ItemTemplate="{StaticResource ConfigExportRowTemplate}"
+                  ItemContainerStyle="{StaticResource ConfigExportRowStyle}" />
+
+        <TextBlock Grid.Row="3"
+                   x:Name="NoMatchText"
+                   Visibility="Collapsed"
+                   VerticalAlignment="Top"
+                   Margin="8,8,0,0"
+                   TextWrapping="Wrap"
+                   Text="{loc:Localize Key=config.export.noMatch}"
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        <!-- v1.2.9.2: apps die je NIET hebt en die NIET in de catalogus staan.
+             Alleen zichtbaar tijdens het zoeken. Vink je er een aan, dan verhuist
+             'ie naar de hoofdlijst hierboven - zie RepoRow_Changed voor waarom dat
+             moet. De hoofdlijst krimpt dan naar 160px zodat de dialog niet van het
+             scherm groeit op een 768px-hoog beeld. -->
+        <StackPanel x:Name="RepoSection"
+                    Grid.Row="4"
+                    Spacing="6"
+                    Visibility="Collapsed">
+            <TextBlock Text="{loc:Localize Key=config.export.repoResults}"
+                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+            <TextBlock x:Name="RepoEmptyText"
+                       Visibility="Collapsed"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+            <ListView x:Name="RepoList"
+                      Height="150"
+                      SelectionMode="None"
+                      ItemTemplate="{StaticResource ConfigExportRowTemplate}"
+                      ItemContainerStyle="{StaticResource ConfigExportRowStyle}" />
+        </StackPanel>
+
+        <Grid Grid.Row="5" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       x:Name="CountText"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
             <Button Grid.Column="1"
                     Content="{loc:Localize Key=common.selectAll}"
                     Click="SelectAll_Click" />
@@ -75,69 +210,5 @@
                     Content="{loc:Localize Key=common.deselectAll}"
                     Click="DeselectAll_Click" />
         </Grid>
-
-        <ListView x:Name="AppList"
-                  Grid.Row="3"
-                  Height="280"
-                  SelectionMode="None"
-                  ItemContainerStyle="{StaticResource ConfigExportRowStyle}">
-            <ListView.ItemTemplate>
-                <DataTemplate x:DataType="dialogs:ConfigExportAppRow">
-                    <Grid ColumnSpacing="10" Padding="0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <CheckBox Grid.Column="0"
-                                  MinWidth="0"
-                                  IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{x:Bind WingetId}"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="2"
-                                    Orientation="Horizontal"
-                                    Spacing="6"
-                                    VerticalAlignment="Center">
-                            <Border Visibility="{x:Bind OutsideCatalogBadgeVisibility}"
-                                    Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
-                                    CornerRadius="4"
-                                    Padding="8,2">
-                                <TextBlock Text="{loc:Localize Key=config.export.outsideCatalog}"
-                                           Style="{StaticResource CaptionTextBlockStyle}" />
-                            </Border>
-                            <Border Visibility="{x:Bind InstalledBadgeVisibility}"
-                                    Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                                    CornerRadius="4"
-                                    Padding="8,2">
-                                <TextBlock Text="{loc:Localize Key=common.installed}"
-                                           Style="{StaticResource CaptionTextBlockStyle}" />
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
-
-        <TextBlock Grid.Row="3"
-                   x:Name="NoMatchText"
-                   Visibility="Collapsed"
-                   VerticalAlignment="Top"
-                   Margin="8,8,0,0"
-                   Text="{loc:Localize Key=config.export.noMatch}"
-                   Style="{StaticResource CaptionTextBlockStyle}"
-                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-        <TextBlock Grid.Row="4"
-                   x:Name="CountText"
-                   Style="{StaticResource CaptionTextBlockStyle}"
-                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
     </Grid>
 </ContentDialog>

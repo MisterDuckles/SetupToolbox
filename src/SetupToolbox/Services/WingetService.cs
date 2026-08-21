@@ -170,7 +170,14 @@ public sealed class WingetService
             try
             {
                 var line = lines[i];
-                if (line.Length < versionPos) continue;
+                // Niet weggooien maar rechts opvullen. Winget padt vandaag elke rij
+                // tot de volle tabelbreedte - op deze machine is de kortste rij 177
+                // tekens tegen versionPos 147 - dus de oude gate liet nul rijen
+                // vallen. Maar zodra winget dat niet meer doet zou elke rij met een
+                // lege laatste kolom STIL verdwijnen, en dan ontbreken er apps in de
+                // config-backup zonder dat iemand het merkt. Rijen zonder echte id
+                // vallen hieronder alsnog af op de naam- en id-checks.
+                if (line.Length < header.Length) line = line.PadRight(header.Length);
 
                 var name = line.Substring(0, idPos).Trim();
                 var idEnd = versionPos;
