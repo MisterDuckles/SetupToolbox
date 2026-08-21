@@ -56,16 +56,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 
 **Checklist bij het cutten:** versienummer in de csproj, installer bouwen (`scripts/build-installer.ps1`), Release aanmaken met de exe als asset, en pas dáárna de website (die trekt versie + downloadlink live uit de GitHub-API).
 
-### v1.3.1 — Website professionaliseren + bijwerken
-
-De landingspagina **staat live** op `projects.dpvb.nl/setup-toolbox`.
-
-> Correctie op mijn eigen audit van 2026-08-16: een geautomatiseerde fetch kreeg **403 Forbidden** op zowel de pagina als de bare domain, waaruit ik concludeerde dat de site niet gedeployed was. Dat was fout — user bevestigt dat 'ie gewoon online is. De 403 is vrijwel zeker bot-/WAF-blokkering op de hosting. **Niet opnieuw als "offline" diagnosticeren op basis van een fetch.**
-
-**Wat er moet gebeuren:** de site is gebouwd in mei 2026 bij v1.0.0 en is sindsdien niet meer bijgewerkt, terwijl het project 14 patches verder is (toast-notificaties, install-lanes, deep clean-uitbreidingen, accu-fix). Twee doelen: (1) **professioneler uiterlijk**, (2) **inhoud synchroon met wat de app nu daadwerkelijk kan**. Versie + downloadlink komen al live uit de GitHub-API, dus die lopen automatisch mee — maar alleen als er ook echt een nieuwe Release gepubliceerd wordt (zie de release-cadans-notitie hieronder).
-
-Bewust achteraan gezet, en sinds 2026-08-20 expliciet **ná v1.3.0**: de site trekt versie en downloadlink live uit de GitHub-API, dus zonder gepubliceerde Release valt er niets te synchroniseren. Bovendien kun je dan in één keer een actueel verhaal neerzetten in plaats van twee keer half.
-
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.9
 
 - **De docstring van `Diagnostics.Log` noemt de verkeerde map.** Gevonden tijdens v1.2.9.6 bij het herschrijven van `CONTRIBUTING.md`: de XML-comment zegt *"Append een regel aan een diagnostic-logfile in `%TEMP%`"*, maar `Diagnostics.LogDir` wijst naar `%LocalAppData%\SetupToolbox\logs` — dezelfde map waar `settings.json` staat en waar de knop *Open logmap* in Instellingen naartoe gaat. Puur een comment, dus nul gedragsrisico, maar het is precies het soort ding dat een bijdrager een half uur in de verkeerde map laat zoeken. Eénregelige fix.
@@ -131,6 +121,37 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### Website — professionaliseren + bijwerken (stond gepland als v1.3.1)
+
+**Naar voren gehaald op verzoek van user (2026-08-21), in de volle scope: uiterlijk én inhoud.** De reden om ‘m áchter de release te zetten vervalt namelijk — versie, downloadlink én bestandsgrootte komen live uit de GitHub-API en lopen dus vanzelf mee zodra v1.3.0 gepubliceerd wordt. **Géén app-versiebump**: dit raakt de exe niet, dus het nummer *v1.3.1* zou misleidend zijn. Eigen commit.
+
+De site stond sinds mei 2026 (v1.0.0) onaangeroerd terwijl het project 14 patches verder is. Stack ongewijzigd: React 19 + Vite 7 + Tailwind 4 + GSAP, geen nieuwe dependencies.
+
+**Wat er inhoudelijk fout stond en nu klopt:**
+
+- *"~74 Tweaks"* — het zijn er **124**. Zelfde stale telling als de 117 die v1.2.4 al corrigeerde.
+- *"Profielen"* stond als losse feature terwijl die is opgegaan in de config-backup.
+- De zes emoji-kaarten zijn vervangen door acht features met een bron per claim, in inline SVG.
+- **De licentie stond er niet**, terwijl het project sinds v1.0.0 propriëtair is. Staat er nu expliciet, met een link naar `LICENSE`.
+- Het drievoudig hardcoded `'v1.0.0'` in de fallback is één `FALLBACK_VERSION` geworden, op `v1.2.0` — de laatst écht gepubliceerde release.
+- *"~69 MB"* was correct maar hardcoded; de hook leest nu `asset.size` uit de API en rekent naar MiB, met dezelfde fallback-aanpak.
+
+Nieuw: een statistiekenstrip, een "Zo werkt het" in vier stappen, een veiligheidssectie en zes veelgestelde vragen. `App.jsx` ging van 176 naar 108 regels doordat de pagina opgesplitst is in `components/`, `hooks/`, `lib/` en `data/` — alle paginatekst staat in `data/content.js` met per cijfer de bron als commentaar, zodat een volgende ronde niet opnieuw hoeft te tellen.
+
+> **Eigen bug gevonden en gefixt tijdens het bouwen:** de eerste versie liet hero én kaarten via `autoAlpha: 0` invliegen. Een screenshot toonde een vrijwel **lege pagina** — de GSAP-ticker liep vast en de inhoud bleef onzichtbaar. Nu animeren de scroll-reveals **alleen transform**, dus de tekst is altijd leesbaar ook als er niets afgaat, en de intro-timeline heeft een watchdog van 2,5s die ‘m desnoods op de eindstand zet. Dit is precies het soort fout dat een build-check niet vangt.
+
+> **Aangetoond (2026-08-21):**
+> - `npm run build` slaagt: 44 modules, 3,09 kB html / 29,93 kB css / 338,86 kB js.
+> - Headless nagemeten tegen `vite preview`: **geen horizontale scroll** op 360 / 414 / 768 / 1920px (`scrollWidth == clientWidth` op alle vier), geen JS-fouten, en de live API-fetch leverde `v1.2.0 · 69 MB`.
+> - Lichte modus end-to-end getest via het echte pad (localStorage → head-script → `useTheme`).
+> - Het stringgetal is ná de agent nog bijgewerkt van 1335 naar **1347**, want deze sessie voegde er zelf keys aan toe.
+
+**Wat er nog mist — dit kan ik niet zelf oplossen:**
+
+- **Screenshots.** `website/public/` bestond niet en er staat nergens een bruikbare UI-afbeelding in de repo (`data/app-icon-preview.png` is het app-icoon, geen scherm). Er staat nu een schematische CSS/SVG-weergave met het onderschrift *"Schematische weergave van de indeling — geen schermafbeelding."* Één hero-shot van de Apps-pagina zou die al kunnen vervangen. Meest waardevol daarna: de Tweaks-tab met de status-pills, de install-kaart met voortgang, en de deep-clean-preview met groottes.
+- **Twee claims wil ik bevestigd hebben.** *"17 opruimcategorieën"* is uit de `DeepCleanCategory`-enum geteld en niet uit wat de UI daadwerkelijk groepeert. En *"geen telemetrie"* in de FAQ is afgeleid uit het ontbréken ervan in de code — een grep vindt geen analytics-SDK en geen tracking-call, dus het is verdedigbaar, maar het is een uitspraak over wat er **niet** is en die staat nu wel op een publieke pagina.
+- **`FALLBACK_VERSION` mag naar `v1.3.0`** zodra die release er is. Puur cosmetisch: de live fetch wint altijd.
 
 ### v1.2.9.6 — Het model eerlijk maken
 

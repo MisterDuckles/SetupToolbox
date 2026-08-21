@@ -1,20 +1,131 @@
 @import "tailwindcss";
 
-/* ── Design tokens (Tailwind v4 @theme → bg-*, text-*, border-* utils) ── */
+/* ==========================================================================
+   Design tokens
+
+   Donker is de basis-look van deze pagina, dus de volledige palette staat op
+   een kale :root (via Tailwind's @theme, zodat de bg-, text- en border-
+   utilities ze oppikken). De lichte variant herdefinieert daarna DEZELFDE
+   tokens. Geen enkele kleur bestaat alleen binnen een media-query, dus er is
+   altijd een compleet thema aanwezig.
+   ========================================================================== */
 @theme {
-  --color-bg: #060a11;
+  --color-bg: #05080f;
   --color-bg2: #0a101b;
   --color-panel: #0f1724;
   --color-panel-2: #131c2c;
+  --color-panel-3: #1a2436;
   --color-stroke: #1e2a3e;
-  --color-ink: #e8edf5;
+  --color-stroke-strong: #2b3a53;
+  --color-ink: #eaf0f8;
+  --color-ink-soft: #c6d1e2;
   --color-muted: #9aa7bd;
-  --color-accent: #5b8cff;
-  --color-accent-2: #8b5cff;
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --color-accent: #7ea6ff;
+  --color-accent-2: #b79cff;
+
+  /* Knopvlakken staan los van de accent-tekstkleur: witte tekst moet er in
+     BEIDE thema's op halen, dus deze twee zijn bewust donkerder. */
+  --color-btn-from: #2f62f0;
+  --color-btn-to: #6b3cf0;
+
+  --color-logo-body: #2f62f0;
+  --color-logo-edge: #eaf0f8;
+
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui,
+    -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
-html { scroll-behavior: smooth; }
+/* Niet-kleur-tokens en afgeleiden die Tailwind niet als utility hoeft te kennen. */
+:root {
+  color-scheme: dark;
+  --aurora-opacity: 0.5;
+  --aurora-1: #2a4fff;
+  --aurora-2: #7c3cff;
+  --aurora-3: #1f6bff;
+  --grid-line: rgba(126, 166, 255, 0.06);
+  --card-glow: rgba(91, 140, 255, 0.16);
+  --card-top: rgba(255, 255, 255, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lift: 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  --rail-bg: rgba(255, 255, 255, 0.04);
+  --bar: rgba(198, 209, 226, 0.22);
+  --bar-strong: rgba(198, 209, 226, 0.42);
+}
+
+/* --- Lichte variant -------------------------------------------------------
+   Eén keer voor de expliciete keuze (data-theme) en één keer voor "volg het
+   systeem". Die tweede is afgeschermd met :not([data-theme="dark"]) zodat een
+   bezoeker die handmatig donker koos dat ook op een licht systeem houdt.
+   -------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f6f8fc;
+  --color-bg2: #eef2f9;
+  --color-panel: #ffffff;
+  --color-panel-2: #f4f7fc;
+  --color-panel-3: #e9eef7;
+  --color-stroke: #d8e0ed;
+  --color-stroke-strong: #b5c3d9;
+  --color-ink: #0c1420;
+  --color-ink-soft: #28354a;
+  --color-muted: #4d5b70;
+  --color-accent: #1f4fd0;
+  --color-accent-2: #6b3cf0;
+  --color-logo-edge: #ffffff;
+  --aurora-opacity: 0.3;
+  --aurora-1: #7fa4ff;
+  --aurora-2: #b79cff;
+  --aurora-3: #8fbcff;
+  --grid-line: rgba(31, 79, 208, 0.06);
+  --card-glow: rgba(47, 98, 240, 0.1);
+  --card-top: rgba(255, 255, 255, 0.9);
+  --shadow-card: 0 1px 2px rgba(15, 30, 55, 0.06);
+  --shadow-lift: 0 18px 40px -24px rgba(15, 30, 55, 0.35);
+  --rail-bg: rgba(12, 20, 32, 0.03);
+  --bar: rgba(12, 20, 32, 0.12);
+  --bar-strong: rgba(12, 20, 32, 0.28);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --color-bg: #f6f8fc;
+    --color-bg2: #eef2f9;
+    --color-panel: #ffffff;
+    --color-panel-2: #f4f7fc;
+    --color-panel-3: #e9eef7;
+    --color-stroke: #d8e0ed;
+    --color-stroke-strong: #b5c3d9;
+    --color-ink: #0c1420;
+    --color-ink-soft: #28354a;
+    --color-muted: #4d5b70;
+    --color-accent: #1f4fd0;
+    --color-accent-2: #6b3cf0;
+    --color-logo-edge: #ffffff;
+    --aurora-opacity: 0.3;
+    --aurora-1: #7fa4ff;
+    --aurora-2: #b79cff;
+    --aurora-3: #8fbcff;
+    --grid-line: rgba(31, 79, 208, 0.06);
+    --card-glow: rgba(47, 98, 240, 0.1);
+    --card-top: rgba(255, 255, 255, 0.9);
+    --shadow-card: 0 1px 2px rgba(15, 30, 55, 0.06);
+    --shadow-lift: 0 18px 40px -24px rgba(15, 30, 55, 0.35);
+    --rail-bg: rgba(12, 20, 32, 0.03);
+    --bar: rgba(12, 20, 32, 0.12);
+    --bar-strong: rgba(12, 20, 32, 0.28);
+  }
+}
+
+/* ==========================================================================
+   Basis
+   ========================================================================== */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem; /* ruimte voor de sticky header bij ankerlinks */
+}
 
 body {
   margin: 0;
@@ -25,8 +136,28 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Aurora-achtergrond: drie grote, vervaagde gekleurde blobs.
-   GSAP animeert hun positie/scale (zie App.jsx) voor traag drijvend effect. ── */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Eén zichtbare focus-stijl voor elke link, knop en samenvatting. */
+:where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  color: var(--color-ink);
+}
+
+/* ==========================================================================
+   Achtergrond: drie trage vervaagde kleurvlakken plus een fijn raster
+   ========================================================================== */
 .aurora {
   position: fixed;
   inset: 0;
@@ -34,84 +165,238 @@ body {
   overflow: hidden;
   pointer-events: none;
 }
+
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.55;
+  filter: blur(100px);
+  opacity: var(--aurora-opacity);
   will-change: transform;
 }
-.blob-1 { width: 46rem; height: 46rem; top: -16rem; left: -10rem; background: radial-gradient(circle, #2a4fff, transparent 60%); }
-.blob-2 { width: 40rem; height: 40rem; top: -8rem; right: -12rem; background: radial-gradient(circle, #7c3cff, transparent 60%); }
-.blob-3 { width: 38rem; height: 38rem; top: 24rem; left: 30%; background: radial-gradient(circle, #1f6bff, transparent 60%); opacity: 0.35; }
 
-/* Fijn rasterpatroon over alles voor diepte. */
+.blob-1 {
+  width: 44rem;
+  height: 44rem;
+  top: -18rem;
+  left: -12rem;
+  background: radial-gradient(circle, var(--aurora-1), transparent 62%);
+}
+
+.blob-2 {
+  width: 38rem;
+  height: 38rem;
+  top: -10rem;
+  right: -14rem;
+  background: radial-gradient(circle, var(--aurora-2), transparent 62%);
+}
+
+.blob-3 {
+  width: 36rem;
+  height: 36rem;
+  top: 30rem;
+  left: 28%;
+  background: radial-gradient(circle, var(--aurora-3), transparent 62%);
+  opacity: calc(var(--aurora-opacity) * 0.6);
+}
+
 .grid-overlay {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(91, 140, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 140, 255, 0.05) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(70% 60% at 50% 0%, black, transparent 80%);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(75% 55% at 50% 0%, black, transparent 78%);
 }
 
-/* Glimmende, langzaam bewegende gradient-tekst (titel-accent). */
+/* ==========================================================================
+   Tekstaccent in de titel
+   ========================================================================== */
 .text-shiny {
-  background: linear-gradient(110deg, #5b8cff 20%, #c7b6ff 42%, #8b5cff 60%, #5b8cff 82%);
+  background: linear-gradient(
+    110deg,
+    var(--color-btn-from) 18%,
+    var(--color-accent-2) 44%,
+    var(--color-btn-to) 62%,
+    var(--color-btn-from) 86%
+  );
   background-size: 220% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: shine 7s linear infinite;
+  animation: shine 9s linear infinite;
 }
-@keyframes shine { to { background-position: 220% center; } }
 
-/* Per-woord reveal (GSAP zet de begin-state + animeert). */
-.word { display: inline-block; }
+@keyframes shine {
+  to {
+    background-position: 220% center;
+  }
+}
 
-/* ── Spotlight-kaart: radiale gloed volgt de cursor (--mx/--my via JS). ── */
+.word {
+  display: inline-block;
+}
+
+/* ==========================================================================
+   Kaarten
+   ========================================================================== */
 .card {
   position: relative;
-  background: linear-gradient(180deg, var(--color-panel), var(--color-bg2));
+  background:
+    linear-gradient(180deg, var(--card-top), transparent 40%),
+    linear-gradient(180deg, var(--color-panel), var(--color-panel-2));
   border: 1px solid var(--color-stroke);
+  box-shadow: var(--shadow-card);
   transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
+
+/* Radiale gloed die de cursor volgt; --mx en --my worden in JS gezet. */
 .card::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(91, 140, 255, 0.22), transparent 60%);
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    var(--card-glow),
+    transparent 62%
+  );
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
-.card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-stroke)); }
-.card:hover::before { opacity: 1; }
 
-/* Primaire knop: subtiele lift + glans-sweep bij hover (geen magnetisch gedoe). */
+.card:hover {
+  transform: translateY(-3px);
+  border-color: var(--color-stroke-strong);
+  box-shadow: var(--shadow-lift);
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+.card > * {
+  position: relative;
+}
+
+/* ==========================================================================
+   Knoppen
+   ========================================================================== */
 .btn-primary {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(120deg, var(--color-accent), var(--color-accent-2));
-  box-shadow: 0 8px 30px -8px rgba(91, 140, 255, 0.6);
+  color: #fff;
+  background: linear-gradient(120deg, var(--color-btn-from), var(--color-btn-to));
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--color-btn-from) 80%, transparent);
   transition: transform 0.2s ease, box-shadow 0.25s ease, filter 0.2s ease;
 }
+
 .btn-primary::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(120deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  background: linear-gradient(
+    120deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.26) 50%,
+    transparent 65%
+  );
   transform: translateX(-130%);
   transition: transform 0.6s ease;
   pointer-events: none;
 }
+
 .btn-primary:hover {
   transform: translateY(-2px);
-  filter: brightness(1.08);
-  box-shadow: 0 14px 44px -8px rgba(124, 92, 255, 0.75);
+  filter: brightness(1.06);
+  box-shadow: 0 18px 44px -14px color-mix(in srgb, var(--color-btn-to) 85%, transparent);
 }
-.btn-primary:hover::after { transform: translateX(130%); }
+
+.btn-primary:hover::after {
+  transform: translateX(130%);
+}
+
+.btn-ghost {
+  border: 1px solid var(--color-stroke);
+  background: color-mix(in srgb, var(--color-panel) 70%, transparent);
+  color: var(--color-ink);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-ghost:hover {
+  background: var(--color-panel-3);
+  border-color: var(--color-stroke-strong);
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   Schematische app-weergave (nadrukkelijk GEEN schermafbeelding)
+   ========================================================================== */
+.bar {
+  display: block;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--bar);
+}
+
+.bar-strong {
+  background: var(--bar-strong);
+}
+
+.rail {
+  background: var(--rail-bg);
+}
+
+/* ==========================================================================
+   Veelgestelde vragen
+   ========================================================================== */
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-chevron {
+  transition: transform 0.2s ease;
+}
+
+details[open] .faq-chevron {
+  transform: rotate(180deg);
+}
+
+/* ==========================================================================
+   Toegankelijkheid
+   ========================================================================== */
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 60;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus-visible {
+  top: 1rem;
+}
+
+/* Wie beweging liever niet heeft, krijgt de pagina statisch. GSAP wordt in
+   App.jsx dan al overgeslagen; dit dekt de pure CSS-animaties. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
