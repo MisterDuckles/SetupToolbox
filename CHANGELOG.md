@@ -1,5 +1,11 @@
 # Changelog
 
+> **Dit bestand loopt tot v0.5.12 en wordt niet meer bijgehouden.** Vanaf v0.5.13
+> is `NEXT-STEPS.md` het logboek: daar staat per versie niet alleen wát er is
+> gewijzigd maar ook waarom, welke aanpak eerst is geprobeerd en wat er is
+> aangetoond. Voor de gebruiker-gerichte samenvatting per release: de
+> release-notes op GitHub.
+
 All notable changes to SetupToolbox (WinUI). Vorige WPF-historie staat
 gearchiveerd onder de git tag `wpf-final-v1.2.1`.
 

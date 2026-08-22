@@ -17,8 +17,8 @@ export const ASSET_PATTERN = /^SetupToolbox-v.*\.exe$/i;
 // Laatst gepubliceerde GitHub-release op het moment van schrijven. Bijwerken
 // bij een nieuwe milestone is niet strikt nodig — de live fetch wint altijd —
 // maar houdt de pagina eerlijk als GitHub onbereikbaar is.
-export const FALLBACK_VERSION = 'v1.2.0';
-export const FALLBACK_SIZE_BYTES = 72384084; // SetupToolbox-v1.2.0.exe
+export const FALLBACK_VERSION = 'v2.0.0';
+export const FALLBACK_SIZE_BYTES = 73074222; // SetupToolbox-v2.0.0.exe
 
 // ── Schermafbeeldingen ─────────────────────────────────────────────────────
 // De site draait op projects.dpvb.nl/setup-toolbox, dus vite.config.js zet base

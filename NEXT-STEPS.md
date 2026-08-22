@@ -27,22 +27,6 @@ Native Windows 11 app voor het bulk-installeren van apps via `winget`, plus debl
 >
 > **De versie-indeling van deze sessie:** v1.2.9.2 (export-dialog: layout + teller + winget-search) · v1.2.9.3 (zichtbare UI-defecten) · v1.2.9.4 (veiligheidsnet: herstelpunt-uitkomst + bevestiging vóór de destructieve losse import) · v1.2.9.5 (vertaalrestje `BackupPromptDialog` + scanner pass 1 leert inline-XAML zien) · v1.2.9.6 (opruimen: dode weergave-strings, subcategorie-descriptions, `CONTRIBUTING.md`) · v1.2.10 (wat-is-er-nieuw-melding) · website (eigen commit). **v1.3.0 blijft expliciet buiten deze sessie** — die cut doet user zelf.
 
-### v1.3.0 — Milestone-release: v1.2.1 t/m v1.2.10 uitleveren
-
-**Besloten door user op 2026-08-20:** zodra v1.2.8 (install-voortgangsregel), v1.2.9 (config-backup) en v1.2.10 (wat-is-er-nieuw-melding) af zijn, wordt er **een Release gecut**. Niet eerder — deze drie horen als één verhaal naar buiten.
-
-**Nummer:** `v1.3.0`. Volgt de bestaande conventie (milestone = minor bump; v1.2.0 was de vorige) en de CLAUDE.md-regel dat alleen milestones een GitHub Release met exe's krijgen. `v1.1.0` blijft overgeslagen — dat nummer is in het WPF-tijdperk al eens vergeven.
-
-**Wat er dan uitgeleverd wordt** — geïnstalleerde gebruikers zitten sinds v1.2.0 op de oude build en krijgen dit in één keer:
-- **v1.2.1** de kwetsbare `System.Drawing.Common` 4.7.0 uit de publish (GHSA-rxg9-xrhp-64gj). Dit is meteen het antwoord op het openstaande besluit onderaan bij *release-cadans*: die security-fix ligt er dan een halve reeks op te wachten.
-- **v1.2.2 t/m v1.2.8.1** de complete multi-language-reeks: NL/EN met live wisselen, 1288 strings.
-- **v1.2.9** de gebundelde config-backup.
-- **v1.2.10** de wat-is-er-nieuw-melding — die is bij déze release meteen zijn eigen eerste testgeval.
-
-**Volgorde-afhankelijkheid, niet vergeten:** v1.2.10 heeft de release-tekst nódig. Als de highlights meegebakken worden in een `data/whatsnew.json` (de voorkeursoptie daar), dan moet het `1.3.0`-blok in dat bestand geschreven zijn vóórdat de Release gepubliceerd wordt — anders levert de eerste update na v1.3.0 een lege melding op. Schrijf dat blok als onderdeel van v1.2.10, niet als losse stap bij het cutten.
-
-**Checklist bij het cutten:** versienummer in de csproj, installer bouwen (`scripts/build-installer.ps1`), Release aanmaken met de exe als asset, en pas dáárna de website (die trekt versie + downloadlink live uit de GitHub-API).
-
 ### Zonder versienummer — klein onderhoud, gevonden tijdens v1.2.9
 
 - **De omschrijving op de tegel *Meldingen & vergrendelscherm* wordt afgekapt in het Nederlands.** Gevonden op 2026-08-22 bij het bekijken van de schermafbeeldingen voor de website, uitvergroot geverifieerd. Bij een breed venster (zes tegels naast elkaar) loopt `Pop-ups, geluiden & vergrendelscherm-opties` over twee regels en wordt het woord *opties* op de tweede regel **horizontaal doormidden gesneden**, half verdwijnend achter de teller `0 / 8 actief`. In het Engels past dezelfde tekst (`Pop-ups, sounds & lock screen options`) op één regel en is er niets aan de hand. Bij een smaller venster (drie tegels naast elkaar) speelt het niet, want dan is de tegel breed genoeg — het is dus breedte-afhankelijk en niet altijd zichtbaar. Uitwegen: de tegel meer ruimte geven, de teller laten wijken, of de Nederlandse tekst inkorten. Dit is de langste categorie-omschrijving van de twaalf, dus met inkorten ben je er waarschijnlijk al.
@@ -117,6 +101,29 @@ Geverifieerd (2026-08-16): niks hiervan is stiekem al gebouwd.
 ---
 
 ## Voltooide versies
+
+### v2.0.0 — Milestone-release: v1.2.1 t/m v1.2.10 uitgeleverd
+
+**Het nummer wijkt af van de planning, en dat is een besluit van user (2026-08-22): `v2.0.0` in plaats van het geplande `v1.3.0`.** De roadmap redeneerde vanuit de conventie *milestone = minor bump*, en die conventie is hier bewust losgelaten. De onderbouwing: in de reeks v1.2.1 t/m v1.2.10 is de app **tweetalig geworden** (inclusief de catalogus, het tweak-corpus en de bloatware-metadata, live te wisselen zonder herstart) én heeft ‘ie er een **complete configuratie-backup** bij gekregen. Dat is geen puntje-erbij maar een ander product dan v1.2.0 was. `v1.1.0` blijft overgeslagen — dat nummer is in het WPF-tijdperk al eens vergeven.
+
+**Wat er in één keer uitgeleverd wordt** aan iedereen die sinds 2026-08-16 op v1.2.0 zit:
+
+- **v1.2.1** — de kwetsbare `System.Drawing.Common` 4.7.0 uit de publish (GHSA-rxg9-xrhp-64gj). Die lag er zes dagen en een halve reeks op te wachten; daarmee is het openstaande besluit bij *release-cadans* feitelijk beantwoord: per geval gewogen, niet via een uitgebreide vuistregel.
+- **v1.2.2 t/m v1.2.7** — de complete multi-language-reeks. Let op: de oude roadmaptekst zei hier *1288 strings*; dat is achterhaald, het zijn er inmiddels **1355** in beide talen.
+- **v1.2.8 / v1.2.8.1** — de install-voortgangsregel, de foutmeldingen uit de ge-eleveerde batches, en winget’s eigen stdout vertaald.
+- **v1.2.9 / .1 / .2** — de gebundelde config-backup, tweaks zelf aanvinken, apps buiten de catalogus, en zoeken in de winget-repository vanuit de export.
+- **v1.2.9.3 t/m v1.2.9.6** — klein onderhoud, met twee echte defecten ertussen: een out-of-range in `ParseSearchOutput` die stil **alle** zoekresultaten kon wissen, en een mislukt herstelpunt dat nergens gemeld werd.
+- **v1.2.10** — de wat-is-er-nieuw-melding, die bij déze release meteen zijn eigen eerste testgeval is.
+
+Plus, buiten de app om: de **volledig herbouwde website** met echte schermafbeeldingen en een NL/EN-schakelaar, en een **GitHub Actions-workflow die de site via SFTP uitrolt** — die eerste run is geslaagd op 2026-08-22.
+
+> **De volgorde-afhankelijkheid uit de planning is omgeklapt, en dat is belangrijker dan het klinkt.** De roadmap waarschuwde: schrijf het versieblok in `data/whatsnew.json` vóórdat je de Release publiceert, anders levert de eerste update een lege melding op. Die afhankelijkheid bestaat niet meer, want user koos in v1.2.10 voor **live** release-notes in plaats van een meegebakken bestand. Er is dus geen blok om te vergeten — maar in ruil daarvoor **ís de release-body nu de tekst die gebruikers in de app te zien krijgen**. Die is daarom geschreven voor twee lezers tegelijk: de GitHub-pagina én een popup van ~360px hoog die de markdown als platte tekst rendert. Geen tabellen, geen geneste opsommingen, geen inline code.
+
+> **Waarom de eerste update na deze release meteen het bewijs is.** Iemand op v1.2.0 heeft de wat-is-er-nieuw-code nog niet. Na het bijwerken naar 2.0.0 draait die code wél: `lastSeenVersion` is leeg, `%LocalAppData%\SetupToolbox` bestaat (dus geen verse installatie), en de notes van tag `v2.0.0` zijn op te halen → de melding hoort te verschijnen. Dat is precies het pad dat op de dev-machine niet uit te lokken was, omdat daar geen release met de huidige tag bestond.
+
+**Checklist bij het cutten — afgewerkt:** versienummer in de csproj (2.0.0 op `Version`, `AssemblyVersion` en `FileVersion`), installer gebouwd met `scripts/build-installer.ps1`, Release aangemaakt met `SetupToolbox-v2.0.0.exe` als asset. De website hoefde niet nagelopen te worden: die trekt versie, downloadlink én bestandsgrootte live uit de GitHub-API en loopt dus vanzelf mee. Alleen de `FALLBACK_VERSION` — het vangnet als die fetch faalt — is meegebumpt naar `v2.0.0`.
+
+> **Valkuil die hier gecontroleerd is en die een release stil kan slopen:** `GitHubService` matcht de release-asset op `^SetupToolbox-v.*\.exe$`. De `.iss` produceert `SetupToolbox-v{versie}.exe` en voldoet daaraan, maar het commentaar bovenin `build-installer.ps1` noemde jarenlang `SetupToolbox-Setup-v<versie>.exe` — een naam die de regex **niet** matcht. Wie dat commentaar had gevolgd bij een handmatige upload, had een release gepubliceerd die voor de self-update onzichtbaar is. Commentaar rechtgezet, met de reden erbij.
 
 ### v1.2.10 — "Wat is er nieuw"-melding na een update
 

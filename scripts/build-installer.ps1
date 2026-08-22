@@ -5,7 +5,10 @@
    2. leest <Version> uit de csproj
    3. compileert installer\SetupToolbox.iss met ISCC (Inno Setup 6)
 
-  Output: installer\Output\SetupToolbox-Setup-v<versie>.exe
+  Output: installer\Output\SetupToolbox-v<versie>.exe
+          (die naam is bindend: GitHubService matcht de release-asset op
+           ^SetupToolbox-v.*\.exe$, dus een andere naam maakt de release
+           onzichtbaar voor de self-update.)
 
   Gebruik:  pwsh scripts\build-installer.ps1            # volledige build
             pwsh scripts\build-installer.ps1 -SkipPublish   # alleen ISCC (hergebruik publish)
