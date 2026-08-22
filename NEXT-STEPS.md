@@ -543,7 +543,9 @@ De sub-versie gaat naar `1.1` — precies waarvoor die aparte sub-versienummers 
 > - `check-catalog-keys.py`: **1335 = 1335**, geen wezen, geen lege waardes. De teller "gecontroleerd op aanroep" gaat van 606 naar **616** — exact +10, dus elke nieuwe key wordt aangeroepen en `config.export.intro` is niet stilletjes wees geworden door de hernoeming die ik eerst had.
 > - De niet-catalogus-filtering is op **echte** `winget list`-output gedraaid, niet op een aanname: 128 / 21 / 107 / 58, zie de tabel hierboven.
 >
-> **Niet getest — zelfde gat als v1.2.9:** de flow is niet doorlopen. Onbevestigd blijven: (1) of de checklist op de Tweaks-tab daadwerkelijk voorgevinkt opent, (2) of de footer en de banner in backup-modus goed wisselen en *Annuleren* netjes terugvalt op de categorie-grid, (3) of de apps buiten de catalogus met hun badge in de dialog verschijnen en doorzoekbaar zijn, (4) of een geïmporteerde extra-app in de nieuwe sectie op de Apps-pagina landt.
+> **AFGESLOTEN op 2026-08-22, zie de v1.2.9-sectie hieronder.** De export-flow is op 21 augustus
+> door user doorlopen en de import op 22 augustus, allebei bevestigd. Oorspronkelijke tekst:
+> Niet getest — zelfde gat als v1.2.9: de flow is niet doorlopen. Onbevestigd blijven: (1) of de checklist op de Tweaks-tab daadwerkelijk voorgevinkt opent, (2) of de footer en de banner in backup-modus goed wisselen en *Annuleren* netjes terugvalt op de categorie-grid, (3) of de apps buiten de catalogus met hun badge in de dialog verschijnen en doorzoekbaar zijn, (4) of een geïmporteerde extra-app in de nieuwe sectie op de Apps-pagina landt.
 
 ### v1.2.9 — Eén-klik volledige config-backup (apps + tweaks + settings)
 
@@ -600,7 +602,24 @@ De drie vormen worden herkend aan de **vorm van de JSON**, niet aan de bestandsn
 > - `check-catalog-keys.py`: 152/152 catalogus-keys, **1325 = 1325**, geen wezen, geen lege waardes. De teller "gecontroleerd op aanroep" loopt van 569 naar **606** — exact +37, dus elke nieuwe key wordt aantoonbaar aangeroepen en er is er geen één dood.
 > - Beide XAML-dialogs compileren daadwerkelijk (`.g.cs` + `.xbf` aanwezig), dus de `x:Bind`-DataTemplate en de markup-extensies zijn niet alleen syntactisch goed.
 >
-> **Niet getest, en dat is het hele bewijsgat:** de round-trip zelf. Er is géén export gemaakt en géén bestand geïmporteerd — een import schrijft `settings.json` en wist de huidige app-selectie op de machine van user, en dat is niets om ongevraagd te doen. Wat daardoor onbevestigd blijft: (1) of de app-keuze-dialog de geïnstalleerde apps daadwerkelijk voorgevinkt toont, (2) of de drie bestandsvormen alle drie herkend worden, (3) of de aparte taal-rij verschijnt en de her-navigatie de melding netjes opnieuw rendert, (4) of `BatchSave` echt één keer schrijft. **Klaargezet om dat in vijf minuten te doen:** vijf voorbeeldbestanden in de scratchpad (losse app-selectie, los tweak-profiel, volledige bundel, een niet-Setup-Toolbox-bestand voor de foutmelding, en een bundel met `language: "nl"` voor de taal-rij).
+> **AFGESLOTEN op 2026-08-22 — de round-trip is gedraaid, op de Release-build van 2.0.0.**
+> De EXPORT was al bewezen: de bundel die user op 22 augustus wegschreef is nagerekend en klopt
+> tot in de details — `kind` en sub-versies goed, `apps` plat en zonder dubbele id's, elke
+> `appDetails`-record met naam én bron én ook in de platte lijst, `backupBeforeApply` als **naam**
+> (`"Ask"`) in plaats van numeriek, `language` als sentinel, en **geen van de zes interactie-vlaggen
+> lekte mee** — inclusief `lastSeenVersion`, die diezelfde dag pas is toegevoegd. Sterker nog: die
+> bundel bevatte één `appDetails`-record voor een pakket dat op die machine **niet geïnstalleerd**
+> staat, en dat kan er maar op één manier in komen — via de winget-repo-zoekactie uit v1.2.9.2.
+> Daarmee was die hele keten bewezen op echte data: zoeken → aanvinken → promoveren naar de
+> hoofdlijst → meegaan bij opslaan → landen in `appDetails`.
+>
+> De IMPORT is daarna door user doorlopen met de vijf klaargezette bestanden plus zijn eigen
+> export: een niet-Setup-Toolbox-bestand (foutmelding), een losse `my-apps.json` (Vorm 2), een los
+> tweak-profiel met een choice-tweak (Vorm 3), een bundel met dezelfde taal als de machine (taalrij
+> hoort **weg** te blijven), een bundel met een andere taal (taalrij **wel**, vinkje standaard uit),
+> en tot slot zijn eigen bundel van 22 apps / 61 tweaks / 10 voorkeuren. **Werkt.**
+>
+> Oorspronkelijke tekst: Er is géén export gemaakt en géén bestand geïmporteerd — een import schrijft `settings.json` en wist de huidige app-selectie op de machine van user, en dat is niets om ongevraagd te doen. Wat daardoor onbevestigd blijft: (1) of de app-keuze-dialog de geïnstalleerde apps daadwerkelijk voorgevinkt toont, (2) of de drie bestandsvormen alle drie herkend worden, (3) of de aparte taal-rij verschijnt en de her-navigatie de melding netjes opnieuw rendert, (4) of `BatchSave` echt één keer schrijft. **Klaargezet om dat in vijf minuten te doen:** vijf voorbeeldbestanden in de scratchpad (losse app-selectie, los tweak-profiel, volledige bundel, een niet-Setup-Toolbox-bestand voor de foutmelding, en een bundel met `language: "nl"` voor de taal-rij).
 
 **Werkwijze-notitie — correctie op de v1.2.8-notitie, opnieuw gemeten.** Daar staat dat de `.cs`-bestanden CRLF zijn en alleen `data/apps.json` LF. Dat klopt niet: de bronboom is **gemengd** — geteld over `src/SetupToolbox` (zonder `bin`/`obj`): **34 CRLF tegenover 47 LF**, en het loopt dwars door mappen heen (`TweakProfileService.cs` is CRLF, `SettingsService.cs` in dezelfde map is LF). `NEXT-STEPS.md` en `SetupToolbox.csproj` zijn ook LF; de twee stringtabellen zíjn CRLF, dus dát deel van de notitie klopte wel. Conclusie blijft dezelfde en wordt alleen belangrijker: lees en schrijf **altijd** met expliciete `newline=''` en bepaal de regeleinden **per bestand**, nooit één aanname voor de hele boom. Zo bleef de diff hier overal beperkt tot de daadwerkelijk gewijzigde regels.
 
