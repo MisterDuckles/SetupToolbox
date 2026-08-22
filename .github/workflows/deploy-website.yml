@@ -1,0 +1,293 @@
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    # Monorepo: verreweg de meeste commits raken alleen de C#-app.
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-website.yml'
+  workflow_dispatch:
+    inputs:
+      prune_assets:
+        description: 'Verweesde gehashte bestanden in assets/ opruimen'
+        type: choice
+        options: ['nee', 'dry-run', 'ja']
+        default: 'nee'
+
+# Deze job leest alleen de repo en praat verder met een externe server.
+permissions:
+  contents: read
+
+# Twee pushes vlak achter elkaar mogen nooit tegelijk in dezelfde map schrijven.
+# cancel-in-progress blijft false: een halverwege afgebroken upload laat de site kapot achter.
+concurrency:
+  group: deploy-website
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    # BEWUST GEEN secrets op job-niveau. Job-brede env staat OOK in de omgeving van
+    # 'npm ci' en 'npm run build', en vite voert daar plugin- en config-code uit van
+    # elk pakket in de lockfile, in hetzelfde proces. Een gecompromitteerde
+    # transitieve dependency zou het SFTP-wachtwoord dan gewoon uit process.env kunnen
+    # lezen en naar buiten sturen - GitHub maskeert alleen LOGS, niet netwerkverkeer.
+    # De secrets staan daarom per stap, alleen waar ze echt nodig zijn. SFTP_DIR wordt
+    # na de controle via GITHUB_ENV doorgegeven; die mag npm niet zien maar is geen
+    # geheim in dezelfde mate.
+    env:
+      SFTP_PORT: ${{ vars.FTP_PORT || '22' }}
+      PRUNE: ${{ inputs.prune_assets || 'nee' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer secrets
+        env:
+          SFTP_HOST: ${{ secrets.FTP_HOST }}
+          SFTP_USER: ${{ secrets.FTP_USER }}
+          SFTP_DIR: ${{ secrets.FTP_DIR }}
+          # sshpass leest het wachtwoord uit deze variabele (-e), zodat het nooit in argv staat.
+          SSHPASS: ${{ secrets.FTP_PASS }}
+        run: |
+          set -euo pipefail
+          missing=''
+          [ -n "${SFTP_HOST:-}" ] || missing="${missing}  - FTP_HOST   hostnaam van de SFTP-server (bv. sftp.voorbeeld.nl), zonder sftp:// en zonder pad\n"
+          [ -n "${SFTP_USER:-}" ] || missing="${missing}  - FTP_USER   inlognaam voor die server\n"
+          [ -n "${SSHPASS:-}" ]   || missing="${missing}  - FTP_PASS   wachtwoord bij die inlognaam\n"
+          [ -n "${SFTP_DIR:-}" ]  || missing="${missing}  - FTP_DIR    doelmap op de server voor /setup-toolbox (absoluut pad, geen slash aan het eind)\n"
+          if [ -n "$missing" ]; then
+            echo "::error title=Secrets ontbreken::Zet ze onder Settings > Secrets and variables > Actions > New repository secret."
+            printf '%b' "$missing"
+            exit 1
+          fi
+
+          # Een lege FTP_DIR zou 'cd ""' worden in de sftp-batch en de upload in de home-map
+          # laten landen in plaats van in /setup-toolbox; die is hierboven al afgevangen.
+          # Maar leeg is niet het enige gevaar: 'cd "."' en 'cd ".."' lukken WEL en landen
+          # ook buiten de doelmap. Op deze hosting is de home van het FTP-account /domains/,
+          # dus daar zou de site over andermans domeinmappen heen gezet worden.
+          #
+          # Bewust GEEN eis dat het pad met / begint: het werkende pad hier is RELATIEF
+          # ('projects.dpvb.nl/public_html/setup-toolbox'), gerekend vanaf die home.
+          # Hieronder de tekens die de sftp-batch (die met "..." quoot) zouden breken.
+          # Bewust een 'case' en geen 'printf | grep -q': onder 'pipefail' levert een pijplijn
+          # waarvan de lezer vroeg stopt status 141 op, waardoor de match stilletjes wegvalt.
+          case "$SFTP_DIR" in
+            *[[:space:]]* | *'"'* | *\\*)
+              echo "::error title=FTP_DIR ongeldig::FTP_DIR bevat een spatie, aanhalingsteken of backslash. Gebruik een pad zonder die tekens."
+              exit 1
+              ;;
+          esac
+          if [ "${#SFTP_DIR}" -gt 1 ]; then
+            SFTP_DIR="${SFTP_DIR%/}"
+          fi
+          case "$SFTP_DIR" in
+            . | .. | ./* | ../* | */. | */.. | */./* | */../*)
+              echo "::error title=FTP_DIR ongeldig::FTP_DIR mag geen '.' of '..' bevatten - daarmee landt de upload buiten de doelmap. Gebruik het volledige pad, bijvoorbeeld domein.nl/public_html/submap."
+              exit 1
+              ;;
+          esac
+          # De AFGEKNIPTE vorm is een andere string dan het secret, en GitHub maskeert
+          # alleen wat het letterlijk kent. Zonder dit staat het pad straks leesbaar in
+          # het log van een publieke repo, want sftp echoot elk batch-commando.
+          echo "::add-mask::$SFTP_DIR"
+          echo "SFTP_DIR=$SFTP_DIR" >> "$GITHUB_ENV"
+          echo 'Alle vier de secrets zijn aanwezig; doelmap gecontroleerd en genormaliseerd.'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Controleer build-output
+        run: |
+          set -euo pipefail
+          if [ ! -f dist/index.html ]; then
+            echo "::error title=Build leeg::dist/index.html ontbreekt na 'npm run build'."
+            exit 1
+          fi
+          # find filtert zelf; een 'find | grep -q' kan onder 'pipefail' de match juist MISSEN
+          # zodra find een SIGPIPE krijgt nadat grep al gestopt is (pijplijnstatus 141).
+          bad_name=$(find dist -name '*"*' -print -quit)
+          if [ -n "$bad_name" ]; then
+            echo "::error title=Bestandsnaam ongeldig::Pad '$bad_name' bevat een aanhalingsteken; dat kan de sftp-batch niet aan."
+            exit 1
+          fi
+          # Vangnet tegen de stilste faalmodus die er is: staat website/public/ niet
+          # in git, dan slaagt de build gewoon, blijft dist/screenshots/ leeg, en
+          # levert de deploy een GROENE run op met een pagina vol kapotte <img>'s.
+          #
+          # Bewust NIET gecontroleerd door de gebouwde JS af te zoeken op beeldnamen.
+          # De galerij stelt zijn URL's tijdens het draaien samen uit het scherm en de
+          # taal, dus die bestandsnamen staan nergens letterlijk in de bundel - alleen
+          # het stuk 'screenshots/' staat erin. Een grep op volledige namen vindt daar
+          # altijd nul en zou dus altijd slagen. Lokaal nagemeten op een echte build.
+          if [ ! -d dist/screenshots ] || [ -z "$(ls -A dist/screenshots 2>/dev/null)" ]; then
+            echo "::error title=Beelden ontbreken::dist/screenshots/ bestaat niet of is leeg. Staat website/public/ wel in git? Zonder die map gaat de site live met kapotte afbeeldingen."
+            exit 1
+          fi
+          bron=$(find public/screenshots -type f 2>/dev/null | wc -l)
+          gebouwd=$(find dist/screenshots -type f | wc -l)
+          if [ "$bron" -ne "$gebouwd" ]; then
+            echo "::error title=Beelden onvolledig::public/screenshots heeft $bron bestanden, dist/screenshots $gebouwd. Vite kopieert public/ ongewijzigd, dus die twee horen gelijk te zijn."
+            exit 1
+          fi
+          echo "Beelden gecontroleerd: $gebouwd bestanden in dist/screenshots."
+          echo "dist/: $(find dist -type f | wc -l) bestanden, $(du -sh dist | cut -f1)"
+
+      - name: SSH-hostkey vastleggen
+        env:
+          SFTP_HOST: ${{ secrets.FTP_HOST }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.FTP_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          KH="$RUNNER_TEMP/known_hosts"
+          if [ -n "${SFTP_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$KH"
+            echo 'Hostkey komt uit secret FTP_KNOWN_HOSTS.'
+          else
+            ssh-keyscan -p "$SFTP_PORT" "$SFTP_HOST" > "$KH" 2>/dev/null || true
+            if [ ! -s "$KH" ]; then
+              echo "::error title=Hostkey onbekend::ssh-keyscan kreeg niets terug van de server op poort $SFTP_PORT. Klopt FTP_HOST (en eventueel variabele FTP_PORT)?"
+              exit 1
+            fi
+            echo "::warning title=Hostkey niet vastgezet::De hostkey wordt nu elke run opnieuw opgehaald en dus niet echt geverifieerd. Zet secret FTP_KNOWN_HOSTS met de uitvoer van 'ssh-keyscan -p $SFTP_PORT <host>' om man-in-the-middle uit te sluiten."
+          fi
+          chmod 600 "$KH"
+          # StrictHostKeyChecking blijft AAN; het verschil zit alleen in waar de key vandaan komt.
+          echo "SFTP_OPTS=-oBatchMode=no -oStrictHostKeyChecking=yes -oUserKnownHostsFile=$KH -oPort=$SFTP_PORT -oConnectTimeout=20" >> "$GITHUB_ENV"
+
+      - name: Verbinding en doelmap testen
+        env:
+          SFTP_HOST: ${{ secrets.FTP_HOST }}
+          SFTP_USER: ${{ secrets.FTP_USER }}
+          SSHPASS: ${{ secrets.FTP_PASS }}
+        run: |
+          set -euo pipefail
+          printf 'cd "%s"\npwd\nquit\n' "$SFTP_DIR" > "$RUNNER_TEMP/probe.txt"
+          if ! sshpass -e sftp $SFTP_OPTS -b "$RUNNER_TEMP/probe.txt" "$SFTP_USER@$SFTP_HOST"; then
+            echo "::error title=Doelmap onbereikbaar::Inloggen mislukte of FTP_DIR bestaat niet op de server. Er is nog geen enkel bestand geupload."
+            exit 1
+          fi
+
+      - name: Deploy via SFTP
+        working-directory: website/dist
+        env:
+          SFTP_HOST: ${{ secrets.FTP_HOST }}
+          SFTP_USER: ${{ secrets.FTP_USER }}
+          SSHPASS: ${{ secrets.FTP_PASS }}
+        run: |
+          set -euo pipefail
+          BATCH="$RUNNER_TEMP/sftp_batch.txt"
+          {
+            # Geen '-' ervoor: als deze cd faalt breekt sftp af en schrijven we nergens.
+            printf 'cd "%s"\n' "$SFTP_DIR"
+            # Mappen eerst, gesorteerd zodat een ouder altijd voor zijn kind komt.
+            # '-mkdir' negeert de fout die een reeds bestaande map oplevert.
+            find . -mindepth 1 -type d | sort | while IFS= read -r d; do
+              printf -- '-mkdir "%s"\n' "${d#./}"
+            done
+            # Assets eerst, index.html als laatste: de HTML verwijst dan nooit naar
+            # bestanden die nog niet op de server staan.
+            find . -type f ! -path './index.html' | sort | while IFS= read -r f; do
+              printf 'put "%s" "%s"\n' "${f#./}" "${f#./}"
+            done
+            printf 'put "index.html" "index.html"\n'
+            printf 'quit\n'
+          } > "$BATCH"
+
+          echo "Te uploaden: $(grep -c '^put ' "$BATCH") bestanden, $(grep -c '^-mkdir ' "$BATCH") mappen."
+          # De batch alleen tonen als de run met debug-logging is gestart.
+          if [ "${RUNNER_DEBUG:-0}" = '1' ]; then cat "$BATCH"; fi
+
+          sshpass -e sftp $SFTP_OPTS -b "$BATCH" "$SFTP_USER@$SFTP_HOST"
+          echo 'Upload afgerond.'
+
+      - name: Verweesde assets opruimen
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.prune_assets != 'nee' }}
+        working-directory: website/dist
+        env:
+          SFTP_HOST: ${{ secrets.FTP_HOST }}
+          SFTP_USER: ${{ secrets.FTP_USER }}
+          SSHPASS: ${{ secrets.FTP_PASS }}
+        run: |
+          set -euo pipefail
+          if [ ! -d assets ]; then
+            echo 'Deze build heeft geen assets/; niets te doen.'
+            exit 0
+          fi
+
+          printf 'cd "%s/assets"\nls -1\nquit\n' "$SFTP_DIR" > "$RUNNER_TEMP/ls.txt"
+          if ! sshpass -e sftp $SFTP_OPTS -b "$RUNNER_TEMP/ls.txt" "$SFTP_USER@$SFTP_HOST" > "$RUNNER_TEMP/raw.txt"; then
+            echo '::error title=Opruimen mislukt::De map assets/ op de server kon niet uitgelezen worden. Er is niets verwijderd; de upload zelf is wel geslaagd.'
+            exit 1
+          fi
+          # '|| true' omdat een lege map elke filter niets laat opleveren, en dat geen fout is.
+          tr -d '\r' < "$RUNNER_TEMP/raw.txt" | grep -v '^sftp>' | sed 's#.*/##' | sed '/^$/d' > "$RUNNER_TEMP/remote.txt" || true
+          ls -1 assets > "$RUNNER_TEMP/local.txt"
+
+          # Alleen namen die eruitzien als Vite-uitvoer ([naam]-[8 hashtekens].ext, eventueel
+          # met .map erachter) komen in aanmerking. Alles daarbuiten blijft staan, ook als het
+          # van iemand anders is. De match gebeurt met [[ =~ ]] en niet via een pijplijn, zodat
+          # 'pipefail' de uitkomst niet kan vertroebelen.
+          : > "$RUNNER_TEMP/todo.txt"
+          while IFS= read -r name; do
+            case "$name" in *'"'* | */* | . | ..) continue ;; esac
+            [[ "$name" =~ ^[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2)(\.map)?$ ]] || continue
+            grep -Fxq "$name" "$RUNNER_TEMP/local.txt" && continue
+            printf '%s\n' "$name" >> "$RUNNER_TEMP/todo.txt"
+          done < "$RUNNER_TEMP/remote.txt"
+
+          count=$(wc -l < "$RUNNER_TEMP/todo.txt")
+          if [ "$count" -eq 0 ]; then
+            echo 'Geen verweesde bestanden gevonden.'
+            exit 0
+          fi
+          echo "Kandidaten om te verwijderen ($count):"
+          cat "$RUNNER_TEMP/todo.txt"
+
+          if [ "$PRUNE" != 'ja' ]; then
+            echo '::notice title=Dry-run::Er is niets verwijderd. Draai opnieuw met prune_assets = ja om het echt uit te voeren.'
+            exit 0
+          fi
+
+          {
+            printf 'cd "%s/assets"\n' "$SFTP_DIR"
+            while IFS= read -r name; do printf 'rm "%s"\n' "$name"; done < "$RUNNER_TEMP/todo.txt"
+            printf 'quit\n'
+          } > "$RUNNER_TEMP/rm.txt"
+          sshpass -e sftp $SFTP_OPTS -b "$RUNNER_TEMP/rm.txt" "$SFTP_USER@$SFTP_HOST"
+          echo "$count bestand(en) verwijderd."
+
+      - name: Samenvatting
+        if: always()
+        run: |
+          {
+            echo '### Deploy website'
+            echo ''
+            echo "- Resultaat: ${{ job.status }}"
+            echo "- Aanleiding: ${{ github.event_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Opruimen: $PRUNE"
+          } >> "$GITHUB_STEP_SUMMARY"

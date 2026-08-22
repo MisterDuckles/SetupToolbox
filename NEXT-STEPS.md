@@ -177,6 +177,32 @@ De release-body is markdown en wordt als **platte tekst** getoond. Een echte ren
 >
 > **Handmatig te forceren:** `lastSeenVersion` uit `%LocalAppData%\SetupToolbox\settings.json` verwijderen terwijl die map blijft bestaan — dan denkt de app dat ‘ie net bijgewerkt is. Er moet dan wél een release met de huidige tag bestaan om iets te zien.
 
+### Website-deploy — GitHub Actions via SFTP (2026-08-22)
+
+**Dit stond nergens vastgelegd en dat was zelf een gat.** De site draaide sinds mei 2026 live zonder dat de repo vertelde hóé ‘ie daar kwam: geen workflow, geen script, alleen de constatering dát ‘ie gedeployed was. Pushen deed niets — `website/dist` staat in `.gitignore` en er was geen CI. Nu wel.
+
+**Overgenomen van de eigen `BoG-Dashboard`-repo van user**, waar dezelfde aanpak al draait: SFTP met `sshpass`, met de secrets `FTP_HOST` / `FTP_USER` / `FTP_PASS` / `FTP_DIR`. Die vorm is dus bewezen op deze hosting; het werk zat in wat hier anders is.
+
+**Wat er anders is dan bij BoG-Dashboard:**
+
+- **Dit is een monorepo.** Daar ís de repo de site; hier zit alles in `website/`. Dus `working-directory`, het `cache-dependency-path` van `setup-node` en het dist-pad kloppen alle drie niet meer één-op-één.
+- **De branch heet `main`**, niet `master`.
+- **Alleen afgaan bij site-wijzigingen** (keuze van user): een `paths`-filter op `website/**` plus de workflow zelf, met `workflow_dispatch` als handmatige knop. Verreweg de meeste commits hier raken de C#-app, en die hoeven geen deploy uit te lokken.
+- **De site staat in een SUBMAP** van het domein. `vite.config.js` heeft daarom `base: '/setup-toolbox/'`, en de galerij bouwt zijn beeld-URL's via `import.meta.env.BASE_URL` — een hardgecodeerde `/screenshots/x.webp` zou lokaal werken en live 404'en.
+
+**De waardes (2026-08-22, van user):** `FTP_DIR` = `projects.dpvb.nl/public_html/setup-toolbox/` — een **relatief** pad, gerekend vanaf de home van het FTP-account, en die home staat op `/domains/`. Dat is de DirectAdmin-indeling. `FTP_HOST` is het IP uit het hostingdashboard.
+
+> **De review stelde voor om een absoluut pad af te dwingen. Dat is bewust NIET gedaan** — dat zou precies deze werkende configuratie breken. In plaats daarvan weigert de guard `.` en `..` (in elke positie), plus spaties, aanhalingstekens en backslashes. Getest tegen elf waardes: het echte pad komt erdoor met én zonder slash aan het eind, `a.b/c..d/e` ook (punten bínnen een naam zijn geen probleem), en elke ontsnappingspoging wordt geweigerd. Dit is niet theoretisch: bij een lege of foute `FTP_DIR` wordt `cd` in een sftp-batch een sprong naar de home-map, en die is hier `/domains/` — dan zet je je site over andermans domeinmappen heen.
+
+**Twee dingen die de adversariële review eruit haalde en die echt fout waren:**
+
+1. **De secrets stonden job-breed in `env:`**, dus ook in de omgeving van `npm ci` en `npm run build`. Vite voert daar plugin- en configcode uit van elk pakket in de lockfile, in hetzelfde proces, met het SFTP-wachtwoord leesbaar in `process.env`. Één gecompromitteerde transitieve dependency en de buit is schrijfrecht op de map waar de exe-download vandaan komt — en dat verlaat de runner via het nétwerk, dus de log-masking van GitHub helpt daar niets. Nu staan ze per stap, alleen waar ze nodig zijn. Nagerekend: de drie npm-stappen zien nul secrets.
+2. **De beeld-controle die ik er zelf in had gezet, controleerde niets.** Die zocht in de gebouwde JS naar `screenshots/<naam>.webp`, maar de galerij stelt die namen tijdens het draaien samen — alleen `screenshots/` staat letterlijk in de bundel. De grep vond dus altijd nul en slaagde altijd. Lokaal nagemeten op een echte build en vervangen door een controle op `dist/screenshots` zelf, getest tegen drie situaties: normaal (slaagt), `website/public/` niet in git (faalt), en een halve kopie (faalt). Zonder dat vangnet levert een ontbrekende `public/`-map een **groene** run op met een pagina vol kapotte afbeeldingen — de stilste faalmodus die er is.
+
+**Wat er verder in zit:** `concurrency` zodat twee pushes niet tegelijk in dezelfde map schrijven (met `cancel-in-progress: false`, want een halverwege afgebroken upload laat de site kapot achter), `permissions: contents: read`, assets vóór `index.html` uploaden zodat de HTML nooit naar bestanden wijst die er nog niet zijn, een voorcontrole die per ontbrekende secret zegt wélke, een verbindingstest vóórdat er één bestand geupload wordt, en een opt-in opruimstap voor verweesde gehashte assets (met dry-run).
+
+**Nog te doen, na de eerste geslaagde run:** de hostkey vastzetten als `FTP_KNOWN_HOSTS` — zie *klein onderhoud* hieronder.
+
 ### Website — professionaliseren + bijwerken (stond gepland als v1.3.1)
 
 **Naar voren gehaald op verzoek van user (2026-08-21), in de volle scope: uiterlijk én inhoud.** De reden om ‘m áchter de release te zetten vervalt namelijk — versie, downloadlink én bestandsgrootte komen live uit de GitHub-API en lopen dus vanzelf mee zodra v1.3.0 gepubliceerd wordt. **Géén app-versiebump**: dit raakt de exe niet, dus het nummer *v1.3.1* zou misleidend zijn. Eigen commit.
