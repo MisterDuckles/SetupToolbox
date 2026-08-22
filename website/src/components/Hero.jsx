@@ -1,6 +1,5 @@
 import { STATS } from '../data/content';
 import { GITHUB_URL } from '../lib/constants';
-import { AppPreview } from './AppPreview';
 import { IconDownload, IconGitHub, IconWindows } from './Icons';
 
 // Splitst tekst in woorden, elk in een overflow-masker zodat GSAP ze van
@@ -65,13 +64,9 @@ export function Hero({ version, downloadUrl, size }) {
         </p>
       </div>
 
-      <div data-hero>
-        <AppPreview />
-      </div>
-
       <dl
         data-hero
-        className="mx-auto mt-14 grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-stroke bg-stroke sm:grid-cols-4"
+        className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-stroke bg-stroke sm:grid-cols-4"
       >
         {STATS.map((s) => (
           <div key={s.label} className="bg-bg2 px-4 py-6 text-center">

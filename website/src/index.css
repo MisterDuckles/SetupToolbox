@@ -49,9 +49,19 @@
   --card-top: rgba(255, 255, 255, 0.04);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lift: 0 18px 40px -22px rgba(0, 0, 0, 0.9);
-  --rail-bg: rgba(255, 255, 255, 0.04);
-  --bar: rgba(198, 209, 226, 0.22);
-  --bar-strong: rgba(198, 209, 226, 0.42);
+
+  /* Omkadering van de schermafbeeldingen. Deze vijf staan hier BEWUST maar één
+     keer en worden door de lichte variant hieronder NIET overschreven: alle acht
+     de beelden tonen de app in zijn eigen donkere thema, dus het frame eromheen
+     is in licht én donker donker. Zo leest het contrast als een passe-partout in
+     plaats van als een fout, en klapt de plaatshouder achter een lazy-loaded
+     beeld tijdens het laden niet van wit naar zwart. Ze staan op de kale :root
+     en dus niet alleen binnen een media-query. */
+  --shot-mat: #101a2b;
+  --shot-mat-2: #070c16;
+  --shot-mat-edge: #24314a;
+  --shot-mat-edge-strong: #3a4c6d;
+  --shot-mat-top: rgba(255, 255, 255, 0.05);
 }
 
 /* --- Lichte variant -------------------------------------------------------
@@ -83,9 +93,6 @@
   --card-top: rgba(255, 255, 255, 0.9);
   --shadow-card: 0 1px 2px rgba(15, 30, 55, 0.06);
   --shadow-lift: 0 18px 40px -24px rgba(15, 30, 55, 0.35);
-  --rail-bg: rgba(12, 20, 32, 0.03);
-  --bar: rgba(12, 20, 32, 0.12);
-  --bar-strong: rgba(12, 20, 32, 0.28);
 }
 
 @media (prefers-color-scheme: light) {
@@ -113,9 +120,6 @@
     --card-top: rgba(255, 255, 255, 0.9);
     --shadow-card: 0 1px 2px rgba(15, 30, 55, 0.06);
     --shadow-lift: 0 18px 40px -24px rgba(15, 30, 55, 0.35);
-    --rail-bg: rgba(12, 20, 32, 0.03);
-    --bar: rgba(12, 20, 32, 0.12);
-    --bar-strong: rgba(12, 20, 32, 0.28);
   }
 }
 
@@ -337,21 +341,75 @@ h3 {
 }
 
 /* ==========================================================================
-   Schematische app-weergave (nadrukkelijk GEEN schermafbeelding)
+   Schermafbeeldingen
    ========================================================================== */
-.bar {
-  display: block;
-  height: 0.5rem;
-  border-radius: 999px;
-  background: var(--bar);
+
+/* De kaart om de schermafbeeldingen heen. Overschrijft alleen de vlakken van
+   .card, niet de rest: de gloed die de cursor volgt, de lift bij hover en de
+   afronding blijven precies zoals bij elke andere kaart. In het lichte thema
+   stond hier een bijna-zwart beeld in een witte kaart met een dun wit randje —
+   dat leest als een fout. Nu is de kaart zelf de donkere omkadering. */
+.shot-card {
+  background:
+    linear-gradient(180deg, var(--shot-mat-top), transparent 40%),
+    linear-gradient(180deg, var(--shot-mat), var(--shot-mat-2));
+  border-color: var(--shot-mat-edge);
 }
 
-.bar-strong {
-  background: var(--bar-strong);
+/* Zonder deze regel zou .card:hover de rand in het lichte thema alsnog naar
+   --color-stroke-strong (lichtgrijs) trekken. */
+.shot-card:hover {
+  border-color: var(--shot-mat-edge-strong);
 }
 
-.rail {
-  background: var(--rail-bg);
+/* De verhoudingsdoos van de galerij. aspect-ratio staat bewust NIET hier maar
+   inline in ScreenshotGallery.jsx, waar 'ie uit SHOT_FRAME_RATIO komt en dat
+   weer uit de width/height in SCREENS — een --shot-ratio hiernaast zou een
+   tweede waarheid zijn die vroeg of laat uit de pas loopt met een nieuwe export.
+
+   position: relative krijgt dit element als direct kind van .card al via de
+   `.card > *`-regel hierboven; het staat hier voor het geval het frame ooit
+   buiten een .card belandt. De achtergrond is de plaatshouder terwijl een beeld
+   nog onderweg is: exact op maat, dus er verschuift niets, en in beide thema's
+   even donker als het beeld dat erin komt, dus er klapt ook niets om. Diezelfde
+   kleur vult de smalle band die object-contain overhoudt als een beeld net een
+   andere verhouding heeft dan het frame. */
+.shot-frame {
+  position: relative;
+  background: var(--shot-mat-2);
+}
+
+/* De geselecteerde tab (en de ingedrukte taalknop). De vorige toestand was een
+   vlak in --color-panel-3 met een rand in --color-stroke-strong: gemeten tegen
+   de paginakleur haalde dat vlak 1,09:1 in licht en 1,32:1 in donker, de rand
+   1,68:1 respectievelijk 1,72:1 — ver onder de 3:1 die WCAG 1.4.11 voor een
+   niet-tekstuele aanwijzing vraagt.
+
+   De aanwijzing is nu de accentrand plus de 3 px onderstreping in diezelfde
+   accentkleur. Tegen de paginakleur haalt --color-accent 6,40:1 in licht
+   (#1f4fd0 op #f6f8fc) en 8,38:1 in donker (#7ea6ff op #05080f); tegen het
+   getinte vlak van de tab zelf 4,76:1 respectievelijk 5,05:1. Het vlak is
+   daarmee alleen nog ondersteuning en geen drager, en de toestand is af te lezen
+   zonder de tekstkleur te vergelijken.
+
+   Geen extra randbreedte en geen extra element: de rand blijft 1 px net als bij
+   een inactieve tab en de onderstreping is een inset-schaduw, dus de knop houdt
+   exact dezelfde maat en de balk herschikt niet bij een klik. */
+.shot-tab-on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-panel-3));
+  box-shadow: inset 0 -3px 0 0 var(--color-accent);
+  color: var(--color-ink);
+}
+
+/* Het paneel bevat geen focusbare elementen, dus het krijgt zelf tabindex="0" —
+   anders kan een toetsenbordgebruiker er niet in landen. Maar het vult het frame
+   precies, en zowel het frame als de kaart eromheen klippen (overflow: hidden).
+   De algemene focusring met outline-offset: 3px zou dus buiten de doos vallen en
+   volledig weggeknipt worden: wél focus, geen zichtbare focus. Voor dit ene geval
+   dus naar binnen. */
+.shot-frame > [role="tabpanel"]:focus-visible {
+  outline-offset: -3px;
 }
 
 /* ==========================================================================

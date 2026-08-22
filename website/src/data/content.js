@@ -84,6 +84,175 @@ export const FEATURES = [
   },
 ];
 
+// ── Schermafbeeldingen ─────────────────────────────────────────────────────
+// Acht bestanden in website/public/screenshots/: <scherm>-nl.webp en
+// <scherm>-en.webp.
+//
+// ⚠ BIJWERKEN BIJ NIEUWE SCREENSHOTS ⚠
+// SHOT_SIZE hieronder is de ENIGE plek in de hele site waar de pixelmaten van de
+// beelden staan. Die twee getallen voeden drie dingen tegelijk:
+//   1. de width/height-attributen op de <img>, waarmee de browser de plek
+//      alvast vrijhoudt;
+//   2. SHOT_FRAME_RATIO — de vaste verhouding van het frame, zodat de doos zijn
+//      eindhoogte heeft vóór er één byte binnen is en er tijdens het laden
+//      niets verschuift;
+//   3. de hoogte die het frame op elke schermbreedte inneemt.
+// Nergens anders — niet in de CSS, niet in de JSX en niet per scherm hieronder —
+// staat nog een breedte, een hoogte of een verhouding. Komt er een nieuwe reeks
+// exports met een andere verhouding, dan zijn deze twee getallen het enige dat
+// mee hoeft; alles eromheen rekent zich opnieuw uit. Lees ze uit de VP8-header
+// van de .webp-bestanden zelf, niet uit de crop-maten van het manifest.
+//
+// Dat één maat voor alle acht volstaat, is geen toeval: de beelden zijn bewust
+// PIXELGELIJK uitgesneden — niet alleen binnen een taalpaar maar over de vier
+// schermen heen, met het app-icoon in de titelbalk als anker. Daardoor springt
+// er niets, niet bij het wisselen van taal en niet bij het wisselen van scherm.
+// Een nieuwe reeks moet dat aanhouden; verschillen de acht straks onderling in
+// formaat, dan keert de layout-sprong terug en moet de maat weer per scherm
+// bijgehouden worden (SHOT_FRAME_RATIO wordt dan de laagste breedte/hoogte van
+// de reeks, dus de hoogste doos). object-contain op de <img> is het vangnet:
+// een afwijkend beeld wordt dan niet vervormd maar met een band in --shot-mat-2
+// ingepast.
+//
+// LET OP bij het opnieuw schieten: de vier navigatielabels zijn in beide talen
+// IDENTIEK ("Apps", "Tweaks", "Debloat", "Deep clean"). De navigatierail toont
+// het taalverschil dus niet — elke opname moet de paginakop en de omschrijvingen
+// in beeld hebben, want daar zit het verschil.
+//
+// De alt-teksten citeren de app-strings LETTERLIJK uit data/strings.nl.json en
+// data/strings.en.json, inclusief trema's ("categorieën", "geïnstalleerde") en
+// de em-dash in "Debloat — Apps". Elke alt begint bij het scherm zelf en niet
+// bij "dezelfde als hierboven": wie op EN drukt zonder de NL-versie gehoord te
+// hebben, moet er evengoed uit kunnen opmaken waar hij naar kijkt. NL en EN
+// noemen bewust dezelfde elementen in dezelfde volgorde, zodat de twee talen
+// naast elkaar te leggen zijn. De aantallen tussen haakjes (35, 86, 6 / 11)
+// komen uit de huidige opnames en moeten bij een nieuwe reeks nagelopen worden.
+
+// De werkelijke maat van alle acht de .webp-bestanden. Zie de waarschuwing
+// hierboven: dit is de plek om aan te passen als er nieuwe opnames komen.
+export const SHOT_SIZE = { width: 1600, height: 935 };
+
+// De vaste verhouding van het beeldframe in de galerij, AFGELEID uit SHOT_SIZE
+// en nergens anders herhaald. Een los getal in de CSS of in de JSX zou een
+// tweede waarheid zijn die bij de eerstvolgende nieuwe reeks uit de pas loopt —
+// precies de fout die deze constante voorkomt. Bijwerken hoeft dus nooit: pas
+// SHOT_SIZE aan en dit rekent zich mee.
+export const SHOT_FRAME_RATIO = SHOT_SIZE.width / SHOT_SIZE.height;
+
+export const GALLERY = {
+  eyebrow: 'In beeld',
+  title: 'Vier schermen, twee talen',
+  lead:
+    'Dit is de app zelf. Zet de schakelaar op EN en dezelfde vier schermen staan er in het Engels — dat is geen ' +
+    'keuze die je bij de installatie vastlegt, maar een knop in de app.',
+  tablistLabel: 'Kies een scherm',
+  langGroupLabel: 'Taal van de schermafbeeldingen',
+  shownIn: 'Getoond in het',
+
+  // Wat de live region onder de figure voorleest zodra er een ander scherm of
+  // een andere taal gekozen wordt. Zonder deze regel hoort iemand die op EN
+  // drukt alleen "ingedrukt" — dat de knop aan staat, maar niet DAT er een
+  // ander beeld voor in de plaats is gekomen.
+  status: (screen, language) => `Schermafbeelding: ${screen}, getoond in het ${language}.`,
+};
+
+export const SHOT_LANGS = [
+  { code: 'nl', short: 'NL', label: 'Nederlands' },
+  { code: 'en', short: 'EN', label: 'Engels' },
+];
+
+export const SCREENS = [
+  {
+    screen: 'apps',
+    icon: 'package',
+    title: 'Apps-catalogus',
+    caption: 'Tien categorieën met een zoekveld erboven; onderin telt de balk mee hoeveel apps je hebt aangevinkt.',
+    alt: {
+      nl:
+        "De Apps-pagina van Setup Toolbox in het Nederlands, met links de navigatie Apps / Tweaks / Debloat. Tien " +
+        "categorietegels: Browsers, Ontwikkeling, Beveiliging & privacy, Productiviteit, Communicatie, Media & " +
+        "entertainment, Gaming, Hulpprogramma's, Creatief & ontwerp en App-suites. Rechtsboven het zoekveld 'Zoek " +
+        "apps of categorieën'. De laatste tegel is maar deels zichtbaar; de lijst scrollt door. Onderaan de balk " +
+        "'0 apps geselecteerd' met de knoppen 'Selectie wissen' en " +
+        "'Geselecteerde apps installeren'.",
+      en:
+        "De Apps-pagina van Setup Toolbox in het Engels, met links de navigatie Apps / Tweaks / Debloat. Tien " +
+        "categorietegels: Browsers, Development, Security & Privacy, Productivity, Communication, Media & " +
+        "Entertainment, Gaming, Utilities, Creative & Design en App Suites. Rechtsboven het zoekveld 'Search apps " +
+        "or categories'. De laatste tegel is maar deels zichtbaar; de lijst scrollt door. Onderaan de balk " +
+        "'0 apps selected' met de knoppen 'Clear all' en 'Install selected apps'.",
+    },
+  },
+  {
+    screen: 'tweaks',
+    icon: 'sliders',
+    title: 'Tweaks',
+    caption:
+      'Twaalf categorieën, elk met een teller die laat zien hoeveel tweaks er nú actief zijn — rechtstreeks ' +
+      'uitgelezen uit het register.',
+    alt: {
+      nl:
+        "De Tweaks-pagina van Setup Toolbox in het Nederlands, met twaalf categorietegels: Verkenner, Taakbalk, " +
+        "Startmenu, Advertenties & tracking, AI / Copilot, Privacy, UI / Thema, Prestaties, Contextmenu, " +
+        "Meldingen & vergrendelscherm, Updates en Beveiliging. De tegels tonen een teller zoals '6 / 11 actief'; " +
+        "Startmenu draagt het groene label 'Volledig actief'. Rechtsboven de knop 'Explorer herstarten' en het " +
+        "zoekveld 'Zoek tweaks'. De onderste tegelrij valt deels buiten beeld. Onderaan de balk 'Geen openstaande " +
+        "wijzigingen' met de knoppen 'Verwerpen' en " +
+        "'Toepassen'.",
+      en:
+        "De Tweaks-pagina van Setup Toolbox in het Engels, met twaalf categorietegels: Explorer, Taskbar, Start " +
+        "Menu, Ads & Tracking, AI / Copilot, Privacy, UI / Theme, Performance, Context Menu, Notifications & Lock " +
+        "Screen, Updates en Security. De tegels tonen een teller zoals '6 / 11 active'; Start Menu draagt het " +
+        "groene label 'Fully applied'. Rechtsboven de knop 'Restart Explorer' en het zoekveld 'Search tweaks'. " +
+        "De onderste tegelrij valt deels buiten beeld. Onderaan de balk 'No pending changes' met de knoppen " +
+        "'Discard' en 'Apply'.",
+    },
+  },
+  {
+    screen: 'debloat',
+    icon: 'broom',
+    title: 'Debloat',
+    caption:
+      'De lijsten staan standaard dicht: eerst uitklappen en aanvinken, pas daarna verwijdert de app iets.',
+    alt: {
+      nl:
+        "De pagina 'Debloat — Apps' van Setup Toolbox in het Nederlands, met bovenaan de uitlegkaart 'Apps " +
+        "debloat' over het verwijderen van Microsoft pre-install bloat, OEM bundleware en apps uit de catalogus. " +
+        "Daaronder twee ingeklapte secties: 'Microsoft-bloatware (35)' en 'Alle geïnstalleerde apps (86)', elk met " +
+        "de knop 'Alles selecteren' en een uitklappijl. Rechtsboven de knop 'Vernieuwen'. Onderaan de balk 'Niets " +
+        "geselecteerd' met de knop 'Geselecteerde verwijderen'.",
+      en:
+        "De pagina 'Debloat — Apps' van Setup Toolbox in het Engels, met bovenaan de uitlegkaart 'Apps debloat' " +
+        "over het verwijderen van Microsoft pre-install bloat, OEM bundleware en apps uit de catalogus. Daaronder " +
+        "twee ingeklapte secties: 'Microsoft bloatware (35)' en 'All installed apps (86)', elk met de knop 'Select " +
+        "all' en een uitklappijl. Rechtsboven de knop 'Refresh'. Onderaan de balk 'Nothing selected' met de knop " +
+        "'Uninstall selected'.",
+    },
+  },
+  {
+    screen: 'deepclean',
+    icon: 'sparkle',
+    title: 'Deep clean',
+    caption:
+      'Twee scans om zelf te starten — Windows-caches en achtergebleven restanten. Scannen is nog niet opruimen: ' +
+      'de lijst komt eerst.',
+    alt: {
+      nl:
+        "De pagina 'Debloat — Deep clean' van Setup Toolbox in het Nederlands, met bovenaan de uitleg " +
+        "'Systeembrede opruiming'. Daaronder twee blokken: 'Windows-caches' (temp-mappen, Update-cache, " +
+        "Prullenbak, Prefetch, Windows.old en browsercaches) met de knop 'Caches scannen', en 'Restanten " +
+        "(volledige deep clean)' (mappen zonder bijbehorende app, dode registry-keys, verweesde services) met de " +
+        "knop 'Restanten scannen'. Deze pagina heeft geen actiebalk onderaan.",
+      en:
+        "De pagina 'Debloat — Deep clean' van Setup Toolbox in het Engels, met bovenaan de uitleg 'System-wide " +
+        "cleanup'. Daaronder twee blokken: 'Windows caches' (temp folders, Update cache, Recycle Bin, Prefetch, " +
+        "Windows.old en browsercaches) met de knop 'Scan caches', en 'Leftovers (full deep clean)' (mappen zonder " +
+        "bijbehorende app, dode registry-keys, verweesde services) met de knop 'Scan leftovers'. Deze pagina heeft " +
+        "geen actiebalk onderaan.",
+    },
+  },
+];
+
 export const STEPS = [
   {
     title: 'Downloaden en starten',

@@ -4,6 +4,7 @@ import { IconGitHub, IconLogo, IconMoon, IconSun } from './Icons';
 
 const NAV = [
   { href: '#functies', label: 'Functies' },
+  { href: '#schermen', label: 'Schermen' },
   { href: '#werkwijze', label: 'Zo werkt het' },
   { href: '#veilig', label: 'Veiligheid' },
   { href: '#vragen', label: 'Vragen' },

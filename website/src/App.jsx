@@ -5,6 +5,7 @@ import { useGSAP } from '@gsap/react';
 
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
+import { ScreenshotGallery } from './components/ScreenshotGallery';
 import { DownloadCta, Faq, Features, Footer, HowItWorks, Safety } from './components/Sections';
 import { useLatestRelease } from './hooks/useLatestRelease';
 import { useTheme } from './hooks/useTheme';
@@ -147,6 +148,7 @@ export default function App() {
       <main id="inhoud">
         <Hero version={version} downloadUrl={downloadUrl} size={size} />
         <Features />
+        <ScreenshotGallery />
         <HowItWorks />
         <Safety />
         <Faq />
