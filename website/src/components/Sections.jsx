@@ -29,7 +29,7 @@ const ICONS = {
 
 function SectionHead({ eyebrow, title, lead, id }) {
   return (
-    <div className="mx-auto max-w-2xl text-center">
+    <div data-reveal className="mx-auto max-w-2xl text-center">
       <p className="text-xs font-semibold tracking-[0.16em] text-accent uppercase">{eyebrow}</p>
       <h2 id={id} className="mt-3 text-2xl font-bold sm:text-4xl">
         {title}
@@ -61,7 +61,7 @@ export function Features() {
         {FEATURES.map((f) => {
           const Icon = ICONS[f.icon];
           return (
-            <li key={f.title} data-feature onMouseMove={trackCursor} className="card rounded-2xl p-5 sm:p-6">
+            <li key={f.title} data-reveal-item onMouseMove={trackCursor} className="card rounded-2xl p-5 sm:p-6">
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-stroke bg-panel-3 text-accent">
                 <Icon className="h-5 w-5" />
               </span>
@@ -92,7 +92,7 @@ export function HowItWorks() {
 
       <ol className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {STEPS.map((s, i) => (
-          <li key={s.title} data-feature onMouseMove={trackCursor} className="card rounded-2xl p-5 sm:p-6">
+          <li key={s.title} data-reveal-item onMouseMove={trackCursor} className="card rounded-2xl p-5 sm:p-6">
             <span
               aria-hidden="true"
               className="block text-3xl font-bold text-transparent [-webkit-text-stroke:1px_var(--color-stroke-strong)]"
@@ -113,7 +113,7 @@ export function Safety() {
     <section id="veilig" aria-labelledby="veilig-titel" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
       <div className="card overflow-hidden rounded-3xl p-6 sm:p-10 lg:p-14">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-16">
-          <div>
+          <div data-reveal>
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-stroke bg-panel-3 text-accent">
               <IconShield className="h-6 w-6" />
             </span>
@@ -128,7 +128,7 @@ export function Safety() {
 
           <ul className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
             {SAFETY.map((s) => (
-              <li key={s.title}>
+              <li key={s.title} data-reveal-item>
                 <h3 className="flex items-start gap-2 text-sm font-semibold">
                   <svg
                     viewBox="0 0 24 24"
@@ -162,7 +162,7 @@ export function Faq() {
 
       <div className="mt-12 divide-y divide-stroke border-y border-stroke">
         {FAQ.map((item) => (
-          <details key={item.q} className="group">
+          <details key={item.q} data-reveal-item className="group">
             <summary className="flex items-center justify-between gap-4 py-5 text-left text-[0.95rem] font-semibold">
               {item.q}
               <IconChevron className="faq-chevron h-5 w-5 shrink-0 text-muted" />
@@ -178,7 +178,7 @@ export function Faq() {
 export function DownloadCta({ version, downloadUrl, size }) {
   return (
     <section id="downloaden" aria-labelledby="downloaden-titel" className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20">
-      <div data-download onMouseMove={trackCursor} className="card overflow-hidden rounded-3xl p-8 text-center sm:p-14">
+      <div data-reveal onMouseMove={trackCursor} className="card overflow-hidden rounded-3xl p-8 text-center sm:p-14">
         <h2 id="downloaden-titel" className="text-2xl font-bold sm:text-4xl">
           Klaar om je pc in te richten?
         </h2>

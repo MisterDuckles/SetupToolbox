@@ -193,6 +193,23 @@ Nieuw: een statistiekenstrip, een "Zo werkt het" in vier stappen, een veiligheid
 > - Lichte modus end-to-end getest via het echte pad (localStorage → head-script → `useTheme`).
 > - Het stringgetal is ná de agent nog bijgewerkt van 1335 naar **1347**, want deze sessie voegde er zelf keys aan toe.
 
+#### Na de eerste blik van user (2026-08-21): de animatie
+
+Twee dingen uit die doorloop, allebei opgelost.
+
+**De glans over de titel haperde.** *"De animatie begint op een gegeven moment opnieuw en is niet continu."* Dat was geen smaakkwestie maar een rekenfout: `.text-shiny` animeerde `background-position` van `0%` naar `220%` bij een `background-size` van **220%**. Die twee percentages meten niet hetzelfde — `background-position: P%` verplaatst over de *overloop* (`breedte − tegelbreedte`), niet over de tegel zelf. Bij een tegel van 220% kwam de verschuiving daardoor op **1,2 tegel** uit, dus na elke ronde sprong het beeld zichtbaar terug. Op **200%** met `0% → 200%` is de verschuiving exact één tegel en sluit de lus naadloos.
+
+**Er was nauwelijks scroll-animatie.** Gevraagd door user: *"dat je scrollt naar beneden en verschillende onderdelen langs komen."* Er stond alleen een schuif van 26px op de feature-kaarten, zónder fade — een overblijfsel van de blanco-pagina-bug hierboven, waarna besloten was nooit meer opacity te animeren. Nu komt elke sectiekop, de veiligheidstekst en de download-kaart omhoog en in beeld gefade, en komen de kaarten, de veiligheidspunten en de FAQ-regels **ná elkaar** binnen met een stagger.
+
+Twee keuzes daarbij:
+
+- **Per ouder groeperen, niet in één selector.** Alle `[data-reveal-item]` in één tween met één trigger zou betekenen dat de tweede rij kaarten al afspeelt terwijl ‘ie nog buiten beeld staat.
+- **`once: true`.** Terugscrollen speelt niets opnieuw af; een sectie die bij elke passage opnieuw begint leest als een storing — precies wat die glans deed.
+
+**De fade mag nu wél, en dat is verantwoord.** De blanco-pagina-bug kwam van de **intro-tijdlijn** die in een achtergrondtab op progress 0 bleef hangen, niet van het scrollen. Die faalmodus wordt nu gericht afgevangen: op `visibilitychange` wordt opnieuw opgemeten en wordt elke reveal die al getriggerd is maar niet afgerond alsnog op de eindstand gezet. Daarmee is de "nooit opacity"-regel niet meer nodig als vuistregel, alleen de reden erachter.
+
+**Bewust géén parallax** op de UI-weergave in de hero: die draagt al een intro-tween op `y`, en een scrub-tween erbovenop vecht met dezelfde transform.
+
 **Wat er nog mist — dit kan ik niet zelf oplossen:**
 
 - **Screenshots.** `website/public/` bestond niet en er staat nergens een bruikbare UI-afbeelding in de repo (`data/app-icon-preview.png` is het app-icoon, geen scherm). Er staat nu een schematische CSS/SVG-weergave met het onderschrift *"Schematische weergave van de indeling — geen schermafbeelding."* Één hero-shot van de Apps-pagina zou die al kunnen vervangen. Meest waardevol daarna: de Tweaks-tab met de status-pills, de install-kaart met voortgang, en de deep-clean-preview met groottes.

@@ -222,7 +222,11 @@ h3 {
     var(--color-btn-to) 62%,
     var(--color-btn-from) 86%
   );
-  background-size: 220% auto;
+  /* 200% en niet 220%: background-position rekent in "hoeveel van de
+     overloop is opgebruikt", dus 0% -> 200% verschuift bij een tegel van
+     200% exact een hele tegel en sluit de lus naadloos. Met 220% kwam de
+     verschuiving op 1,2 tegel uit en sprong het beeld elke ronde terug. */
+  background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -231,7 +235,7 @@ h3 {
 
 @keyframes shine {
   to {
-    background-position: 220% center;
+    background-position: 200% center;
   }
 }
 

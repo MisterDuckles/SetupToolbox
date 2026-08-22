@@ -53,27 +53,78 @@ export default function App() {
       intro.eventCallback('onComplete', () => window.clearTimeout(guard));
 
       // ── Onthullen bij het scrollen ─────────────────────────────────────────
-      // Bewust alléén een transform, geen opacity: inhoud onder de vouw is dus
-      // ook zichtbaar als een tween nooit afgaat. Het schuift hooguit niet.
-      gsap.utils.toArray('[data-feature]').forEach((el, i) => {
-        gsap.from(el, {
-          scrollTrigger: { trigger: el, start: 'top 90%', once: true },
-          y: 26,
-          duration: 0.55,
-          ease: 'power2.out',
-          delay: (i % 4) * 0.06,
+      // Elk blok schuift omhoog en fadet in zodra 'ie in beeld komt. once: true,
+      // dus terugscrollen speelt niets opnieuw af — een sectie die bij elke
+      // passage opnieuw begint leest als een storing, niet als een effect.
+      //
+      // De vorige ronde animeerde hier bewust GEEN opacity, na een bug waarbij de
+      // pagina leeg bleef. De oorzaak daarvan was de intro-tijdlijn die in een
+      // achtergrondtab op progress 0 bleef hangen — niet het scrollen zelf. Die
+      // faalmodus wordt hieronder gericht afgevangen, dus de reveals mogen wel
+      // een echte fade doen.
+      const reveals = [];
+
+      const trigger = (el, start) => ({
+        trigger: el,
+        start: `top ${start}`,
+        once: true,
+      });
+
+      // Losse blokken: sectiekoppen, de veiligheidstekst, de download-kaart.
+      gsap.utils.toArray('[data-reveal]').forEach((el) => {
+        reveals.push(
+          gsap.from(el, {
+            y: 34,
+            autoAlpha: 0,
+            duration: 0.6,
+            ease: 'power2.out',
+            scrollTrigger: trigger(el, '88%'),
+          }),
+        );
+      });
+
+      // Groepen: alles met dezelfde ouder krijgt één tween met stagger, zodat
+      // kaarten ná elkaar binnenkomen in plaats van als blok. Per ouder groeperen
+      // en niet in één selector, anders speelt de tweede rij kaarten al af
+      // terwijl 'ie nog buiten beeld staat.
+      const groups = new Map();
+      gsap.utils.toArray('[data-reveal-item]').forEach((el) => {
+        const parent = el.parentElement;
+        if (!groups.has(parent)) groups.set(parent, []);
+        groups.get(parent).push(el);
+      });
+
+      groups.forEach((els, parent) => {
+        reveals.push(
+          gsap.from(els, {
+            y: 30,
+            autoAlpha: 0,
+            duration: 0.55,
+            ease: 'power2.out',
+            stagger: 0.07,
+            scrollTrigger: trigger(parent, '85%'),
+          }),
+        );
+      });
+
+      // Vangnet, gericht op precies de faalmodus van de vorige ronde: een
+      // rAF-ticker die in een achtergrondtab stilstaat laat een from()-tween op
+      // progress 0 staan, en dan blijft de inhoud ONZICHTBAAR in plaats van
+      // alleen niet-bewegend. Zodra de tab weer zichtbaar is: opnieuw opmeten, en
+      // alles wat al getriggerd is maar niet afgerond op de eindstand zetten.
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return;
+        ScrollTrigger.refresh();
+        reveals.forEach((t) => {
+          if (t.scrollTrigger && t.scrollTrigger.progress > 0 && t.progress() < 1) t.progress(1);
         });
-      });
+      };
+      document.addEventListener('visibilitychange', onVisible);
 
-      gsap.from('[data-download]', {
-        scrollTrigger: { trigger: '#downloaden', start: 'top 88%', once: true },
-        y: 22,
-        scale: 0.985,
-        duration: 0.65,
-        ease: 'power3.out',
-      });
-
-      return () => window.clearTimeout(guard);
+      return () => {
+        window.clearTimeout(guard);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
     },
     { scope: root },
   );
