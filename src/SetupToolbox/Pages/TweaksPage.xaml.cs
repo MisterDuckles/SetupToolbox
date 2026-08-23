@@ -407,7 +407,7 @@ public sealed partial class TweaksPage : Page
             {
                 XamlRoot = this.XamlRoot
             };
-            if (await picker.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await DialogService.ShowAsync(picker) != ContentDialogResult.Primary) return;
 
             var appIds = picker.SelectedAppIds;
             var appDetails = picker.GetSelectedAppDetails();
@@ -542,7 +542,7 @@ public sealed partial class TweaksPage : Page
     private async void RestoreButton_Click(object sender, RoutedEventArgs e)
     {
         var browser = new SnapshotBrowserDialog { XamlRoot = this.XamlRoot };
-        await browser.ShowAsync();
+        await DialogService.ShowAsync(browser);
         // Restore kan registry hebben gewijzigd → states re-detecten + UI bij.
         LoadingOverlayText.Text = App.Loc.S("tweaks.rereadingState");
         LoadingOverlay.Visibility = Visibility.Visible;
@@ -564,7 +564,7 @@ public sealed partial class TweaksPage : Page
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await DialogService.ShowAsync(dialog) != ContentDialogResult.Primary) return;
 
         RestartExplorerButton.IsEnabled = false;
         try

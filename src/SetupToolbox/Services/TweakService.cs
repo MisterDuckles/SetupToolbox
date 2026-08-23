@@ -14,11 +14,13 @@ namespace SetupToolbox.Services;
 // Centrale service voor de Tweaks tab. Registreert alle Tweak-definities
 // (data-driven, geen per-tweak UI-code), leest live registry-state bij
 // page-load, en past tweaks toe via een gemixt local/elevated batch-pad
-// (HKCU = in-process, HKLM = 1 UAC voor de gehele admin-subset).
+// (gewone HKCU-keys in-process; HKLM, HKU én de HKCU-policy-takken in 1 UAC
+// voor de gehele admin-subset — zie RegistryPathRules voor het waarom).
 //
 // Architectuur is parallel met DeepCleanService:
 //   - read = synchronous registry-walk (Microsoft.Win32.Registry)
 //   - apply = split user-ops vs elevated-ops, elevated via PowerShell + reg.exe
+//     (en voor pakketverwijdering Remove-AppxPackage, in dezelfde batch)
 //   - revert = idem, behalve dat DisabledValue wordt geschreven i.p.v. EnabledValue
 public sealed class TweakService
 {
@@ -71,6 +73,12 @@ public sealed class TweakService
 
     private static TweakState DetectStateInternal(Tweak tweak)
     {
+        // Pakketverwijdering: "aan" = geen van de pakketten meer geregistreerd
+        // voor deze gebruiker (of een alternate-signal zegt dat het effect er
+        // al is, bv. de Dsh-policy uit de ISO).
+        if (tweak.PackageRemoval is { } removal)
+            return DetectPackageRemovalState(removal);
+
         // Choice-tweak: zoek de eerste choice waarvan ALLE Values matchen de
         // huidige registry-state. Geen match → SelectedChoiceIndex = -1 (custom).
         if (tweak.IsChoice)
@@ -133,16 +141,55 @@ public sealed class TweakService
         return -1;
     }
 
-    private static TweakState MatchOpState(TweakOperation op)
+    // Per-gebruiker registratie van AppX-pakketten. Elke subkey heet naar de
+    // PackageFullName: "<Name>_<Version>_<Arch>__<PublisherId>". Oude versies
+    // kunnen blijven hangen (CBS staat er met tien versies), dus we kijken
+    // alleen of er ÍETS met het juiste "<Name>_"-prefix staat.
+    private const string UserPackageRepository =
+        @"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages";
+
+    private static bool IsPackageRegisteredForCurrentUser(string packageName)
     {
-        // 1) Eerst alle AlternateEnabledPaths probereren — als ÉÉN alternate
-        // matcht, is de tweak effectief actief (via een ander mechanisme dan
-        // wat wij schrijven). Voorbeelden: Win11 Home gebruikers die
-        // Start_IrisRecommendations=0 zetten via Settings i.p.v. de
-        // HideRecommendedSection policy; HKLM-policy die HKCU overruled.
-        // Alternates kunnen alleen VOOR Enabled stemmen, nooit voor Disabled —
-        // ze zijn advisory reads, niet authoritative writes.
-        foreach (var alt in op.AlternateEnabledPaths)
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(UserPackageRepository, writable: false);
+            if (key == null) return false;
+            var prefix = packageName + "_";
+            foreach (var sub in key.GetSubKeyNames())
+                if (sub.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static TweakState DetectPackageRemovalState(TweakPackageRemoval removal)
+    {
+        if (AnyAlternateSignalActive(removal.AlternateEnabledPaths)) return TweakState.Enabled;
+        if (removal.PackageNames.Count == 0) return TweakState.Unknown;
+
+        // ALLEEN het eerste pakket bepaalt de status; de rest is meeliftende
+        // ballast die op de ene machine wel en op de andere niet bestaat — de
+        // Widgets-runtime komt bijvoorbeeld pas met 24H2 mee, en op 23H2 of op
+        // een image zonder Store heeft de gebruiker 'm nooit gehad. Zou zo'n
+        // nooit-geïnstalleerd pakket als "verwijderd" meetellen, dan kwam de
+        // tweak op Partial — en Partial telt in de UI als AAN, waardoor de
+        // schakelaar niet meer uit te zetten was.
+        return IsPackageRegisteredForCurrentUser(removal.PackageNames[0])
+            ? TweakState.Disabled
+            : TweakState.Enabled;
+    }
+
+    /// <summary>
+    /// True als één van de alternate-signalen matcht — de tweak is dan effectief
+    /// actief via een ander mechanisme dan wat wij zelf schrijven. Alternates
+    /// stemmen alleen VOOR Enabled, nooit voor Disabled.
+    /// </summary>
+    private static bool AnyAlternateSignalActive(IReadOnlyList<TweakAlternateSignal> alternates)
+    {
+        foreach (var alt in alternates)
         {
             var altActual = TryReadValue(new TweakOperation
             {
@@ -152,10 +199,23 @@ public sealed class TweakService
             });
             var altIsAbsent = !altActual.exists;
             var altExpectedAbsent = alt.EnabledValue == null;
-            if (altExpectedAbsent && altIsAbsent) return TweakState.Enabled;
+            if (altExpectedAbsent && altIsAbsent) return true;
             if (!altExpectedAbsent && !altIsAbsent && ValuesEqual(altActual.value!, alt.EnabledValue!))
-                return TweakState.Enabled;
+                return true;
         }
+        return false;
+    }
+
+    private static TweakState MatchOpState(TweakOperation op)
+    {
+        // 1) Eerst alle AlternateEnabledPaths probereren — als ÉÉN alternate
+        // matcht, is de tweak effectief actief (via een ander mechanisme dan
+        // wat wij schrijven). Voorbeelden: Win11 Home gebruikers die
+        // Start_IrisRecommendations=0 zetten via Settings i.p.v. de
+        // HideRecommendedSection policy; HKLM-policy die HKCU overruled.
+        // Alternates kunnen alleen VOOR Enabled stemmen, nooit voor Disabled —
+        // ze zijn advisory reads, niet authoritative writes.
+        if (AnyAlternateSignalActive(op.AlternateEnabledPaths)) return TweakState.Enabled;
 
         // 2) Primary-path read — onze eigen schrijf-target.
         var actual = TryReadValue(op);
@@ -251,10 +311,24 @@ public sealed class TweakService
     {
         var results = new Dictionary<string, (bool ok, string msg)>();
         var localOps = new List<(Tweak tweak, TweakOperation op)>();
-        var elevatedOps = new List<(Tweak tweak, TweakOperation op)>();
+        var elevatedSteps = new List<BatchStep>();
+        var userSteps = new List<BatchStep>();
         foreach (var t in tweaks)
+        {
             foreach (var op in t.Operations)
-                (op.RequiresElevation ? elevatedOps : localOps).Add((t, op));
+            {
+                if (op.RequiresElevation) elevatedSteps.Add(RegistryStep(t, op, apply));
+                else localOps.Add((t, op));
+            }
+            if (t.PackageRemoval is { } removal)
+            {
+                // Verwijderen vereist admin en gaat in dezelfde batch (dus
+                // dezelfde UAC-prompt) mee als de registry-ops. Terugzetten juist
+                // niet: dat moet in de context van de ingelogde gebruiker draaien.
+                if (apply) elevatedSteps.AddRange(PackageRemoveSteps(t, removal));
+                else userSteps.AddRange(PackageRegisterSteps(t, removal));
+            }
+        }
 
         // 1) Local (HKCU) in-process — geen UAC.
         foreach (var (tweak, op) in localOps)
@@ -272,10 +346,17 @@ public sealed class TweakService
 
         // 2) Elevated batch — 1 UAC voor de hele subset.
         var cancelled = false;
-        if (elevatedOps.Count > 0)
+        if (elevatedSteps.Count > 0)
         {
-            var (batchResults, wasCancelled) = await RunElevatedBatchAsync(elevatedOps, apply);
+            var (batchResults, wasCancelled) = await RunBatchAsync(elevatedSteps, elevated: true);
             cancelled = wasCancelled;
+            foreach (var kv in batchResults) results[kv.Key] = kv.Value;
+        }
+
+        // 2b) Gebruikers-batch — zonder UAC, in ons eigen account.
+        if (userSteps.Count > 0)
+        {
+            var (batchResults, _) = await RunBatchAsync(userSteps, elevated: false);
             foreach (var kv in batchResults) results[kv.Key] = kv.Value;
         }
 
@@ -372,11 +453,11 @@ public sealed class TweakService
 
         // 2) Elevated batch — 1 UAC voor de admin-subset. Translate naar
         // TweakOperation (waarbij EnabledValue = de gekozen Value) zodat we
-        // dezelfde RunElevatedBatchAsync kunnen hergebruiken.
+        // dezelfde RunBatchAsync kunnen hergebruiken.
         var cancelled = false;
         if (elevatedValues.Count > 0)
         {
-            var asOps = elevatedValues.Select(v => (
+            var steps = elevatedValues.Select(v => RegistryStep(
                 tweak,
                 new TweakOperation
                 {
@@ -386,9 +467,9 @@ public sealed class TweakService
                     EnabledValue = v.Value,
                     DisabledValue = v.Value,
                     RequiresElevation = true
-                }
-            )).ToList();
-            var (batchResults, wasCancelled) = await RunElevatedBatchAsync(asOps, apply: true);
+                },
+                apply: true)).ToList();
+            var (batchResults, wasCancelled) = await RunBatchAsync(steps, elevated: true);
             cancelled = wasCancelled;
             foreach (var kv in batchResults) results[kv.Key] = kv.Value;
         }
@@ -493,8 +574,181 @@ public sealed class TweakService
         return idx < 0 ? subPath : subPath.Substring(idx + 1);
     }
 
+    // Eén stap in een PowerShell-batch. Script is het blok dat binnen een try { }
+    // draait: het hoort te throwen bij een fout en hoeft zelf geen RESULT-regel
+    // te loggen — de runner logt OK met OkMessage, of FAIL met de exception-tekst.
+    // FailureMap vertaalt een bekende sentinel uit het script naar een leesbare
+    // (vertaalde) melding.
+    private sealed record BatchStep(
+        string Key,
+        string DisplayName,
+        string Script,
+        string OkMessage,
+        Func<string, string>? FailureMap = null);
+
+    private static BatchStep RegistryStep(Tweak tweak, TweakOperation op, bool apply)
+    {
+        var key = $"{tweak.Id}::{op.Path}::{op.ValueName}";
+        var targetValue = apply ? op.EnabledValue : op.DisabledValue;
+        // reg.exe draait straks onder het admin-token. Voor een HKCU-pad
+        // (de user-policies, zie RegistryPathRules) is "HKCU" dáár het
+        // profiel van wie de UAC-prompt goedkeurde — bij een split-token
+        // admin dezelfde hive, maar bij een standaardgebruiker die een
+        // ander admin-account invult het verkeerde profiel. Daarom
+        // adresseren we de hive van de ingelogde gebruiker expliciet.
+        var regPath = ToElevatedRegPath(op.Path);
+        var sb = new StringBuilder();
+
+        if (targetValue == null)
+        {
+            // reg.exe delete /va = alle values; we willen alleen specifieke value of hele key.
+            //
+            // NIET op de exit-code oordelen: reg.exe geeft 1 zowel wanneer de
+            // waarde er al niet was als bij een echte fout, en "was er al niet"
+            // is voor een revert-naar-afwezig precies de gewenste uitkomst. De
+            // in-process variant (ApplyOpLocal → DeleteValue(throwOnMissingValue:
+            // false)) is daar altijd al tolerant in geweest; toen de drie
+            // HKCU-policy-tweaks naar de elevated batch verhuisden zou dezelfde
+            // revert ineens twaalf "reg.exe exit 1"-fouten opleveren. Daarom
+            // wordt het EINDRESULTAAT getoetst: staat het er na afloop nog, dan
+            // pas is het fout. (SnapshotService doet hetzelfde voor zijn
+            // WasAbsent-entries.)
+            var probeArg = op.DeleteKeyOnAbsent
+                ? string.Empty
+                : (string.IsNullOrEmpty(op.ValueName) ? " /ve" : $" /v '{Escape(op.ValueName)}'");
+            sb.AppendLine($"    & reg.exe delete '{Escape(regPath)}'{probeArg} /f 2>$null | Out-Null");
+            sb.AppendLine($"    & reg.exe query '{Escape(regPath)}'{probeArg} 2>$null | Out-Null");
+            sb.AppendLine($"    if ($LASTEXITCODE -eq 0) {{ throw \"reg.exe delete failed (still present)\" }}");
+            return new BatchStep(key, tweak.Name, sb.ToString(), "Deleted");
+        }
+
+        var regType = op.Kind switch
+        {
+            RegistryValueKind.DWord => "REG_DWORD",
+            RegistryValueKind.String => "REG_SZ",
+            RegistryValueKind.ExpandString => "REG_EXPAND_SZ",
+            RegistryValueKind.MultiString => "REG_MULTI_SZ",
+            RegistryValueKind.Binary => "REG_BINARY",
+            RegistryValueKind.QWord => "REG_QWORD",
+            _ => "REG_SZ"
+        };
+        var addValueArg = string.IsNullOrEmpty(op.ValueName) ? "/ve" : $"/v '{Escape(op.ValueName)}'";
+        var data = FormatValueForReg(targetValue, op.Kind);
+        sb.AppendLine($"    & reg.exe add '{Escape(regPath)}' {addValueArg} /t {regType} /d '{Escape(data)}' /f | Out-Null");
+        sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"reg.exe exit $LASTEXITCODE\" }}");
+        return new BatchStep(key, tweak.Name, sb.ToString(), "Set");
+    }
+
+    // Sentinel die het revert-script gooit als er geen gestaged pakket meer is
+    // om te herregistreren. Wordt via FailureMap naar een vertaalde melding
+    // met Store-hint omgezet.
+    private const string NoStagedPackageSentinel = "NoStagedPackage";
+
+    /// <summary>
+    /// De verwijder-stappen: één per pakket, ge-eleveerd. `Remove-AppxPackage`
+    /// van een systeem-pakket vereist admin, en we geven expliciet `-User &lt;SID&gt;`
+    /// mee zodat het profiel van de INGELOGDE gebruiker geraakt wordt en niet dat
+    /// van het account dat de UAC-prompt goedkeurde. Bewust per gebruiker: geen
+    /// -AllUsers en geen deprovisioning, zodat het pakket gestaged blijft en de
+    /// revert het terug kan zetten.
+    /// </summary>
+    private static IEnumerable<BatchStep> PackageRemoveSteps(Tweak tweak, TweakPackageRemoval removal)
+    {
+        var sid = CurrentUserSid();
+        var userArg = sid == null ? string.Empty : $" -User '{Escape(sid)}'";
+        var first = true;
+        foreach (var name in removal.PackageNames)
+        {
+            var sb = new StringBuilder();
+            // Processen één keer stoppen (bij de eerste stap), anders weigert
+            // Remove-AppxPackage met "package in use".
+            if (first && removal.ProcessNames.Count > 0)
+            {
+                var procs = string.Join(",", removal.ProcessNames.Select(p => $"'{Escape(p)}'"));
+                sb.AppendLine($"    Get-Process -Name {procs} -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue");
+            }
+            // -ErrorAction Stop op de query: een pakket dat niet geïnstalleerd is
+            // levert géén fout maar een lege lijst (en dus een no-op die terecht
+            // als geslaagd geldt). Faalt de query zelf, dan hoort dat wél op te
+            // vallen in plaats van als "Verwijderd" gerapporteerd te worden.
+            sb.AppendLine($"    $pkgs = @(Get-AppxPackage -Name '{Escape(name)}'{userArg} -ErrorAction Stop)");
+            sb.AppendLine("    foreach ($p in $pkgs) {");
+            sb.AppendLine($"        Remove-AppxPackage -Package $p.PackageFullName{userArg} -ErrorAction Stop");
+            sb.AppendLine("    }");
+            yield return new BatchStep(PackageKey(tweak, name), tweak.Name, sb.ToString(), "Removed");
+            first = false;
+        }
+    }
+
+    /// <summary>
+    /// De herstel-stappen: één per pakket, ONGE-ELEVEERD. `Add-AppxPackage
+    /// -Register` kent geen -User en registreert altijd voor het account dat het
+    /// aanroept — in een ge-eleveerd kindproces zou dat het admin-account zijn en
+    /// niet de ingelogde gebruiker. Vanuit ons eigen (asInvoker-)proces klopt de
+    /// context per definitie, en registreren van een al gestaged pakket voor
+    /// jezelf vereist geen admin. Het manifest-pad komt uit de AppxAllUserStore-
+    /// registry: `C:\Program Files\WindowsApps` is niet te doorzoeken, maar een
+    /// pad dat je al kent is wel leesbaar, en die key noemt het manifest direct
+    /// (bij een bundel het AppxBundleManifest.xml).
+    /// </summary>
+    private static IEnumerable<BatchStep> PackageRegisterSteps(Tweak tweak, TweakPackageRemoval removal)
+    {
+        var index = 0;
+        foreach (var name in removal.PackageNames)
+        {
+            var isPrimary = index++ == 0;
+            var sb = new StringBuilder();
+            sb.AppendLine("    $staged = @('Applications','InboxApplications') |");
+            sb.AppendLine("        ForEach-Object { Get-ChildItem \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Appx\\AppxAllUserStore\\$_\" -ErrorAction SilentlyContinue } |");
+            sb.AppendLine($"        Where-Object {{ $_.PSChildName -like '{Escape(name)}_*' }} |");
+            sb.AppendLine("        ForEach-Object { $_.GetValue('Path') } |");
+            sb.AppendLine("        Where-Object { $_ -and (Test-Path -LiteralPath $_) } |");
+            sb.AppendLine("        Sort-Object -Descending | Select-Object -First 1");
+            if (isPrimary)
+            {
+                sb.AppendLine($"    if (-not $staged) {{ throw '{NoStagedPackageSentinel}' }}");
+                sb.AppendLine("    Add-AppxPackage -DisableDevelopmentMode -Register $staged -ErrorAction Stop");
+            }
+            else
+            {
+                // Een secundair pakket dat nooit op deze machine stond (de
+                // Widgets-runtime bestaat pas vanaf 24H2) is geen fout: er valt
+                // dan simpelweg niets terug te zetten. Bewust een if-blok en
+                // géén `return` — dat laatste beëindigt op scriptniveau de hele
+                // batch en zou de volgende stappen overslaan.
+                sb.AppendLine("    if ($staged) {");
+                sb.AppendLine("        Add-AppxPackage -DisableDevelopmentMode -Register $staged -ErrorAction Stop");
+                sb.AppendLine("    }");
+            }
+            yield return new BatchStep(PackageKey(tweak, name), tweak.Name, sb.ToString(), "Registered",
+                msg => msg.Contains(NoStagedPackageSentinel, StringComparison.Ordinal)
+                    ? App.Loc.S("tweak.package.noStaged",
+                        removal.StoreDisplayName ?? name, removal.StoreProductId ?? string.Empty)
+                    : msg);
+        }
+    }
+
+    // De result-key van een pakketstap. KeyTail() maakt hier het label van dat in
+    // een foutmelding belandt, en die splitst op "::" — de pakketnaam is dus het
+    // laatste segment en komt zo zonder interne tokens in beeld.
+    private static string PackageKey(Tweak tweak, string packageName) =>
+        $"{tweak.Id}::{packageName}::";
+
+    private static string? CurrentUserSid()
+    {
+        try { return System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value; }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Draait alle stappen in één PowerShell-script en leest de uitkomst per stap
+    /// uit de logfile. Met <paramref name="elevated"/> gaat dat via een UAC-prompt
+    /// (`runas`) — één prompt voor de hele batch; zonder draait het script in de
+    /// context van de ingelogde gebruiker, wat nodig is voor alles wat het eigen
+    /// gebruikersprofiel moet raken (zie PackageRegisterSteps).
+    /// </summary>
     private static async Task<(Dictionary<string, (bool ok, string msg)> results, bool cancelled)>
-        RunElevatedBatchAsync(IReadOnlyList<(Tweak tweak, TweakOperation op)> items, bool apply)
+        RunBatchAsync(IReadOnlyList<BatchStep> steps, bool elevated)
     {
         var logPath = Path.Combine(Path.GetTempPath(),
             $"SetupToolbox_tweaks_{DateTime.Now:yyyyMMdd_HHmmss}.log");
@@ -505,48 +759,14 @@ public sealed class TweakService
         sb.AppendLine("function Log($msg) { Add-Content -Path $logPath -Value $msg }");
         sb.AppendLine("Log \"START|$(Get-Date -Format o)\"");
 
-        foreach (var (tweak, op) in items)
+        foreach (var step in steps)
         {
-            var key = $"{tweak.Id}::{op.Path}::{op.ValueName}";
-            var targetValue = apply ? op.EnabledValue : op.DisabledValue;
-            sb.AppendLine($"Log \"PROGRESS|{Escape(tweak.Name)}\"");
+            sb.AppendLine($"Log \"PROGRESS|{Escape(step.DisplayName)}\"");
             sb.AppendLine("try {");
-
-            if (targetValue == null)
-            {
-                // reg.exe delete /va = alle values; we willen alleen specifieke value of hele key
-                if (op.DeleteKeyOnAbsent)
-                {
-                    sb.AppendLine($"    & reg.exe delete '{Escape(op.Path)}' /f | Out-Null");
-                }
-                else
-                {
-                    var valueArg = string.IsNullOrEmpty(op.ValueName) ? "/ve" : $"/v '{Escape(op.ValueName)}'";
-                    sb.AppendLine($"    & reg.exe delete '{Escape(op.Path)}' {valueArg} /f | Out-Null");
-                }
-                sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"reg.exe exit $LASTEXITCODE\" }}");
-                sb.AppendLine($"    Log \"RESULT|{Escape(key)}|OK|Deleted\"");
-            }
-            else
-            {
-                var regType = op.Kind switch
-                {
-                    RegistryValueKind.DWord => "REG_DWORD",
-                    RegistryValueKind.String => "REG_SZ",
-                    RegistryValueKind.ExpandString => "REG_EXPAND_SZ",
-                    RegistryValueKind.MultiString => "REG_MULTI_SZ",
-                    RegistryValueKind.Binary => "REG_BINARY",
-                    RegistryValueKind.QWord => "REG_QWORD",
-                    _ => "REG_SZ"
-                };
-                var valueArg = string.IsNullOrEmpty(op.ValueName) ? "/ve" : $"/v '{Escape(op.ValueName)}'";
-                var data = FormatValueForReg(targetValue, op.Kind);
-                sb.AppendLine($"    & reg.exe add '{Escape(op.Path)}' {valueArg} /t {regType} /d '{Escape(data)}' /f | Out-Null");
-                sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"reg.exe exit $LASTEXITCODE\" }}");
-                sb.AppendLine($"    Log \"RESULT|{Escape(key)}|OK|Set\"");
-            }
+            sb.Append(step.Script);
+            sb.AppendLine($"    Log \"RESULT|{Escape(step.Key)}|OK|{Escape(step.OkMessage)}\"");
             sb.AppendLine("} catch {");
-            sb.AppendLine($"    Log \"RESULT|{Escape(key)}|FAIL|$($_.Exception.Message)\"");
+            sb.AppendLine($"    Log \"RESULT|{Escape(step.Key)}|FAIL|$($_.Exception.Message)\"");
             sb.AppendLine("}");
         }
         sb.AppendLine("Log \"END|$(Get-Date -Format o)\"");
@@ -559,9 +779,11 @@ public sealed class TweakService
         {
             FileName = "powershell.exe",
             Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
-            UseShellExecute = true,
-            Verb = "runas",
-            CreateNoWindow = false,
+            // runas vereist UseShellExecute=true; zonder elevatie juist niet, dan
+            // start het proces zonder venster in onze eigen sessie.
+            UseShellExecute = elevated,
+            Verb = elevated ? "runas" : string.Empty,
+            CreateNoWindow = !elevated,
             WindowStyle = ProcessWindowStyle.Hidden
         };
 
@@ -572,8 +794,8 @@ public sealed class TweakService
             using var proc = Process.Start(psi);
             if (proc == null)
             {
-                foreach (var (t, op) in items)
-                    results[$"{t.Id}::{op.Path}::{op.ValueName}"] = (false, App.Loc.S("elevated.couldNotStart"));
+                foreach (var step in steps)
+                    results[step.Key] = (false, App.Loc.S("elevated.couldNotStart"));
                 return (results, false);
             }
             await proc.WaitForExitAsync();
@@ -581,25 +803,53 @@ public sealed class TweakService
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            cancelled = true;
-            foreach (var (t, op) in items)
+            // Alleen de ge-eleveerde start kan hierop stuklopen doordat de
+            // gebruiker de UAC-prompt weigert (Win32 1223); onge-eleveerd is een
+            // Win32Exception gewoon een mislukte processtart.
+            cancelled = elevated;
+            var msg = App.Loc.S(elevated ? "elevated.uacDeclined" : "elevated.couldNotStart");
+            foreach (var step in steps)
             {
-                var key = $"{t.Id}::{op.Path}::{op.ValueName}";
-                if (!results.ContainsKey(key))
-                    results[key] = (false, App.Loc.S("elevated.uacDeclined"));
+                if (!results.ContainsKey(step.Key))
+                    results[step.Key] = (false, msg);
             }
         }
         finally
         {
             try { File.Delete(scriptPath); } catch { }
         }
-        foreach (var (t, op) in items)
+        foreach (var step in steps)
         {
-            var key = $"{t.Id}::{op.Path}::{op.ValueName}";
-            if (!results.ContainsKey(key))
-                results[key] = (false, App.Loc.S("elevated.didNotRun"));
+            if (!results.TryGetValue(step.Key, out var r))
+            {
+                results[step.Key] = (false, App.Loc.S("elevated.didNotRun"));
+            }
+            else if (!r.Item1 && step.FailureMap != null)
+            {
+                results[step.Key] = (false, step.FailureMap(r.Item2));
+            }
         }
         return (results, cancelled);
+    }
+
+    /// <summary>
+    /// Vertaalt een HKCU-pad naar HKU\&lt;SID van de ingelogde gebruiker&gt; voor
+    /// gebruik in de elevated batch. Andere hives gaan ongewijzigd door. Valt
+    /// terug op het originele pad als de SID niet te bepalen is (dan geldt
+    /// het oude gedrag: HKCU van het admin-token).
+    /// </summary>
+    internal static string ToElevatedRegPath(string path)
+    {
+        var firstSep = path.IndexOf('\\');
+        if (firstSep <= 0) return path;
+        var hive = path.Substring(0, firstSep);
+        if (!hive.Equals("HKCU", StringComparison.OrdinalIgnoreCase) &&
+            !hive.Equals("HKEY_CURRENT_USER", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var sid = CurrentUserSid();
+        if (string.IsNullOrEmpty(sid)) return path;
+        return $@"HKU\{sid}\{path.Substring(firstSep + 1)}";
     }
 
     private static string FormatValueForReg(object value, RegistryValueKind kind) => kind switch
@@ -778,10 +1028,11 @@ public sealed class TweakService
             }));
 
         // ── TASKBAR ─────────────────────────────────────────────────
-        // Alle taskbar-tweaks zitten onder dezelfde Explorer\Advanced key + zijn
-        // HKCU (geen UAC). Geen Explorer-restart geforceerd — na elke apply
-        // broadcast TweakService een WM_SETTINGCHANGE, wat voor de meeste
-        // taskbar-keys live picked-up wordt (TaskView / Widgets / Copilot etc.).
+        // Bijna alle taskbar-tweaks zitten onder dezelfde Explorer\Advanced key + zijn
+        // HKCU (geen UAC); Widgets is sinds 24H2 een pakketverwijdering (zie daar).
+        // Geen Explorer-restart geforceerd — na elke apply broadcast TweakService
+        // een WM_SETTINGCHANGE, wat voor de meeste taskbar-keys live picked-up
+        // wordt (TaskView / Copilot etc.).
         // Voor tweaks die het niet live kunnen (Show seconds / Never combine /
         // Classic context menu) is er een manual "Restart Explorer" knop top-right
         // op de TweaksPage als escape hatch.
@@ -830,28 +1081,41 @@ public sealed class TweakService
                 }
             }));
 
+        // Widgets: tot 23H2 was dit TaskbarDa=0 in Explorer\Advanced. Sinds 24H2
+        // beschermt UCPD.sys die waarde op kernel-niveau (net als de Dsh-policy
+        // AllowNewsAndInterests): SetValue geeft "access denied" voor elk
+        // proces dat niet door Microsoft gesigneerd is, en reg.exe/powershell.exe
+        // staan bovendien op de blokkeerlijst — elevated helpt dus ook niet
+        // (geverifieerd op 25H2, 2026-08-23). Delete wordt niet gefilterd, maar
+        // daar heb je niets aan om de knop te verbergen. Daarom is dit sinds
+        // 2026-08-23 een pakketverwijdering, zoals Win11Debloat en WinUtil ook
+        // doen: zonder Widgets-pakket is er geen knop én geen paneel. Per
+        // gebruiker en omkeerbaar (herregistratie uit WindowsApps) — zie
+        // TweakPackageRemoval. Explorer-restart zodat de knop direct verdwijnt.
         list.Add(new Tweak(
             id: "Taskbar.HideWidgets",
             category: TweakCategory.Taskbar,
-            restart: RestartRequirement.None,
-            operations: new[]
+            restart: RestartRequirement.ExplorerRestart,
+            packageRemoval: new TweakPackageRemoval
             {
-                new TweakOperation
+                PackageNames = new[]
                 {
-                    Path = explorerAdvanced,
-                    ValueName = "TaskbarDa",
-                    Kind = RegistryValueKind.DWord,
-                    EnabledValue = 0,
-                    DisabledValue = 1,
-                    // HKLM AllowNewsAndInterests=0 (Dsh policy of MDM PolicyManager)
-                    // verbergt het Widgets-paneel system-wide; user heeft 'm dan
-                    // al uit ongeacht TaskbarDa. Detection-only — we schrijven
-                    // alleen TaskbarDa zelf.
-                    AlternateEnabledPaths = new[]
-                    {
-                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", ValueName = "AllowNewsAndInterests", EnabledValue = 0 },
-                        new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Microsoft\PolicyManager\default\NewsAndInterests\AllowNewsAndInterests", ValueName = "value", EnabledValue = 0 }
-                    }
+                    "MicrosoftWindows.Client.WebExperience",   // Windows Web Experience Pack = Widgets
+                    "Microsoft.WidgetsPlatformRuntime",        // runtime dat 24H2+ erbij zet
+                },
+                ProcessNames = new[] { "Widgets", "WidgetService", "WidgetBoard" },
+                StoreDisplayName = "Windows Web Experience Pack",
+                StoreProductId = "9MSSGKG348SP",               // Windows Web Experience Pack in de Store
+                // De Dsh-policy verbergt knop én paneel system-wide (zo staat 'ie
+                // bijvoorbeeld in de ISO van Windows11-Unattended-Debloat). Dan is
+                // het effect er al, ongeacht het pakket. Detection-only: de policy
+                // is door UCPD niet schrijfbaar. De PolicyManager\default-key die
+                // hier vroeger ook stond is bewust weg — dat is het CSP-schema
+                // (stockwaarde 1), geen toestand.
+                AlternateEnabledPaths = new[]
+                {
+                    new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", ValueName = "AllowNewsAndInterests", EnabledValue = 0 },
+                    new TweakAlternateSignal { Path = @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", ValueName = "DisableWidgetsBoard", EnabledValue = 1 },
                 }
             }));
 
@@ -947,12 +1211,14 @@ public sealed class TweakService
         // hebben gevonden.
 
         // ── START MENU ──────────────────────────────────────────────
-        // Alle Start menu tweaks zitten in HKCU (geen UAC) behalve AllowCortana
-        // (HKLM policy). Layout / TrackProgs / TrackDocs delen dezelfde
-        // Explorer\Advanced key als Explorer + Taskbar. HideRecommendedSection
-        // en DisableSearchBoxSuggestions zijn group-policy keys onder
-        // \Software\Policies\Microsoft\Windows\Explorer — werken op Win11 22H2+
-        // ook voor Home (de policy-engine is decoupled van de Pro-only UI).
+        // Layout / TrackProgs / TrackDocs delen dezelfde Explorer\Advanced key
+        // als Explorer + Taskbar en gaan zonder UAC. UAC nodig hebben:
+        // AllowCortana (HKLM-policy) én HideRecommendedSection en
+        // DisableSearchBoxSuggestions — die staan onder
+        // HKCU\Software\Policies\Microsoft\Windows\Explorer, en die tak is voor
+        // de gebruiker zelf alleen-lezen (zie RegistryPathRules). Ze werken op
+        // Win11 22H2+ ook voor Home: de policy-engine staat los van de Pro-only
+        // gpedit-UI.
         const string explorerPolicies = @"HKCU\Software\Policies\Microsoft\Windows\Explorer";
         const string searchSettings = @"HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings";
 
@@ -1153,9 +1419,8 @@ public sealed class TweakService
             }));
 
         // ── ADS & BLOAT (OFGB-equivalent) ───────────────────────────
-        // Inspired by xM4ddy/OFGB ("Oh Frick Go Back") en ChrisTitusTech winutil.
-        // Alle HKCU — werkt op Home/Pro/Enterprise zonder UAC. HKLM CloudContent
-        // policies (Pro/Edu only, vereisen admin) zijn voor latere iteratie.
+        // Bijna alles HKCU zonder UAC; de uitzonderingen (de CloudContent-policies,
+        // ook de HKCU-variant voor Spotlight — zie RegistryPathRules) gaan elevated.
         const string contentDeliveryManager = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
         const string userProfileEngagement = @"HKCU\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement";
         const string privacyPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Privacy";
@@ -2201,7 +2466,10 @@ public sealed class TweakService
                 {
                     Path = @"HKCU\Software\Policies\Microsoft\Windows\Explorer",
                     ValueName = "DisableNotificationCenter",
-                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    // Zelfde key als HideRecommendedSection: HKCU\Software\Policies
+                    // is alleen door Administrators schrijfbaar → elevated batch.
+                    RequiresElevation = true
                 }
             }));
 
@@ -2731,7 +2999,12 @@ public sealed class TweakService
                 {
                     Path = @"HKCU\Software\Policies\Microsoft\Windows\CloudContent",
                     ValueName = "DisableSpotlightCollectionOnDesktop",
-                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null
+                    Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null,
+                    // HKCU\Software\Policies is voor de gebruiker zelf read-only
+                    // (alleen Administrators mogen schrijven) — in-process gaf
+                    // dit "access denied" en de tweak deed stil niets. Via de
+                    // elevated batch, net als de Explorer-policies van Start.
+                    RequiresElevation = true
                 }
             }));
 
@@ -2959,26 +3232,42 @@ public sealed class TweakService
 
         // Office-bundle: HKCU\Software\Policies\Microsoft\Office\16.0 (dekt
         // Office 2016/2019/2021/365). No-op als Office niet geïnstalleerd is.
-        // Geen UAC (HKCU). DisabledValue=null → revert deletet de policy.
+        // DisabledValue=null → revert deletet de policy.
+        //
+        // WÉL UAC, ondanks HKCU: de hele HKCU\Software\Policies-tak heeft een
+        // ACL waarin de gebruiker zelf alleen ReadKey heeft en alleen
+        // BUILTIN\Administrators mag schrijven (Windows beschermt user-policies
+        // zo tegen de user). In-process schrijven gaf "Access to the registry
+        // key ... is denied" voor 12 van de 13 keys (2026-08-23). Alle policy-
+        // ops gaan daarom via de elevated batch (reg.exe onder het admin-
+        // token, HKCU wordt daar naar HKU\<SID> van de ingelogde gebruiker
+        // vertaald — zie RunBatchAsync). Alleen MailSettings is een
+        // gewone user-key en blijft in-process.
         const string officeCommon = @"HKCU\Software\Policies\Microsoft\Office\16.0\Common";
+        const string officeOsm = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM";
+        TweakOperation OfficePolicyOp(string path, string valueName, int enabledValue) => new TweakOperation
+        {
+            Path = path, ValueName = valueName, Kind = RegistryValueKind.DWord,
+            EnabledValue = enabledValue, DisabledValue = null, RequiresElevation = true
+        };
         list.Add(new Tweak(
             id: "Privacy.DisableOfficeTelemetry",
             category: TweakCategory.Privacy,
             restart: RestartRequirement.None,
             operations: new[]
             {
-                new TweakOperation { Path = officeCommon + @"\ClientTelemetry", ValueName = "DisableTelemetry", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null },
-                new TweakOperation { Path = officeCommon + @"\ClientTelemetry", ValueName = "SendTelemetry", Kind = RegistryValueKind.DWord, EnabledValue = 3, DisabledValue = null },
-                new TweakOperation { Path = officeCommon, ValueName = "QMEnable", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = officeCommon, ValueName = "LinkedIn", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM", ValueName = "Enablelogging", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM", ValueName = "EnableUpload", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = @"HKCU\Software\Policies\Microsoft\Office\16.0\OSM", ValueName = "EnableFileObfuscation", Kind = RegistryValueKind.DWord, EnabledValue = 1, DisabledValue = null },
-                new TweakOperation { Path = officeCommon + @"\Feedback", ValueName = "Enabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = officeCommon + @"\Feedback", ValueName = "SurveyEnabled", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = officeCommon + @"\Feedback", ValueName = "IncludeEmail", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
-                new TweakOperation { Path = officeCommon + @"\Privacy", ValueName = "UserContentDisabled", Kind = RegistryValueKind.DWord, EnabledValue = 2, DisabledValue = null },
-                new TweakOperation { Path = officeCommon + @"\Privacy", ValueName = "DownloadContentDisabled", Kind = RegistryValueKind.DWord, EnabledValue = 2, DisabledValue = null },
+                OfficePolicyOp(officeCommon + @"\ClientTelemetry", "DisableTelemetry", 1),
+                OfficePolicyOp(officeCommon + @"\ClientTelemetry", "SendTelemetry", 3),
+                OfficePolicyOp(officeCommon, "QMEnable", 0),
+                OfficePolicyOp(officeCommon, "LinkedIn", 0),
+                OfficePolicyOp(officeOsm, "Enablelogging", 0),
+                OfficePolicyOp(officeOsm, "EnableUpload", 0),
+                OfficePolicyOp(officeOsm, "EnableFileObfuscation", 1),
+                OfficePolicyOp(officeCommon + @"\Feedback", "Enabled", 0),
+                OfficePolicyOp(officeCommon + @"\Feedback", "SurveyEnabled", 0),
+                OfficePolicyOp(officeCommon + @"\Feedback", "IncludeEmail", 0),
+                OfficePolicyOp(officeCommon + @"\Privacy", "UserContentDisabled", 2),
+                OfficePolicyOp(officeCommon + @"\Privacy", "DownloadContentDisabled", 2),
                 new TweakOperation { Path = @"HKCU\Software\Microsoft\Office\16.0\Common\MailSettings", ValueName = "InlineTextPrediction", Kind = RegistryValueKind.DWord, EnabledValue = 0, DisabledValue = null },
             }));
 

@@ -98,8 +98,17 @@ public sealed record TweakOperation
     public object? EnabledValue { get; init; }
     public object? DisabledValue { get; init; }
     public bool DeleteKeyOnAbsent { get; init; }
-    // True wanneer HKLM (machine-scope) - moet via elevated batch.
-    public bool RequiresElevation { get; init; }
+    // True wanneer de write het admin-token nodig heeft — moet via de elevated
+    // batch. Expliciet zetten mag altijd; niet gezet, dan wordt het afgeleid
+    // van het pad (zie RegistryPathRules). Dat vangnet bestaat omdat drie
+    // tweaks onder HKCU\Software\Policies stil faalden met "access denied":
+    // die tak is voor de gebruiker zelf read-only.
+    private readonly bool? _requiresElevation;
+    public bool RequiresElevation
+    {
+        get => _requiresElevation ?? RegistryPathRules.NeedsAdminToken(Path);
+        init => _requiresElevation = value;
+    }
     public IReadOnlyList<TweakAlternateSignal> AlternateEnabledPaths { get; init; }
         = Array.Empty<TweakAlternateSignal>();
     public TweakState AbsenceMeans { get; init; } = TweakState.Disabled;
@@ -114,7 +123,88 @@ public sealed record TweakChoiceValue
     public string ValueName { get; init; } = string.Empty;
     public RegistryValueKind Kind { get; init; } = RegistryValueKind.DWord;
     public object? Value { get; init; }
-    public bool RequiresElevation { get; init; }
+    // Zelfde afleiding als TweakOperation.RequiresElevation.
+    private readonly bool? _requiresElevation;
+    public bool RequiresElevation
+    {
+        get => _requiresElevation ?? RegistryPathRules.NeedsAdminToken(Path);
+        init => _requiresElevation = value;
+    }
+}
+
+// Welke registry-paden alleen met een admin-token beschrijfbaar zijn. Dit is
+// de enige plek waar die kennis staat; TweakOperation en TweakChoiceValue
+// vallen hierop terug als een definitie de vlag niet expliciet zet.
+//
+//  - HKLM en HKU: machine-scope respectievelijk andermans/SYSTEM-profiel.
+//  - HKCU\Software\Policies en HKCU\...\CurrentVersion\Policies: de user-
+//    policy-takken. Windows geeft de gebruiker daar alleen ReadKey; alleen
+//    BUILTIN\Administrators en SYSTEM mogen schrijven (geverifieerd op 25H2
+//    met Get-Acl). Dat is ook waarom de Explorer-policies van de Start-
+//    tweaks al sinds 24H2 via de elevated batch gaan.
+public static class RegistryPathRules
+{
+    private static readonly string[] ProtectedHkcuPrefixes =
+    {
+        @"HKCU\Software\Policies\",
+        @"HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\",
+        @"HKEY_CURRENT_USER\Software\Policies\",
+        @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\",
+    };
+
+    public static bool NeedsAdminToken(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        if (path.StartsWith(@"HKLM\", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith(@"HKEY_LOCAL_MACHINE\", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith(@"HKU\", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith(@"HKEY_USERS\", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // De prefixes eindigen op '\' zodat "HKCU\Software\PoliciesX" niet
+        // matcht maar de key "...\Policies" zelf (zonder subpad) wél.
+        var probe = path.EndsWith('\\') ? path : path + '\\';
+        foreach (var prefix in ProtectedHkcuPrefixes)
+            if (probe.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+}
+
+// Een tweak die AppX-pakketten voor de ingelogde gebruiker verwijdert in plaats van
+// registry-waarden te schrijven. Bestaat omdat Windows sinds 24H2 met UCPD.sys (de
+// "User Choice Protection Driver") een vaste lijst registry-waarden op kernel-niveau
+// beschermt — onder andere TaskbarDa (de Widgets-knop) en de Dsh-policy
+// AllowNewsAndInterests. Alleen door Microsoft gesigneerde processen mogen die nog
+// schrijven, en reg.exe/powershell.exe staan expliciet op de blokkeerlijst, dus ook
+// de elevated batch helpt niet. Pakket weg = knop weg; Win11Debloat en WinUtil zijn
+// om dezelfde reden allebei op pakketverwijdering overgestapt.
+//
+// Apply: Remove-AppxPackage -User <SID> per pakket (elevated; per gebruiker, NIET
+// -AllUsers en niet deprovisioneren, zodat de bestanden in WindowsApps blijven
+// staan). Revert: Add-AppxPackage -Register op het nog gestagede pakket; lukt dat
+// niet (pakket ook voor alle gebruikers weg), dan meldt de tweak dat het via de
+// Store terug te halen is. Detectie: de per-gebruiker registratie onder
+// HKCU\...\AppModel\Repository\Packages — in-process en zonder Get-AppxPackage.
+public sealed record TweakPackageRemoval
+{
+    // Package-namen zoals Get-AppxPackage -Name ze verwacht (zonder versie/publisher),
+    // bv. "MicrosoftWindows.Client.WebExperience".
+    //
+    // DE EERSTE IS BEPALEND. Alleen dat pakket bepaalt of de tweak actief is en
+    // alleen dat pakket levert een fout op als het niet terug te zetten valt; de
+    // rest is meeliftende ballast die per Windows-versie kan bestaan of niet.
+    public IReadOnlyList<string> PackageNames { get; init; } = Array.Empty<string>();
+    // Processen die vóór de verwijdering gestopt worden — anders weigert
+    // Remove-AppxPackage met "package in use".
+    public IReadOnlyList<string> ProcessNames { get; init; } = Array.Empty<string>();
+    // Naam en Store-pagina waarmee het pakket terug te halen is als herregistratie
+    // niet lukt (alleen voor de foutmelding; we openen de Store niet zelf).
+    public string? StoreDisplayName { get; init; }
+    public string? StoreProductId { get; init; }
+    // Net als bij TweakOperation: signalen waardoor de tweak effectief al actief
+    // is via een ander mechanisme (bv. de Dsh-policy die in de ISO gebakken zit).
+    public IReadOnlyList<TweakAlternateSignal> AlternateEnabledPaths { get; init; }
+        = Array.Empty<TweakAlternateSignal>();
 }
 
 // Een keuze in een multi-state tweak. Bijv. Search heeft 4 modes (Hide /
@@ -152,21 +242,24 @@ public sealed class TweakChoice
 // TweakService.BuildAll() geregistreerd - apps.json-stijl data-driven, geen
 // per-tweak UI-code.
 //
-// Twee varianten:
+// Drie varianten:
 //   1. Toggle (default): Operations met EnabledValue/DisabledValue.
 //      TweaksPage rendert een ToggleSwitch.
 //   2. Multi-choice: Choices met een TweakChoice per optie. TweaksPage
 //      rendert een ComboBox die mirror't wat Windows Settings doet voor
 //      multi-state opties (Search mode, Light/Dark, etc.).
-// Een Tweak is óf toggle (Operations.Count > 0, Choices == null) óf choice
-// (Operations is empty, Choices != null). Beide hebben dezelfde live state-
-// detect + restart-handling lifecycle.
+//   3. Pakketverwijdering: PackageRemoval met AppX-pakketnamen. Rendert als
+//      toggle (aan = pakket weg). Zie TweakPackageRemoval voor het waarom.
+// Een Tweak is óf toggle (Operations.Count > 0) óf choice (Choices != null) óf
+// pakketverwijdering (PackageRemoval != null); de andere twee velden zijn dan
+// leeg. Alle drie hebben dezelfde live state-detect + restart-handling lifecycle.
 public sealed class Tweak : INotifyPropertyChanged
 {
     public string Id { get; }                          // stable ID voor presets/profiles later
     public TweakCategory Category { get; }
     public IReadOnlyList<TweakOperation> Operations { get; }
     public IReadOnlyList<TweakChoice>? Choices { get; }
+    public TweakPackageRemoval? PackageRemoval { get; }
     public RestartRequirement Restart { get; }
 
     // Naam / omschrijving / use-case zijn sinds v1.2.4 VERTAALD en worden dus
@@ -192,7 +285,9 @@ public sealed class Tweak : INotifyPropertyChanged
     public string? Group => GroupKey == null ? null : SetupToolbox.App.Loc.S(GroupKey);
 
     public bool IsChoice => Choices != null;
+    public bool IsPackageRemoval => PackageRemoval != null;
     public bool RequiresElevation =>
+        PackageRemoval != null ||
         Operations.Any(o => o.RequiresElevation) ||
         (Choices?.SelectMany(c => c.Values).Any(v => v.RequiresElevation) ?? false);
 
@@ -255,6 +350,24 @@ public sealed class Tweak : INotifyPropertyChanged
         Category = category;
         Operations = operations;
         Choices = null;
+        Restart = restart;
+        GroupKey = group;
+    }
+
+    // Constructor voor pakketverwijdering (toggle in UI, aan = pakket weg).
+    // Operations blijft leeg; TweakService bouwt de PowerShell-stappen zelf.
+    public Tweak(
+        string id,
+        TweakCategory category,
+        TweakPackageRemoval packageRemoval,
+        RestartRequirement restart = RestartRequirement.None,
+        string? group = null)
+    {
+        Id = id;
+        Category = category;
+        Operations = Array.Empty<TweakOperation>();
+        Choices = null;
+        PackageRemoval = packageRemoval;
         Restart = restart;
         GroupKey = group;
     }

@@ -305,8 +305,10 @@ export const FAQ = [
   {
     q: 'Kan ik wijzigingen terugdraaien?',
     a:
-      'Ja. Elke tweak is omkeerbaar, en de app maakt vóór het toepassen een momentopname van de registerwaarden die ' +
-      'hij gaat wijzigen. Voor debloat en deep clean kan er daarnaast een Windows-systeemherstelpunt gezet worden.',
+      'Ja. Elke tweak is omkeerbaar met dezelfde schakelaar, en de app maakt vóór het toepassen een momentopname van ' +
+      'de registerwaarden die hij gaat wijzigen. Eén tweak verwijdert een app in plaats van een registerwaarde — ' +
+      'Widgets, omdat Windows die knop sinds 24H2 niet anders laat verbergen. Die draai je terug met de schakelaar, ' +
+      'niet met een momentopname. Voor debloat en deep clean kan er daarnaast een Windows-systeemherstelpunt gezet worden.',
   },
   {
     q: 'Waar komen de apps vandaan?',

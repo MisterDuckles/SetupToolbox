@@ -137,7 +137,7 @@ public sealed partial class SettingsPage : Page
     private async void BrowseSnapshotsButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Dialogs.SnapshotBrowserDialog { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
+        await DialogService.ShowAsync(dialog);
         UpdateBrowseSnapshotsLabel();
     }
 
@@ -278,7 +278,7 @@ public sealed partial class SettingsPage : Page
     private async void ScheduleButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ScheduleDialog { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
+        await DialogService.ShowAsync(dialog);
         await RefreshScheduleStatusAsync();
     }
 
@@ -301,7 +301,7 @@ public sealed partial class SettingsPage : Page
             XamlRoot = this.XamlRoot
         };
 
-        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await DialogService.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         var ok = await App.TaskScheduler.DeleteUpdateTaskAsync();
         var result = new ContentDialog
@@ -313,7 +313,7 @@ public sealed partial class SettingsPage : Page
             CloseButtonStyle = (Microsoft.UI.Xaml.Style)resources["DialogDefaultButtonStyle"],
             XamlRoot = this.XamlRoot
         };
-        await result.ShowAsync();
+        await DialogService.ShowAsync(result);
 
         await RefreshScheduleStatusAsync();
     }
@@ -432,7 +432,7 @@ public sealed partial class SettingsPage : Page
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (await DialogService.ShowAsync(dialog) == ContentDialogResult.Primary)
             App.Window?.NavigateToTweaks();
         else
             ShowProfileInfo(InfoBarSeverity.Informational,
@@ -513,7 +513,7 @@ public sealed partial class SettingsPage : Page
                 XamlRoot = this.XamlRoot
             };
             ConfigResultBar.IsOpen = false;
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await DialogService.ShowAsync(dialog) != ContentDialogResult.Primary) return;
 
             var db = await App.Database.GetAppDatabaseAsync();
             var result = await App.ConfigIO.ApplyAsync(

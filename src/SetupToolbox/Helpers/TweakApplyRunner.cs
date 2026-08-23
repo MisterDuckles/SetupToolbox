@@ -53,7 +53,7 @@ public static class TweakApplyRunner
         if (mode == BackupBeforeApplyMode.Ask)
         {
             var prompt = new BackupPromptDialog { XamlRoot = xamlRoot };
-            var result = await prompt.ShowAsync();
+            var result = await DialogService.ShowAsync(prompt);
             if (result == ContentDialogResult.None)
                 return new Outcome(false, 0, 0, false, Array.Empty<string>(), false, false, 0);
 
@@ -89,7 +89,7 @@ public static class TweakApplyRunner
         var failureLines = new List<string>();
 
         // Buckets — toggle-tweaks batchen per richting (ApplyAsync verzamelt
-        // alle elevated ops in 1 RunElevatedBatchAsync = 1 UAC).
+        // alle elevated ops in 1 RunBatchAsync = 1 UAC).
         var toggleApply = new List<Tweak>();
         var toggleRevert = new List<Tweak>();
         var choiceChanges = new List<(Tweak tweak, int idx)>();
@@ -110,7 +110,12 @@ public static class TweakApplyRunner
             if (r.Cancelled) cancelled = true;
             foreach (var t in tweaks)
             {
-                if (t.Restart == RestartRequirement.ExplorerRestart) anyExplorerRestart = true;
+                // Alleen herstarten als er ook echt iets geschreven is. Bij een
+                // geweigerde UAC-prompt volgde anders alsnog een explorer-kill:
+                // het bureaublad knippert, open vensters gaan dicht, en er is niet
+                // eens iets veranderd. Zelfde voorwaarde als bij SignOut.
+                if (r.SuccessCount > 0 && t.Restart == RestartRequirement.ExplorerRestart)
+                    anyExplorerRestart = true;
                 if (r.SuccessCount > 0 &&
                     (t.Restart == RestartRequirement.SignOut || t.Restart == RestartRequirement.Reboot))
                     anySignOut = true;
@@ -127,7 +132,8 @@ public static class TweakApplyRunner
             totalSuccess += r.SuccessCount;
             totalFailed += r.FailedCount;
             if (r.Cancelled) cancelled = true;
-            if (tweak.Restart == RestartRequirement.ExplorerRestart) anyExplorerRestart = true;
+            if (r.SuccessCount > 0 && tweak.Restart == RestartRequirement.ExplorerRestart)
+                anyExplorerRestart = true;
             if (r.SuccessCount > 0 &&
                 (tweak.Restart == RestartRequirement.SignOut || tweak.Restart == RestartRequirement.Reboot))
                 anySignOut = true;

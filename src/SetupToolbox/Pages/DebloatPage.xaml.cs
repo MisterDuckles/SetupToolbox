@@ -508,7 +508,7 @@ public sealed partial class DebloatPage : Page
             XamlRoot = this.XamlRoot
         };
 
-        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await DialogService.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         // First-run config voor System Restore Points: bij de eerste Debloat-
         // actie vraag user éénmalig of we restore points willen maken voor
@@ -521,7 +521,7 @@ public sealed partial class DebloatPage : Page
                 OperationName = App.Loc.S("nav.debloat"),
                 XamlRoot = this.XamlRoot
             };
-            var result = await cfg.ShowAsync();
+            var result = await DialogService.ShowAsync(cfg);
             App.Settings.RestorePointBeforeDebloat = (result == ContentDialogResult.Primary);
             App.Settings.DebloatRestorePointConfigured = true;
         }
@@ -545,7 +545,7 @@ public sealed partial class DebloatPage : Page
         if (bloatwareSelected.Count > 0)
         {
             var bloatDialog = new BloatwareUninstallDialog(bloatwareSelected, App.Bloatware, rpDescription) { XamlRoot = this.XamlRoot };
-            await bloatDialog.ShowAsync();
+            await DialogService.ShowAsync(bloatDialog);
             // Checkpoint zit nu in de bloatware-batch geconsumed — clear voor de
             // apps-fase, anders zouden we proberen een tweede te maken.
             rpDescription = null;
@@ -583,7 +583,7 @@ public sealed partial class DebloatPage : Page
             if (proceed)
             {
                 var appsDialog = new AllAppsUninstallDialog(appsSelected, App.MixedUninstaller) { XamlRoot = this.XamlRoot };
-                await appsDialog.ShowAsync();
+                await DialogService.ShowAsync(appsDialog);
                 leftoverRefs.AddRange(appsDialog.SuccessfulItems.Select(BuildAppRef));
             }
         }
@@ -688,7 +688,7 @@ public sealed partial class DebloatPage : Page
         CleanupResultBar.IsOpen = true;
 
         var cleanup = new LeftoverCleanupDialog(leftovers, App.LeftoverScanner) { XamlRoot = this.XamlRoot };
-        await cleanup.ShowAsync();
+        await DialogService.ShowAsync(cleanup);
 
         // Folder-deletes raken Program Files / AppData — als user iets weggooide
         // verandert dat niet de installed-status, maar refresh maakt eventuele

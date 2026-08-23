@@ -77,6 +77,13 @@ public sealed class SnapshotService
             // value van álle choices die theoretisch geschreven kunnen worden
             // (zo'n choice-tweak schrijft één set per click, maar als user
             // tussen choices wisselt zijn alle paden relevant).
+            //
+            // BLINDE VLEK, bewust en benoemd: een pakketverwijder-tweak
+            // (TweakPackageRemoval, sinds v2.0.1 alleen Widgets) levert hier
+            // NUL entries op — er is geen registerwaarde om te bewaren. Zo'n
+            // tweak is wél omkeerbaar, maar via zijn eigen schakelaar en niet
+            // via een snapshot-restore. Een snapshot die over zo'n tweak gaat
+            // zet 'm dus niet terug. Staat als open punt in NEXT-STEPS.md.
             if (tweak.IsChoice && tweak.Choices != null)
             {
                 // Voor choices kapture we de unieke (Path, ValueName) paren over
@@ -171,7 +178,14 @@ public sealed class SnapshotService
         var localEntries = new List<SnapshotEntry>();
         var elevatedEntries = new List<SnapshotEntry>();
         foreach (var entry in snapshot.Entries)
-            (entry.RequiresElevation ? elevatedEntries : localEntries).Add(entry);
+        {
+            // De opgeslagen vlag is leidend, maar de pad-regel telt óók mee:
+            // snapshots van vóór 2026-08-23 hebben HKCU\Software\Policies-entries
+            // met RequiresElevation=false (de tweak-definities misten de vlag),
+            // en die tak is in-process niet schrijfbaar — zie RegistryPathRules.
+            var elevated = entry.RequiresElevation || RegistryPathRules.NeedsAdminToken(entry.Path);
+            (elevated ? elevatedEntries : localEntries).Add(entry);
+        }
 
         var successCount = 0;
         var failures = new List<string>();
@@ -243,7 +257,7 @@ public sealed class SnapshotService
             if (entry.WasAbsent)
             {
                 var valueArg = string.IsNullOrEmpty(entry.ValueName) ? "/ve" : $"/v '{Escape(entry.ValueName)}'";
-                sb.AppendLine($"    & reg.exe delete '{Escape(entry.Path)}' {valueArg} /f | Out-Null");
+                sb.AppendLine($"    & reg.exe delete '{Escape(TweakService.ToElevatedRegPath(entry.Path))}' {valueArg} /f | Out-Null");
                 // reg.exe delete returnt non-zero als key/value niet bestaat.
                 // Voor restore-naar-absent is dat oké — accepteer beide.
                 sb.AppendLine($"    Log \"RESULT|{Escape(key)}|OK|Deleted\"");
@@ -262,7 +276,7 @@ public sealed class SnapshotService
                 };
                 var valueArg = string.IsNullOrEmpty(entry.ValueName) ? "/ve" : $"/v '{Escape(entry.ValueName)}'";
                 var data = FormatValueForReg(entry.PreviousValue, entry.Kind);
-                sb.AppendLine($"    & reg.exe add '{Escape(entry.Path)}' {valueArg} /t {regType} /d '{Escape(data)}' /f | Out-Null");
+                sb.AppendLine($"    & reg.exe add '{Escape(TweakService.ToElevatedRegPath(entry.Path))}' {valueArg} /t {regType} /d '{Escape(data)}' /f | Out-Null");
                 sb.AppendLine($"    if ($LASTEXITCODE -ne 0) {{ throw \"reg.exe exit $LASTEXITCODE\" }}");
                 sb.AppendLine($"    Log \"RESULT|{Escape(key)}|OK|Restored\"");
             }

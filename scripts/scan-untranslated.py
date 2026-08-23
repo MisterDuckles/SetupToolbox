@@ -555,6 +555,17 @@ def enclosing_call(masked, pos, window=800):
 #    --vlag. Geen van drieën komt in weergavetekst voor.
 SCRIPT_OR_ARG = re.compile(
     r'(?:^|\s)--\w|\$_|\$Error|-ErrorAction|'
+    # Ook een LOS -Parameter-token is een PowerShell-argumentfragment: " -User
+    # '{sid}'", " -AllUsers", " -Register". Toegevoegd in v2.0.1, toen de
+    # pakketverwijdering van de Widgets-tweak zo'n fragment in een variabele
+    # zette in plaats van in een AppendLine — de regels hierboven dekken alleen
+    # fragmenten die een heel cmdlet noemen, en een literal in een variabele
+    # heeft geen aanroep-context om op terug te vallen.
+    # De eis van een spatie (of stringbegin) vóór het streepje houdt Wi-Fi en
+    # e-mail buiten schot, en "Naam - Waarde" matcht niet omdat daar een spatie
+    # ná het streepje staat. Getoetst tegen de vertaaltabellen: van de 2712
+    # UI-strings raakt dit patroon er nul.
+    r'|(?:^|\s)-[A-Z][a-zA-Z]+\b|'
     r'\b(?:Get|Set|New|Remove|Add|Clear|Checkpoint|Where|Out|Select|Start|Stop|'
     r'Test|Import|Export|Invoke|Write)-[A-Z]\w+')
 

@@ -192,13 +192,13 @@ public sealed partial class DeepCleanPage : Page
                 OperationName = App.Loc.S("nav.debloat.deepClean"),
                 XamlRoot = this.XamlRoot
             };
-            var result = await cfg.ShowAsync();
+            var result = await Helpers.DialogService.ShowAsync(cfg);
             App.Settings.RestorePointBeforeDeepClean = (result == ContentDialogResult.Primary);
             App.Settings.DeepCleanRestorePointConfigured = true;
         }
 
         var dialog = new DeepCleanDialog(items, App.DeepClean) { XamlRoot = this.XamlRoot };
-        await dialog.ShowAsync();
+        await Helpers.DialogService.ShowAsync(dialog);
 
         if (dialog.DeleteResult is { SuccessCount: > 0 })
         {
